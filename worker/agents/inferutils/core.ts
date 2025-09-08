@@ -21,6 +21,8 @@ import { DatabaseService, SecretsService } from '../../database';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { AuthUser } from '../../types/auth-types';
 import { getGlobalConfigurableSettings } from '../../config';
+import { RateLimitExceededError } from '../../services/rate-limit/errors';
+import { SecurityError } from '../../types/security';
 
 function optimizeInputs(messages: Message[]): Message[] {
 	return messages.map((message) => ({
@@ -313,7 +315,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
 			avatarUrl: undefined
 		};
 
-        const globalConfig = await getGlobalConfigurableSettings(env) // Its powered by KV so it be fast enough. 
+        const globalConfig = await getGlobalConfigurableSettings(env)
         // Maybe in the future can expand using config object for other stuff like global model configs?
 		await RateLimitService.enforceLLMCallsRateLimit(env, globalConfig.security.rateLimit, authUser)
 
@@ -544,6 +546,9 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
 			throw new InferError('Failed to parse response', content);
 		}
 	} catch (error) {
+        if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
+            throw error;
+        }
 		console.error('Error in inferWithSchemaOutput:', error);
 		throw error;
 	}

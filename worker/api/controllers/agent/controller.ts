@@ -74,23 +74,12 @@ export class CodingAgentController extends BaseController {
             try {
                 await RateLimitService.enforceAppCreationRateLimit(env, context.config.security.rateLimit, user, request);
             } catch (error) {
-                const config = context.config.security.rateLimit.appCreation;
-                this.logger.warn('App creation rate limited', { userId: user.id, error, config });
+                this.logger.warn('App creation rate limited', { userId: user.id, error });
                 if (error instanceof RateLimitExceededError) {
-                    const errorResponse = createRateLimitErrorResponse(
-                        error.limitType,
-                        error.message,
-                        config.limit,
-                        config.period,
-                    );
-                    return new Response(JSON.stringify(errorResponse), {
-                        status: 429,
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Retry-After': config.period.toString()
-                        }
-                    });
+                    const errorResponse = createRateLimitErrorResponse(error);
+                    return this.createErrorResponse(errorResponse.error, 429);
                 }
+                const config = context.config.security.rateLimit.appCreation;
                 return new Response(JSON.stringify({ 
                     error: error instanceof Error ? error.message : 'Rate limit exceeded'
                 }), {
