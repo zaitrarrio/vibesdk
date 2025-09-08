@@ -43,9 +43,7 @@ export default function Chat() {
 	const { app, loading: appLoading } = useApp(urlChatId);
 
 	// If we have an existing app, use its data
-	const displayQuery = app
-		? app.originalPrompt || app.title
-		: userQuery || '';
+	const displayQuery = app ? app.originalPrompt || app.title : userQuery || '';
 	const appTitle = app?.title;
 
 	// Manual refresh trigger for preview
