@@ -1319,6 +1319,7 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 							console.log('📡 Received WebSocket URL from server:', result.websocketUrl)
 						}
 						if (obj.template) {
+                            console.log('Received template from server:', obj.template);
 							result.template = obj.template;
 							if (obj.template.files) {
 								loadBootstrapFiles(obj.template.files);

@@ -540,6 +540,8 @@ class ApiClient {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
+				// Hint server/CDN that we expect a streaming NDJSON response
+				'Accept': 'application/x-ndjson, text/event-stream;q=0.9, */*;q=0.8',
 				...this.getAuthHeaders(),
 			},
 			credentials: 'include',

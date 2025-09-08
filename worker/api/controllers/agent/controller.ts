@@ -11,6 +11,7 @@ import { ModelConfig } from '../../../agents/inferutils/config.types';
 import { RateLimitService } from '../../../services/rate-limit/rateLimits';
 import { createRateLimitErrorResponse, RateLimitExceededError } from '../../../services/rate-limit/errors';
 import { validateWebSocketOrigin } from '../../../middleware/security/websocket';
+import { waitUntil } from 'cloudflare:workers';
 interface CodeGenArgs {
     query: string;
     language?: string;
@@ -137,63 +138,77 @@ export class CodingAgentController extends BaseController {
                 modelConfigsCount: Object.keys(userModelConfigs).length,
             });
 
-            const agentPromise = agentInstance.initialize({
-                query,
-                language: body.language || defaultCodeGenArgs.language,
-                frameworks: body.frameworks || defaultCodeGenArgs.frameworks,
-                hostname,
-                inferenceContext,
-                onTemplateGenerated: (templateDetails) => {
-                    const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
-                    const httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
-                
-                    writer.write({
-                        message: 'Code generation started',
-                        agentId: agentId, // Keep as agentId for backward compatibility
-                        websocketUrl,
-                        httpStatusUrl,
-                        template: {
-                            name: templateDetails.name,
-                            files: templateDetails.files,
-                        }
+            // Promise to wait for template generation to complete, otherwise bootstrap file streaming doesn't work properly
+            const templateGenerationPromise = new Promise<void>((resolve) => {
+                const agentPromise = agentInstance.initialize({
+                    query,
+                    language: body.language || defaultCodeGenArgs.language,
+                    frameworks: body.frameworks || defaultCodeGenArgs.frameworks,
+                    hostname,
+                    inferenceContext,
+                    onTemplateGenerated: (templateDetails) => {
+                        const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
+                        const httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
+                    
+                        writer.write({
+                            message: 'Code generation started',
+                            agentId: agentId, // Keep as agentId for backward compatibility
+                            websocketUrl,
+                            httpStatusUrl,
+                            template: {
+                                name: templateDetails.name,
+                                files: templateDetails.files,
+                            }
+                        });
+
+                        resolve();
+                    },
+                    onBlueprintChunk: (chunk) => {
+                        writer.write({ chunk });
+                    },
+                }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
+                agentPromise.then(async (state: CodeGenState) => {
+                    this.logger.info('Blueprint generated successfully');
+                    // Save the app to database (authenticated users only)
+                    const appService = new AppService(this.db);
+                    await appService.createApp({
+                        id: agentId,
+                        userId: user.id,
+                        sessionToken: null,
+                        title: state.blueprint.title || query.substring(0, 100),
+                        description: state.blueprint.description || null,
+                        originalPrompt: query,
+                        finalPrompt: query,
+                        blueprint: state.blueprint,
+                        framework: state.blueprint.frameworks?.[0] || defaultCodeGenArgs.frameworks?.[0],
+                        visibility: 'private',
+                        status: 'generating',
+                        createdAt: new Date(),
+                        updatedAt: new Date()
                     });
-                },
-                onBlueprintChunk: (chunk) => {
-                    writer.write({ chunk });
-                },
-            }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
-            agentPromise.then(async (state: CodeGenState) => {
-                this.logger.info('Blueprint generated successfully');
-                // Save the app to database (authenticated users only)
-                const appService = new AppService(this.db);
-                await appService.createApp({
-                    id: agentId,
-                    userId: user.id,
-                    sessionToken: null,
-                    title: state.blueprint.title || query.substring(0, 100),
-                    description: state.blueprint.description || null,
-                    originalPrompt: query,
-                    finalPrompt: query,
-                    blueprint: state.blueprint,
-                    framework: state.blueprint.frameworks?.[0] || defaultCodeGenArgs.frameworks?.[0],
-                    visibility: 'private',
-                    status: 'generating',
-                    createdAt: new Date(),
-                    updatedAt: new Date()
+                    this.logger.info('App saved successfully to database', { 
+                        agentId, 
+                        userId: user.id,
+                        visibility: 'private'
+                    });
+                    this.logger.info('Agent initialized successfully');
+                }).finally(() => {
+                    writer.write("terminate");
                 });
-                this.logger.info('App saved successfully to database', { 
-                    agentId, 
-                    userId: user.id,
-                    visibility: 'private'
-                });
-                this.logger.info('Agent initialized successfully');
-            }).finally(() => {
-                writer.write("terminate");
             });
+
+            waitUntil(templateGenerationPromise);
+            
             return new Response(readable, {
                 status: 200,
                 headers: {
-                    "content-type": "text/event-stream"
+                    // Use SSE content-type to ensure Cloudflare disables buffering,
+                    // while the payload remains NDJSON lines consumed by the client.
+                    'Content-Type': 'text/event-stream; charset=utf-8',
+                    // Prevent intermediary caches/proxies from buffering or transforming
+                    'Cache-Control': 'no-cache, no-store, must-revalidate, no-transform',
+                    'Pragma': 'no-cache',
+                    'Connection': 'keep-alive'
                 }
             });
         } catch (error) {
