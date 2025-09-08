@@ -166,7 +166,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         const { query, language, frameworks, hostname, inferenceContext } = initArgs;
         // Fetch available templates
         const templatesResponse = await SandboxSdkClient.listTemplates();
-        if (!templatesResponse) {
+        if (!templatesResponse || !templatesResponse.success) {
             throw new Error('Failed to fetch templates from sandbox service');
         }
         
