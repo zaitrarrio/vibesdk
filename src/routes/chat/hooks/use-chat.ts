@@ -1288,6 +1288,7 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 					});
 
 					for await (const obj of ndjsonStream(response.stream)) {
+                        console.log('Received chunk from server:', obj);
 						if (obj.chunk) {
 							if (!startedBlueprintStream) {
 								sendMessage({
@@ -1392,7 +1393,6 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 		}
 
 		init();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	useEffect(() => {
