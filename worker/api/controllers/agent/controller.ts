@@ -179,7 +179,6 @@ export class CodingAgentController extends BaseController {
                         description: state.blueprint.description || null,
                         originalPrompt: query,
                         finalPrompt: query,
-                        blueprint: state.blueprint,
                         framework: state.blueprint.frameworks?.[0] || defaultCodeGenArgs.frameworks?.[0],
                         visibility: 'private',
                         status: 'generating',
