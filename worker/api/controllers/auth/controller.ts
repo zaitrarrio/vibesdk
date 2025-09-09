@@ -440,7 +440,7 @@ export class AuthController extends BaseController {
 
             const sessionService = new SessionService(this.db, env);
             
-            await sessionService.revokeSession(sessionIdToRevoke);
+            await sessionService.revokeUserSession(sessionIdToRevoke, user.id);
 
             return this.createSuccessResponse({
                 message: 'Session revoked successfully'

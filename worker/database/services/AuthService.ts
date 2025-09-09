@@ -250,7 +250,7 @@ export class AuthService extends BaseService {
      */
     async logout(sessionId: string): Promise<void> {
         try {
-            await this.sessionService.revokeSession(sessionId);
+            await this.sessionService.revokeSessionId(sessionId);
             logger.info('User logged out', { sessionId });
         } catch (error) {
             logger.error('Logout error', error);

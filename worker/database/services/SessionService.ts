@@ -399,7 +399,7 @@ export class SessionService extends BaseService {
                             reasons: suspiciousAnalysis.reasons
                         });
                         
-                        await this.revokeSession(session.id);
+                        await this.revokeSessionId(session.id);
                         return null;
                     }
                     
@@ -432,9 +432,9 @@ export class SessionService extends BaseService {
     }
     
     /**
-     * Revoke session
+     * Revoke session with ID and userID
      */
-    async revokeSession(sessionId: string): Promise<void> {
+    async revokeUserSession(sessionId: string, userId: string): Promise<void> {
         try {
             await this.db.db
                 .update(schema.sessions)
@@ -443,7 +443,12 @@ export class SessionService extends BaseService {
                     revokedAt: new Date(),
                     revokedReason: 'user_logout'
                 })
-                .where(eq(schema.sessions.id, sessionId));
+                .where(
+                    and(
+                        eq(schema.sessions.id, sessionId),
+                        eq(schema.sessions.userId, userId)
+                    )
+                );
             
             logger.info('Session revoked', { sessionId });
         } catch (error) {
