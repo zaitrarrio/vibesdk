@@ -23,12 +23,7 @@ interface SessionConfig {
     maxSessions: number; // Max sessions per user
     sessionTTL: number; // Session TTL in seconds
     cleanupInterval: number; // Cleanup interval in seconds
-    // Security settings
-    strictIPCheck: boolean; // Strict IP validation
-    allowIPSubnetChange: boolean; // Allow IP changes within same subnet
     maxConcurrentDevices: number; // Max concurrent devices per user
-    suspiciousActivityThreshold: number; // Threshold for flagging suspicious activity
-    deviceFingerprintValidation: boolean; // Enable device fingerprinting
 }
 
 /**
@@ -39,12 +34,7 @@ export class SessionService extends BaseService {
         maxSessions: 5,
         sessionTTL: 3 * 24 * 60 * 60,
         cleanupInterval: 60 * 60, // 1 hour
-        // Security settings
-        strictIPCheck: false, // Disabled by default for mobile users
-        allowIPSubnetChange: true, // Allow IP changes within same subnet
         maxConcurrentDevices: 3, // Max 3 devices concurrently
-        suspiciousActivityThreshold: 5, // Flag after 5 suspicious events
-        deviceFingerprintValidation: true // Enable device fingerprinting
     };
     
     private jwtUtils: JWTUtils;
@@ -56,164 +46,7 @@ export class SessionService extends BaseService {
         super(db);
         this.jwtUtils = JWTUtils.getInstance(env);
     }
-    
-    /**
-     * Generate device fingerprint from request headers
-     */
-    private generateDeviceFingerprint(request: Request): string {
-        const userAgent = request.headers.get('User-Agent') || '';
-        const acceptLanguage = request.headers.get('Accept-Language') || '';
-        const acceptEncoding = request.headers.get('Accept-Encoding') || '';
-        const connection = request.headers.get('Connection') || '';
-        
-        // Create a simple fingerprint (in production, consider more sophisticated methods)
-        const fingerprint = `${userAgent}|${acceptLanguage}|${acceptEncoding}|${connection}`;
-        return btoa(fingerprint).substring(0, 32); // Base64 encode and truncate
-    }
-    
-    /**
-     * Check if IP addresses are in the same subnet (Class C)
-     */
-    private isIPInSameSubnet(ip1: string, ip2: string): boolean {
-        try {
-            // Simple IPv4 subnet check (Class C: /24)
-            const parts1 = ip1.split('.');
-            const parts2 = ip2.split('.');
-            
-            if (parts1.length !== 4 || parts2.length !== 4) {
-                return false; // Invalid IP format
-            }
-            
-            // Check first 3 octets for Class C subnet
-            return parts1[0] === parts2[0] && 
-                   parts1[1] === parts2[1] && 
-                   parts1[2] === parts2[2];
-        } catch {
-            return false;
-        }
-    }
-    
-    /**
-     * Analyze session for suspicious activity
-     */
-    private async analyzeSuspiciousActivity(
-        sessionId: string, 
-        userId: string, 
-        request: Request
-    ): Promise<{
-        suspicious: boolean;
-        reasons: string[];
-        riskScore: number;
-    }> {
-        const reasons: string[] = [];
-        let riskScore = 0;
-        
-        try {
-            const currentMetadata = extractRequestMetadata(request);
-            const currentIP = currentMetadata.ipAddress;
-            const currentUA = currentMetadata.userAgent;
-            const currentFingerprint = this.generateDeviceFingerprint(request);
-            
-            // Get current session details
-            const session = await this.db.db
-                .select()
-                .from(schema.sessions)
-                .where(eq(schema.sessions.id, sessionId))
-                .get();
-                
-            if (!session) {
-                return { suspicious: true, reasons: ['Session not found'], riskScore: 10 };
-            }
-            
-            // Check IP changes
-            if (session.ipAddress && session.ipAddress !== currentIP) {
-                if (this.config.strictIPCheck) {
-                    reasons.push('IP address changed (strict mode)');
-                    riskScore += 8;
-                } else if (this.config.allowIPSubnetChange && 
-                          !this.isIPInSameSubnet(session.ipAddress, currentIP)) {
-                    reasons.push('IP address changed to different subnet');
-                    riskScore += 5;
-                } else if (!this.config.allowIPSubnetChange) {
-                    reasons.push('IP address changed');
-                    riskScore += 6;
-                }
-            }
-            
-            // Check User-Agent changes
-            if (session.userAgent && session.userAgent !== currentUA) {
-                reasons.push('User-Agent changed');
-                riskScore += 4;
-            }
-            
-            // Check device fingerprint if stored
-            if (session.deviceInfo) {
-                try {
-                    const storedFingerprint = JSON.parse(session.deviceInfo).fingerprint;
-                    if (storedFingerprint && storedFingerprint !== currentFingerprint) {
-                        reasons.push('Device fingerprint changed');
-                        riskScore += 6;
-                    }
-                } catch {
-                    // Ignore JSON parse errors
-                }
-            }
-            
-            // Check for multiple concurrent sessions from different locations
-            const recentSessions = await this.db.db
-                .select({
-                    ipAddress: schema.sessions.ipAddress,
-                    lastActivity: schema.sessions.lastActivity
-                })
-                .from(schema.sessions)
-                .where(
-                    and(
-                        eq(schema.sessions.userId, userId),
-                        eq(schema.sessions.isRevoked, false),
-                        gt(schema.sessions.lastActivity, new Date(Date.now() - 15 * 60 * 1000)) // Last 15 minutes
-                    )
-                )
-                .all();
-                
-            const uniqueIPs = new Set(recentSessions.map(s => s.ipAddress).filter(Boolean));
-            if (uniqueIPs.size > this.config.maxConcurrentDevices) {
-                reasons.push(`Too many concurrent locations (${uniqueIPs.size})`);
-                riskScore += 7;
-            }
-            
-            // Check for rapid location changes (impossible travel)
-            if (recentSessions.length > 1) {
-                const sessionsByTime = recentSessions.sort((a, b) => 
-                    (b.lastActivity?.getTime() || 0) - (a.lastActivity?.getTime() || 0)
-                );
-                
-                if (sessionsByTime.length >= 2) {
-                    const latest = sessionsByTime[0];
-                    const previous = sessionsByTime[1];
-                    
-                    if (latest.ipAddress !== previous.ipAddress && 
-                        latest.lastActivity && previous.lastActivity) {
-                        const timeDiff = latest.lastActivity.getTime() - previous.lastActivity.getTime();
-                        
-                        // If location changed in less than 5 minutes, it's suspicious
-                        if (timeDiff < 5 * 60 * 1000) {
-                            reasons.push('Impossible travel detected');
-                            riskScore += 9;
-                        }
-                    }
-                }
-            }
-            
-            return {
-                suspicious: riskScore >= this.config.suspiciousActivityThreshold,
-                reasons,
-                riskScore
-            };
-        } catch (error) {
-            logger.error('Error analyzing suspicious activity', error);
-            return { suspicious: false, reasons: [], riskScore: 0 };
-        }
-    }
+
     
     /**
      * Log security event for audit purposes
@@ -282,16 +115,8 @@ export class SessionService extends BaseService {
             // Extract request metadata using centralized utility
             const requestMetadata = extractRequestMetadata(request);
             
-            // Generate device fingerprint if enabled
-            const deviceFingerprint = this.config.deviceFingerprintValidation 
-                ? this.generateDeviceFingerprint(request) 
-                : null;
-            
             // Create device info object
-            const deviceInfo = deviceFingerprint ? JSON.stringify({
-                fingerprint: deviceFingerprint,
-                createdAt: new Date().toISOString()
-            }) : requestMetadata.userAgent;
+            const deviceInfo = requestMetadata.userAgent;
             
             // Create session
             const now = new Date();
@@ -330,104 +155,6 @@ export class SessionService extends BaseService {
                 'Failed to create session',
                 500
             );
-        }
-    }
-    
-    /**
-     * Validate session by token
-     */
-    async validateSession(accessToken: string, request?: Request): Promise<AuthSession | null> {
-        try {
-            // Verify token structure
-            const payload = await this.jwtUtils.verifyToken(accessToken);
-            if (!payload || payload.type !== 'access') {
-                return null;
-            }
-            
-            // Hash token for lookup
-            const accessTokenHash = await this.jwtUtils.hashToken(accessToken);
-            
-            // Find session
-            const now = new Date();
-            const session = await this.db.db
-                .select()
-                .from(schema.sessions)
-                .where(
-                    and(
-                        eq(schema.sessions.accessTokenHash, accessTokenHash),
-                        eq(schema.sessions.userId, payload.sub),
-                        gt(schema.sessions.expiresAt, now),
-                        eq(schema.sessions.isRevoked, false)
-                    )
-                )
-                .get();
-            
-            if (!session) {
-                logger.debug('Session not found or expired');
-                return null;
-            }
-            
-            // Enhanced security: Analyze session for suspicious activity
-            if (request) {
-                const suspiciousAnalysis = await this.analyzeSuspiciousActivity(
-                    session.id, 
-                    session.userId, 
-                    request
-                );
-                
-                if (suspiciousAnalysis.suspicious) {
-                    // Log security event
-                    await this.logSecurityEvent(
-                        session.userId,
-                        session.id,
-                        suspiciousAnalysis.riskScore >= 8 ? 'session_hijacking' : 'suspicious_activity',
-                        {
-                            reasons: suspiciousAnalysis.reasons,
-                            riskScore: suspiciousAnalysis.riskScore,
-                            currentIP: request.headers.get('CF-Connecting-IP'),
-                            sessionIP: session.ipAddress
-                        },
-                        request
-                    );
-                    
-                    // Revoke session if risk score is high enough
-                    if (suspiciousAnalysis.riskScore >= 8) {
-                        logger.warn('Session revoked due to high risk activity', {
-                            sessionId: session.id,
-                            userId: session.userId,
-                            riskScore: suspiciousAnalysis.riskScore,
-                            reasons: suspiciousAnalysis.reasons
-                        });
-                        
-                        await this.revokeSessionId(session.id);
-                        return null;
-                    }
-                    
-                    // For lower risk scores, just log the event but continue
-                    logger.info('Suspicious activity detected but session maintained', {
-                        sessionId: session.id,
-                        userId: session.userId,
-                        riskScore: suspiciousAnalysis.riskScore,
-                        reasons: suspiciousAnalysis.reasons
-                    });
-                }
-            }
-            
-            // Update last activity
-            await this.db.db
-                .update(schema.sessions)
-                .set({ lastActivity: new Date() })
-                .where(eq(schema.sessions.id, session.id));
-            
-            return {
-                userId: session.userId,
-                email: payload.email,
-                sessionId: session.id,
-                expiresAt: session.expiresAt,
-            };
-        } catch (error) {
-            logger.error('Error validating session', error);
-            return null;
         }
     }
     
