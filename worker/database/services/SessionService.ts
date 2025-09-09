@@ -37,7 +37,7 @@ interface SessionConfig {
 export class SessionService extends BaseService {
     private readonly config: SessionConfig = {
         maxSessions: 5,
-        sessionTTL: 7 * 24 * 60 * 60, // 7 days
+        sessionTTL: 3 * 24 * 60 * 60,
         cleanupInterval: 60 * 60, // 1 hour
         // Security settings
         strictIPCheck: false, // Disabled by default for mobile users
@@ -260,7 +260,6 @@ export class SessionService extends BaseService {
     ): Promise<{
         session: AuthSession;
         accessToken: string;
-        refreshToken: string;
     }> {
         try {
             // Clean up old sessions for this user
@@ -271,17 +270,14 @@ export class SessionService extends BaseService {
             const userEmail = await this.getUserEmail(userId);
             
             // Generate tokens WITH session ID
-            const { accessToken, refreshToken } = await this.jwtUtils.createTokenPair(
+            const { accessToken } = await this.jwtUtils.createAccessToken(
                 userId,
                 userEmail,
                 sessionId
             );
             
             // Hash tokens for storage
-            const [accessTokenHash, refreshTokenHash] = await Promise.all([
-                this.jwtUtils.hashToken(accessToken),
-                this.jwtUtils.hashToken(refreshToken)
-            ]);
+            const [accessTokenHash] = await this.jwtUtils.hashToken(accessToken);
             
             // Extract request metadata using centralized utility
             const requestMetadata = extractRequestMetadata(request);
@@ -305,7 +301,7 @@ export class SessionService extends BaseService {
                 id: sessionId,
                 userId,
                 accessTokenHash,
-                refreshTokenHash,
+                refreshTokenHash: '',
                 expiresAt,
                 lastActivity: now,
                 ipAddress: requestMetadata.ipAddress,
@@ -326,7 +322,6 @@ export class SessionService extends BaseService {
             return {
                 session,
                 accessToken,
-                refreshToken
             };
         } catch (error) {
             logger.error('Error creating session', error);
@@ -432,65 +427,6 @@ export class SessionService extends BaseService {
             };
         } catch (error) {
             logger.error('Error validating session', error);
-            return null;
-        }
-    }
-    
-    /**
-     * Refresh session with refresh token
-     */
-    async refreshSession(refreshToken: string): Promise<{
-        accessToken: string;
-        expiresIn: number;
-    } | null> {
-        try {
-            // Verify refresh token
-            const payload = await this.jwtUtils.verifyToken(refreshToken);
-            if (!payload || payload.type !== 'refresh') {
-                return null;
-            }
-            
-            // Hash token for lookup
-            const refreshTokenHash = await this.jwtUtils.hashToken(refreshToken);
-            
-            // Find session
-            const session = await this.db.db
-                .select()
-                .from(schema.sessions)
-                .where(
-                    and(
-                        eq(schema.sessions.refreshTokenHash, refreshTokenHash),
-                        eq(schema.sessions.userId, payload.sub)
-                    )
-                )
-                .get();
-            
-            if (!session) {
-                logger.warn('Session not found for refresh token');
-                return null;
-            }
-            
-            // Generate new access token
-            const result = await this.jwtUtils.refreshAccessToken(refreshToken);
-            if (!result) {
-                return null;
-            }
-            
-            // Update session with new access token hash
-            const newTokenHash = await this.jwtUtils.hashToken(result.accessToken);
-            await this.db.db
-                .update(schema.sessions)
-                .set({
-                    accessTokenHash: newTokenHash,
-                    lastActivity: new Date()
-                })
-                .where(eq(schema.sessions.id, session.id));
-            
-            logger.info('Session refreshed', { userId: payload.sub, sessionId: session.id });
-            
-            return result;
-        } catch (error) {
-            logger.error('Error refreshing session', error);
             return null;
         }
     }
@@ -749,9 +685,9 @@ export class SessionService extends BaseService {
     }
     
     /**
-     * Revoke session by refresh token hash
+     * Revoke session by ID
      */
-    async revokeSessionByRefreshTokenHash(refreshTokenHash: string): Promise<void> {
+    async revokeSessionId(sessionId: string): Promise<void> {
         try {
             await this.db.db
                 .update(schema.sessions)
@@ -760,7 +696,7 @@ export class SessionService extends BaseService {
                     revokedAt: new Date(),
                     revokedReason: 'user_logout'
                 })
-                .where(eq(schema.sessions.refreshTokenHash, refreshTokenHash));
+                .where(eq(schema.sessions.id, sessionId));
             
             logger.info('Session revoked by refresh token hash');
         } catch (error) {

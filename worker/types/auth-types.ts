@@ -57,7 +57,6 @@ export interface TokenPayload {
 export interface AuthResult {
 	user: AuthUser;
 	accessToken: string;
-	refreshToken: string;
 	expiresIn: number;
 	sessionId?: string;
 	isNewUser?: boolean;
