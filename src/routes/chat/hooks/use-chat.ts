@@ -4,8 +4,7 @@ import type {
 	BlueprintType,
 	WebSocketMessage,
 	CodeFixEdits,
-    RateLimitErrorResponse,
-    RateLimitError,
+    RateLimitErrorResponse
 } from '../api-types';
 import {
 	createRepairingJSONParser,
@@ -17,6 +16,7 @@ import { getPreviewUrl } from '@/lib/utils';
 import { generateId } from '../../../utils/id-generator';
 import { apiClient } from '@/lib/api-client';
 import { appEvents } from '@/lib/app-events';
+import { toast } from 'sonner';
 
 export interface FileType {
 	filePath: string;
@@ -981,60 +981,61 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 			}
 
 			case 'error': {
-				const errorData = message as { error: string; details?: RateLimitError };
-				console.error('❌ WebSocket error received:', errorData);
+				const errorData = message;
+				// Handle generic errors
+				setMessages(prev => [
+					...prev,
+					{
+						type: 'ai',
+						id: `error_${Date.now()}`,
+						message: `❌ ${errorData.error}`,
+					},
+				]);
 				
-				// Handle rate limiting errors specially
-				if (errorData?.details) {
-					const rateLimitError = errorData.details;
-					let displayMessage = errorData.error;
-					
-					// Add helpful suggestions for rate limiting
-					if (rateLimitError.suggestions && rateLimitError.suggestions.length > 0) {
-						displayMessage += `\n\n💡 Suggestions:\n${rateLimitError.suggestions.map(s => `• ${s}`).join('\n')}`;
-					}
-					
-					// Add a system message for rate limits
-					setMessages(prev => [
-						...prev,
-						{
-							type: 'ai',
-							id: `rate_limit_${Date.now()}`,
-							message: `⏱️ ${displayMessage}`,
-						},
-					]);
-					
-					// Notify debug handler about rate limit
-					onDebugMessage?.(
-						'error',
-						`Rate Limit: ${rateLimitError.limitType.replace('_', ' ')} limit exceeded`,
-						`Limit: ${rateLimitError.limit} per ${Math.floor((rateLimitError.period || 0) / 3600)}h\nRetry after: ${rateLimitError.retryAfter}s\n\nSuggestions:\n${rateLimitError.suggestions?.join('\n') || 'None'}`,
-						'Rate Limiting',
-						rateLimitError.limitType,
-						rateLimitError
-					);
-				} else {
-					// Handle generic errors
-					setMessages(prev => [
-						...prev,
-						{
-							type: 'ai',
-							id: `error_${Date.now()}`,
-							message: `❌ ${errorData.error}`,
-						},
-					]);
-					
-					onDebugMessage?.(
-						'error',
-						'WebSocket Error',
-						errorData.error,
-						'WebSocket',
-						'error',
-						errorData
-					);
-				}
+				onDebugMessage?.(
+					'error',
+					'WebSocket Error',
+					errorData.error,
+					'WebSocket',
+					'error',
+					errorData
+				);
 				break;
 			}
+
+            case 'rate_limit_error' : {
+                const rateLimitError = message.details;
+                let displayMessage = message.error;
+                
+                // Add helpful suggestions for rate limiting
+                if (rateLimitError.suggestions && rateLimitError.suggestions.length > 0) {
+                    displayMessage += `\n\n💡 Suggestions:\n${rateLimitError.suggestions.map(s => `• ${s}`).join('\n')}`;
+                }
+                
+                // Add a system message for rate limits
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        type: 'ai',
+                        id: `rate_limit_${Date.now()}`,
+                        message: `⏱️ ${displayMessage}`,
+                    },
+                ]);
+
+                // Add toast notification for rate limit
+                toast.error(displayMessage);
+                
+                // Notify debug handler about rate limit
+                onDebugMessage?.(
+                    'error',
+                    `Rate Limit: ${rateLimitError.limitType.replace('_', ' ')} limit exceeded`,
+                    `Limit: ${rateLimitError.limit} per ${Math.floor((rateLimitError.period || 0) / 3600)}h\nRetry after: ${(rateLimitError.period || 0) / 3600}h\n\nSuggestions:\n${rateLimitError.suggestions?.join('\n') || 'None'}`,
+                    'Rate Limiting',
+                    rateLimitError.limitType,
+                    rateLimitError
+                );
+                break;
+            }
 
 			default:
 				console.warn('Unhandled message:', message);
@@ -1231,7 +1232,7 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 							// Not a JSON error, handle as regular error
 						}
 						
-						if (parsedError && parsedError.type === 'RATE_LIMIT_EXCEEDED') {
+						if (parsedError && parsedError.type === 'rate_limit_error') {
 							const rateLimitResponse = parsedError as RateLimitErrorResponse;
 							const rateLimitError = rateLimitResponse.details;
 							
@@ -1249,11 +1250,13 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 									message: `⏱️ ${displayMessage}`,
 								},
 							]);
+
+                            toast.error(displayMessage);
 							
 							onDebugMessage?.(
 								'error',
 								`Rate Limit: ${rateLimitError.limitType.replace('_', ' ')} limit exceeded`,
-								`Limit: ${rateLimitError.limit} per ${Math.floor((rateLimitError.period || 0) / 3600)}h\nRetry after: ${rateLimitError.retryAfter}s\n\nSuggestions:\n${rateLimitError.suggestions?.join('\n') || 'None'}`,
+								`Limit: ${rateLimitError.limit} per ${Math.floor((rateLimitError.period || 0) / 3600)}h\nRetry after: ${(rateLimitError.period || 0) / 3600}h\n\nSuggestions:\n${rateLimitError.suggestions?.join('\n') || 'None'}`,
 								'Rate Limiting',
 								rateLimitError.limitType,
 								rateLimitError

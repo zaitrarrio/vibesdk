@@ -7,6 +7,8 @@ import { ChatCompletionTool, ReasoningEffort } from 'openai/resources.mjs';
 import { AgentActionKey, AIModels, InferenceContext, ModelConfig } from './config.types';
 import { AGENT_CONFIG } from './config';
 import { createLogger } from '../../logger';
+import { RateLimitExceededError } from '../../services/rate-limit/errors';
+import { SecurityError } from '../../types/security';
 
 const logger = createLogger('InferenceUtils');
 
@@ -135,6 +137,9 @@ export async function executeInference<T extends z.AnyZodObject>(   {
             // console.log(result);
             return result;
         } catch (error) {
+            if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
+                throw error;
+            }
             const isLastAttempt = attempt === retryLimit - 1;
             logger.error(
                 `Error during ${agentActionName} operation (attempt ${attempt + 1}/${retryLimit}):`,

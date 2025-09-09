@@ -4,6 +4,8 @@ import z from 'zod';
 import { createLogger } from '../../logger';
 import { executeInference } from '../inferutils/infer';
 import { InferenceContext } from '../inferutils/config.types';
+import { RateLimitExceededError } from '../../services/rate-limit/errors';
+import { SecurityError } from '../../types/security';
 
 const logger = createLogger('TemplateSelector');
 
@@ -124,6 +126,9 @@ Analyze each template's features, frameworks, and architecture to make the best 
 
     } catch (error) {
         logger.error("Error during AI template selection:", error);
+        if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
+            throw error;
+        }
         // Fallback to no template selection in case of error
         return { selectedTemplateName: null, reasoning: "An error occurred during the template selection process.", useCase: null, complexity: null, styleSelection: null, projectName: '' };
     }

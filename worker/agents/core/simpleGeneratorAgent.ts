@@ -43,6 +43,7 @@ import { selectTemplate } from '../planning/templateSelector';
 import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
+import { createRateLimitErrorResponse, RateLimitExceededError } from '../../services/rate-limit/errors';
 
 interface WebhookPayload {
     event: {
@@ -435,6 +436,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             this.logger().info("State machine completed successfully");
         } catch (error) {
             this.logger().error("Error in state machine:", error);
+            if (error instanceof RateLimitExceededError) {
+                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, createRateLimitErrorResponse(error));
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.broadcast(WebSocketMessageResponses.ERROR, {
                 error: `Error during generation: ${errorMessage}`
@@ -488,6 +492,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             };
         } catch (error) {
             this.logger().error("Error generating phase", error);
+            if (error instanceof RateLimitExceededError) {
+                throw error;
+            }
             this.broadcast(WebSocketMessageResponses.ERROR, {
                 message: "Error generating phase",
                 error: error
@@ -547,6 +554,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             return {currentDevState: CurrentDevState.PHASE_GENERATING, staticAnalysis: staticAnalysis};
         } catch (error) {
             this.logger().error("Error implementing phase", error);
+            if (error instanceof RateLimitExceededError) {
+                throw error;
+            }
             return {currentDevState: CurrentDevState.IDLE};
         }
     }
@@ -625,6 +635,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
         } catch (error) {
             this.logger().error("Error during review cycle:", error);
+            if (error instanceof RateLimitExceededError) {
+                throw error;
+            }
             return CurrentDevState.IDLE;
         }
     }
@@ -2217,6 +2230,10 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
         } catch (error) {
             this.logger().error('Error handling user input:', error);
+            if (error instanceof RateLimitExceededError) {
+                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, createRateLimitErrorResponse(error));
+                return;
+            }
             this.broadcast(WebSocketMessageResponses.ERROR, {
                 error: `Error processing user input: ${error instanceof Error ? error.message : String(error)}`
             });

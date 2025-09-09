@@ -3,11 +3,14 @@ import type { CodeGenState } from "../agents/core/state";
 import type { CodeIssue, RuntimeError, StaticAnalysisResponse } from "../services/sandbox/sandboxTypes";
 import type { CodeFixResult } from "../services/code-fixer";
 import { IssueReport } from "../agents/domain/values/IssueReport";
+import { RateLimitErrorResponse } from "../services/rate-limit/errors";
 
 type ErrorMessage = {
     type: 'error';
     error: string;
 };
+
+type RateLimitErrorMessage = RateLimitErrorResponse;
 
 type StateMessage = {
 	type: 'cf_agent_state';
@@ -390,6 +393,7 @@ export type WebSocketMessage =
 	| GitHubExportCompletedMessage
 	| GitHubExportErrorMessage
 	| ErrorMessage
+    | RateLimitErrorMessage
 	| UserSuggestionsProcessingMessage
 	| ConversationResponseMessage
     | DeterministicCodeFixStartedMessage
