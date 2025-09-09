@@ -8,6 +8,7 @@ import { setupModelConfigRoutes } from './modelConfigRoutes';
 import { setupModelProviderRoutes } from './modelProviderRoutes';
 import { setupGitHubExporterRoutes } from './githubExporterRoutes';
 import { setupCodegenRoutes } from './codegenRoutes';
+import { setupScreenshotRoutes } from './screenshotRoutes';
 import { Hono } from "hono";
 import { AppEnv } from "../../types/appenv";
 
@@ -43,7 +44,10 @@ export function setupRoutes(env: Env, app: Hono<AppEnv>): void {
     
     // Model provider routes
     setupModelProviderRoutes(env, app);
-    
+
     // GitHub Exporter routes
     setupGitHubExporterRoutes(env, app);
+
+    // Screenshot serving routes (public)
+    setupScreenshotRoutes(env, app);
 }
