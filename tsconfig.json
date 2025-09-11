@@ -12,6 +12,9 @@
 		}
 	],
 	"compilerOptions": {
-		"composite": true
+		"composite": true,
+		"types": [
+			"./worker-configuration.d.ts"
+		]
 	}
 }
