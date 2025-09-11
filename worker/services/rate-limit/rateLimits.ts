@@ -4,6 +4,7 @@ import { createObjectLogger } from '../../logger';
 import { AuthUser } from '../../types/auth-types';
 import { extractTokenWithMetadata, extractRequestMetadata } from '../../utils/authUtils';
 import { RateLimitExceededError } from './errors';
+import { captureSecurityEvent } from '../../observability/sentry';
 import { getUserConfigurableSettings } from '../../config';
 import { KVRateLimitStore } from './KVRateLimitStore';
 
@@ -135,6 +136,13 @@ export class RateLimitService {
                     userAgent: request.headers.get('User-Agent'),
                     ip: request.headers.get('CF-Connecting-IP')
                 });
+                captureSecurityEvent('rate_limit_exceeded', {
+                    limitType: RateLimitType.API_RATE_LIMIT,
+                    identifier,
+                    key,
+                    userAgent: request.headers.get('User-Agent') || undefined,
+                    ip: request.headers.get('CF-Connecting-IP') || undefined,
+                });
                 throw new RateLimitExceededError(`Global API rate limit exceeded`, RateLimitType.API_RATE_LIMIT);
             }
         } catch (error) {
@@ -168,6 +176,13 @@ export class RateLimitService {
                     userAgent: request.headers.get('User-Agent'),
                     ip: request.headers.get('CF-Connecting-IP')
                 });
+                captureSecurityEvent('rate_limit_exceeded', {
+                    limitType: RateLimitType.AUTH_RATE_LIMIT,
+                    identifier,
+                    key,
+                    userAgent: request.headers.get('User-Agent') || undefined,
+                    ip: request.headers.get('CF-Connecting-IP') || undefined,
+                });
                 throw new RateLimitExceededError(`Auth rate limit exceeded`, RateLimitType.AUTH_RATE_LIMIT);
             }
         } catch (error) {
@@ -199,6 +214,13 @@ export class RateLimitService {
 					key,
 					userAgent: request.headers.get('User-Agent'),
 					ip: request.headers.get('CF-Connecting-IP')
+				});
+				captureSecurityEvent('rate_limit_exceeded', {
+					limitType: RateLimitType.APP_CREATION,
+					identifier,
+					key,
+					userAgent: request.headers.get('User-Agent') || undefined,
+					ip: request.headers.get('CF-Connecting-IP') || undefined,
 				});
 				throw new RateLimitExceededError(
 					`App creation rate limit exceeded. Maximum ${config.appCreation.limit} apps per ${config.appCreation.period / 3600} hour${config.appCreation.period >= 7200 ? 's' : ''}`,
@@ -234,6 +256,11 @@ export class RateLimitService {
 			const success = await this.enforce(env, key, user, config, RateLimitType.LLM_CALLS);
 			if (!success) {
 				this.logger.warn('LLM calls rate limit exceeded', {
+					identifier,
+					key,
+				});
+				captureSecurityEvent('rate_limit_exceeded', {
+					limitType: RateLimitType.LLM_CALLS,
 					identifier,
 					key,
 				});

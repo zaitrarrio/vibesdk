@@ -3,17 +3,24 @@ import { SmartCodeGeneratorAgent } from "./agents/core/smartGeneratorAgent";
 import { proxyToSandbox } from '@cloudflare/sandbox';
 import { isDispatcherAvailable } from './utils/dispatcherUtils';
 import { createApp } from './app';
+import * as Sentry from '@sentry/cloudflare';
+import { sentryOptions } from './observability/sentry';
 
-export class CodeGeneratorAgent extends SmartCodeGeneratorAgent {}
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
-export { DORateLimitStore } from './services/rate-limit/DORateLimitStore';
+// export { DORateLimitStore } from './services/rate-limit/DORateLimitStore';
+// export class CodeGeneratorAgent extends SmartCodeGeneratorAgent {}
+
+
+import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
+export const CodeGeneratorAgent = Sentry.instrumentDurableObjectWithSentry(sentryOptions, SmartCodeGeneratorAgent);
+export const DORateLimitStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, BaseDORateLimitStore);
 
 // Logger for the main application
 const logger = createLogger('App');
 /**
  * Main Worker fetch handler
  */
-export default {
+const worker = {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
         const hostname = url.hostname;
@@ -70,3 +77,5 @@ export default {
         return response;
     },
 } satisfies ExportedHandler<Env>;
+
+export default Sentry.withSentry(sentryOptions, worker);

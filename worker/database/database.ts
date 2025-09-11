@@ -4,6 +4,7 @@
  */
 
 import { drizzle } from 'drizzle-orm/d1';
+import * as Sentry from '@sentry/cloudflare';
 import * as schema from './schema';
 
 import type { HealthStatusResult } from './types';
@@ -37,7 +38,8 @@ export class DatabaseService {
     public readonly db: ReturnType<typeof drizzle>;
 
     constructor(env: DatabaseEnv) {
-        this.db = drizzle(env.DB, { schema });
+        const instrumented = Sentry.instrumentD1WithSentry(env.DB);
+        this.db = drizzle(instrumented, { schema });
     }
 
     // ========================================
