@@ -315,18 +315,24 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             inferenceContext,
         });
 
-        // Deploy to sandbox service and generate initial setup commands in parallel
-        Promise.all([this.deployToSandbox(), this.getProjectSetupAssistant().generateSetupCommands(), this.generateReadme()]).then(async ([, setupCommands, _readme]) => {
-            this.logger().info("Deployment to sandbox service and initial commands predictions completed successfully");
-            await this.executeCommands(setupCommands.commands);
-            this.logger().info("Initial commands executed successfully");
-        }).catch(error => {
+        try {
+            // Deploy to sandbox service and generate initial setup commands in parallel
+            Promise.all([this.deployToSandbox(), this.getProjectSetupAssistant().generateSetupCommands(), this.generateReadme()]).then(async ([, setupCommands, _readme]) => {
+                this.logger().info("Deployment to sandbox service and initial commands predictions completed successfully");
+                await this.executeCommands(setupCommands.commands);
+                this.logger().info("Initial commands executed successfully");
+            }).catch(error => {
+                this.logger().error("Error during deployment:", error);
+                this.broadcast(WebSocketMessageResponses.ERROR, {
+                    error: `Error during deployment: ${error instanceof Error ? error.message : String(error)}`
+                });
+            });
+        } catch (error) {
             this.logger().error("Error during deployment:", error);
             this.broadcast(WebSocketMessageResponses.ERROR, {
                 error: `Error during deployment: ${error instanceof Error ? error.message : String(error)}`
             });
-        });
-
+        }
         this.logger().info(`Agent ${this.state.sessionId} initialized successfully`);
         return this.state;
     }
@@ -665,7 +671,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 const issuesFound = reviewResult.issuesFound;
 
                 if (issuesFound) {
-                    this.logger().info(`Issues found in review cycle ${i + 1}`);
+                    this.logger().info(`Issues found in review cycle ${i + 1}`, { issuesFound });
                     const promises = [];
 
                     for (const fileToFix of reviewResult.filesToFix) {

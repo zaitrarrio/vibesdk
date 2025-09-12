@@ -174,7 +174,7 @@
 		"vite-plugin-monaco-editor": "^1.1.0",
 		"vite-plugin-node-polyfills": "^0.24.0",
 		"vitest": "^3.2.4",
-		"wrangler": "4.32.0"
+		"wrangler": "4.35.0"
 	},
 	"prettier": {
 		"singleQuote": true,

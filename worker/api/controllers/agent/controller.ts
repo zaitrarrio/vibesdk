@@ -157,7 +157,7 @@ export class CodingAgentController extends BaseController {
                     },
                 }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
                 agentPromise.then(async (state: CodeGenState) => {
-                    this.logger.info('Blueprint generated successfully');
+                    this.logger.info(`Blueprint generated successfully for agent ${agentId}`);
                     // Save the app to database (authenticated users only)
                     const appService = new AppService(this.db);
                     await appService.createApp({
@@ -174,14 +174,18 @@ export class CodingAgentController extends BaseController {
                         createdAt: new Date(),
                         updatedAt: new Date()
                     });
-                    this.logger.info('App saved successfully to database', { 
+                    this.logger.info(`App saved successfully to database for agent ${agentId}`, { 
                         agentId, 
                         userId: user.id,
                         visibility: 'private'
                     });
-                    this.logger.info('Agent initialized successfully');
+                    this.logger.info(`Agent initialized successfully for agent ${agentId}`);
+                }).catch((error) => {
+                    this.logger.info(`Agent ${agentId} failed to initialize`, error);
+                    writer.write("error");
                 }).finally(() => {
                     writer.write("terminate");
+                    this.logger.info(`Agent ${agentId} terminated successfully`);
                 });
             });
 
