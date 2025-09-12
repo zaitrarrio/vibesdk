@@ -182,14 +182,16 @@ export class CodingAgentController extends BaseController {
                     this.logger.info(`Agent initialized successfully for agent ${agentId}`);
                 }).catch((error) => {
                     this.logger.info(`Agent ${agentId} failed to initialize`, error);
-                    writer.write("error");
                 }).finally(() => {
                     writer.write("terminate");
+                    writer.close();
                     this.logger.info(`Agent ${agentId} terminated successfully`);
                 });
             });
 
             waitUntil(templateGenerationPromise);
+
+            this.logger.info(`Template generation for agent ${agentId} completed successfully`);
             
             return new Response(readable, {
                 status: 200,
