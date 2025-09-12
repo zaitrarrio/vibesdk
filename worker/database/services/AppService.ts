@@ -693,7 +693,6 @@ export class AppService extends BaseService {
                 visibility: 'private', // Forks start as private
                 status: 'completed', // Forked apps start as completed
                 parentAppId: originalApp.id,
-                blueprint: originalApp.blueprint,
                 createdAt: now,
                 updatedAt: now
             })

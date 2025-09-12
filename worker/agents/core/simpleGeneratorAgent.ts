@@ -128,6 +128,80 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         return this._logger;
     }
 
+    // ===============================
+    // Screenshot storage helpers
+    // ===============================
+    private base64ToUint8Array(base64: string): Uint8Array {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    private async uploadScreenshotToCloudflareImages(base64: string, filename: string): Promise<string> {
+        const url = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/images/v1`;
+        const bytes = this.base64ToUint8Array(base64);
+        const blob = new Blob([bytes], { type: 'image/png' });
+        const form = new FormData();
+        form.append('file', blob, filename);
+
+        // Type guard for Images binding
+        type ImagesBinding = { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
+        const maybeImages = (this.env as unknown as { [key: string]: unknown })['IMAGES'];
+        const imagesBinding: ImagesBinding | null = (
+            typeof maybeImages === 'object' && maybeImages !== null &&
+            'fetch' in (maybeImages as Record<string, unknown>) && 
+            typeof (maybeImages as { fetch?: unknown }).fetch === 'function'
+        ) ? (maybeImages as ImagesBinding) : null;
+
+        let resp: Response;
+        if (imagesBinding) {
+            // Use Images service binding when available (no explicit token needed)
+            resp = await imagesBinding.fetch(url, { method: 'POST', body: form });
+        } else if (this.env.CLOUDFLARE_API_TOKEN) {
+            // Fallback to direct API with token
+            resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${this.env.CLOUDFLARE_API_TOKEN}` },
+                body: form,
+            });
+        } else {
+            throw new Error('Cloudflare Images not available: missing IMAGES binding and CLOUDFLARE_API_TOKEN');
+        }
+
+        const json = await resp.json() as {
+            success: boolean;
+            result?: { id: string; variants?: string[] };
+            errors?: Array<{ message?: string }>;
+        };
+
+        if (!resp.ok || !json.success || !json.result) {
+            const errMsg = json.errors?.map(e => e.message).join('; ') || `status ${resp.status}`;
+            throw new Error(`Cloudflare Images upload failed: ${errMsg}`);
+        }
+
+        const variants = json.result.variants || [];
+        if (variants.length > 0) {
+            // Prefer first variant URL
+            return variants[0];
+        }
+        throw new Error('Cloudflare Images upload succeeded without variants');
+    }
+
+    private async uploadScreenshotToR2(base64: string, key: string): Promise<string> {
+        const bytes = this.base64ToUint8Array(base64);
+        await this.env.TEMPLATES_BUCKET.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
+
+        // Build a public URL served via Worker route
+        const fileName = key.split('/').pop() as string;
+        const protocol = getProtocolForHost(this.state.hostname);
+        const base = this.state.hostname ? `${protocol}://${this.state.hostname}` : '';
+        const sessionId = this.state.sessionId;
+        const url = `${base}/api/screenshots/${encodeURIComponent(sessionId)}/${encodeURIComponent(fileName)}`;
+        return url;
+    }
     // logger: StructuredLogger = createObjectLogger(this, 'CodeGeneratorAgent');
 
     initialState: CodeGenState = {
@@ -2324,15 +2398,39 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             
             // Get base64 screenshot data
             const base64Screenshot = result.result.screenshot;
-            
+
+            // Prefer Cloudflare Images → then R2 → fallback to data URL
+            const fileStamp = Date.now();
+            const fileBase = `${this.state.sessionId}-${fileStamp}`;
+            let publicUrl: string | null = null;
+
+            // 1) Try Cloudflare Images (REST API)
+            try {
+                publicUrl = await this.uploadScreenshotToCloudflareImages(base64Screenshot, `${fileBase}.png`);
+            } catch (imgErr) {
+                this.logger().warn('Cloudflare Images upload failed, will try R2 fallback', { error: imgErr instanceof Error ? imgErr.message : String(imgErr) });
+            }
+
+            // 2) Try R2 (serve via Worker route) if Images failed
+            if (!publicUrl) {
+                try {
+                    const r2Key = `screenshots/${this.state.sessionId}/${fileBase}.png`;
+                    publicUrl = await this.uploadScreenshotToR2(base64Screenshot, r2Key);
+                } catch (r2Err) {
+                    this.logger().warn('R2 upload fallback failed, will store as data URL', { error: r2Err instanceof Error ? r2Err.message : String(r2Err) });
+                }
+            }
+
+            // 3) Fallback: store data URL directly in DB
+            if (!publicUrl) {
+                publicUrl = `data:image/png;base64,${base64Screenshot}`;
+            }
+
+            // Persist in database
             try {
                 const db = createDatabaseService(this.env);
                 const appService = new AppService(db);
-                // Update database with base64 screenshot data
-                await appService.updateAppScreenshot(
-                    this.state.sessionId,
-                    `data:image/png;base64,${base64Screenshot}`
-                );
+                await appService.updateAppScreenshot(this.state.sessionId, publicUrl);
             } catch (dbError) {
                 const error = `Database update failed: ${dbError instanceof Error ? dbError.message : 'Unknown database error'}`;
                 this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_ERROR, {
@@ -2344,12 +2442,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 });
                 throw new Error(error);
             }
-            
-            this.logger().info('Screenshot captured successfully via REST API', { 
+
+            this.logger().info('Screenshot captured and stored successfully', { 
                 url, 
-                screenshotSize: base64Screenshot.length 
+                storage: publicUrl.startsWith('data:') ? 'database' : (publicUrl.includes('/api/screenshots/') ? 'r2' : 'images'),
+                length: base64Screenshot.length
             });
-            
+
             // Notify successful screenshot capture
             this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_SUCCESS, {
                 message: `Successfully captured screenshot of ${url}`,
@@ -2358,9 +2457,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 screenshotSize: base64Screenshot.length,
                 timestamp: new Date().toISOString()
             });
-            
-            // Return the data URL for immediate use
-            return `data:image/png;base64,${base64Screenshot}`;
+
+            return publicUrl;
             
         } catch (error) {
             this.logger().error('Failed to capture screenshot via REST API:', error);

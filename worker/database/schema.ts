@@ -143,7 +143,6 @@ export const apps = sqliteTable('apps', {
     finalPrompt: text('final_prompt'), // The processed/refined prompt used for generation
     
     // Generated Content  
-    blueprint: text('blueprint', { mode: 'json' }), // The generated blueprint
     framework: text('framework'), // 'react', 'vue', 'svelte', etc.
     
     // Ownership and Context
