@@ -110,7 +110,7 @@ export class SessionService extends BaseService {
             );
             
             // Hash tokens for storage
-            const [accessTokenHash] = await this.jwtUtils.hashToken(accessToken);
+            const accessTokenHash = await this.jwtUtils.hashToken(accessToken);
             
             // Extract request metadata using centralized utility
             const requestMetadata = extractRequestMetadata(request);
