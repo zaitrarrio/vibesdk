@@ -202,6 +202,12 @@ Every single file listed in <CURRENT_PHASE> needs to be implemented in this phas
 - Check for patterns causing infinite loops before submitting
 - If you write problematic code, REWRITE the entire file immediately
 
+⚠️  **ZUSTAND SELECTOR POLICY** — ZERO TOLERANCE
+- Do NOT return objects/arrays from \`useStore\` selectors
+- Do NOT destructure from object-literal selectors (e.g., \`const { a, b } = useStore((s) => ({ a: s.a, b: s.b }))\`)
+- Always select primitives individually via separate \`useStore\` calls
+- If you absolutely must read multiple values in one call, pass zustand's shallow comparator: \`useStore(selector, shallow)\`. Avoid object literals.
+
 ⚠️  **BACKWARD COMPATIBILITY** - PRESERVE EXISTING FUNCTIONALITY  
 - Do NOT break anything from previous phases
 - Maintain all existing features and functionality

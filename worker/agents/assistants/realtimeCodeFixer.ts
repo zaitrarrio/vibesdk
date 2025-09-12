@@ -68,6 +68,9 @@ Review Process:
       - setState called during render: setCount(count + 1) in component body
       - useEffect without dependencies: useEffect(() => setState(...))
       - Object dependencies in useEffect: useEffect(..., [objectRef])
+      - Zustand selector anti-patterns that cause unstable references:
+        - Object-literal selectors with destructuring: const { a, b } = useStore((s) => ({ a: s.a, b: s.b }))
+        - Fix required: select primitives individually with separate useStore(...) calls for each value
    b. Import/Export integrity errors
       - @xyflow/react: Must use { ReactFlow }, not default import
       - Missing @/lib/utils import for cn function
