@@ -6,6 +6,20 @@ import type { AuthUser } from '../types/auth-types';
 import type { User } from '../database/schema';
 
 /**
+ * Extract sessionId from cookie
+*/
+export function extractSessionId(request: Request): string | null {
+    const cookieHeader = request.headers.get('Cookie');
+       if (!cookieHeader) {
+               return null;
+       }
+
+       const cookies = parseCookies(cookieHeader);
+       return cookies['sessionId'];
+}
+
+
+/**
  * Token extraction priorities and methods
  */
 export enum TokenExtractionMethod {
@@ -84,19 +98,6 @@ export function extractTokenWithMetadata(
 }
 
 /**
- * Extract refresh token from request (cookies only for security)
- */
-export function extractRefreshToken(request: Request): string | null {
-	const cookieHeader = request.headers.get('Cookie');
-	if (!cookieHeader) {
-		return null;
-	}
-
-	const cookies = parseCookies(cookieHeader);
-	return cookies['refreshToken'] || cookies['refresh_token'] || null;
-}
-
-/**
  * Parse cookie header into key-value pairs
  */
 export function parseCookies(cookieHeader: string): Record<string, string> {
@@ -129,7 +130,6 @@ export function clearAuthCookie(name: string): string {
  */
 export function clearAuthCookies(response: Response): void {
 	response.headers.append('Set-Cookie', clearAuthCookie('accessToken'));
-	response.headers.append('Set-Cookie', clearAuthCookie('refreshToken'));
 	response.headers.append('Set-Cookie', clearAuthCookie('auth_token'));
 }
 
@@ -181,16 +181,12 @@ export function setSecureAuthCookies(
 	response: Response,
 	tokens: {
 		accessToken: string;
-		refreshToken: string;
 		accessTokenExpiry?: number; // seconds
-		refreshTokenExpiry?: number; // seconds
 	},
 ): void {
 	const {
 		accessToken,
-		refreshToken,
-		accessTokenExpiry = 24 * 60 * 60, // 24 hours (1 day)
-		refreshTokenExpiry = 7 * 24 * 60 * 60, // 7 days
+		accessTokenExpiry = 3 * 24 * 60 * 60, // 3 days
 	} = tokens;
 
 	// Set access token cookie
@@ -202,18 +198,6 @@ export function setSecureAuthCookies(
 			maxAge: accessTokenExpiry,
 			httpOnly: true,
 			sameSite: 'Lax',
-		}),
-	);
-
-	// Set refresh token cookie with higher security
-	response.headers.append(
-		'Set-Cookie',
-		createSecureCookie({
-			name: 'refreshToken',
-			value: refreshToken,
-			maxAge: refreshTokenExpiry,
-			httpOnly: true,
-			sameSite: 'Strict', // More restrictive for refresh tokens
 		}),
 	);
 }
