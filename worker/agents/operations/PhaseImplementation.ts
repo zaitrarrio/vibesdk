@@ -185,7 +185,7 @@ These are the instructions and quality standards that must be followed to implem
     •   **ALWAYS export ALL the components, variables, functions, classes, and types from each and every file**
     •   Some React specific guidelines:
         - **Rendering Should Be a Pure Function of Props and State**: A component's render method should be predictable. Given the same inputs (props and state), it should always produce the same JSX output
-        - **Effects are Managed Lifecycles, Not Afterthoughts**: Use useEffect for side effects, not for state updates or other logic. useEffect is for managing the lifecycle of a component, not for afterthoughts.
+        - **Effects are Managed Lifecycles, Not Afterthoughts**: Use useEffect for side effects and state synchronization; never unconditionally update state in render or effects. Guard effect updates with proper dependency arrays and conditions.
         - **The principle of having a "single source of truth" is paramount in React**
 
 Also understand the following:

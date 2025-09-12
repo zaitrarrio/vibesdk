@@ -442,6 +442,10 @@ const derivedValue = propValue.toUpperCase(); // No state needed
         - Strict DRY (Don't Repeat Yourself) principle.
         - Always try to import or extend existing types, components, functions, variables, etc. instead of redefining something similar.
 
+    •   **When using Zustand with Zustand's immer middleware, never define computed getters on the store. Export typed selectors/hooks that derive from primitive IDs.**
+    •   **Use useStore(selector) with functions that depend on raw state fields (e.g., IDs), not on derived getters.**
+    •   **Keep actions responsible for side-effects (fetch/poll), and selectors responsible for derivation only.**
+
     **ALGORITHMIC PRECISION & LOGICAL REASONING:**
     •   **Mathematical Accuracy:** For games/calculations, implement precise algorithms step-by-step. ALWAYS validate boundaries: if (x >= 0 && x < width && y >= 0 && y < height). Use === for exact comparisons.
     •   **Game Logic Systems:** Break complex logic into smaller, testable functions. Example: moveLeft(), checkWin(), updateScore(). Each function should handle ONE responsibility.
