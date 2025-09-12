@@ -204,7 +204,8 @@ export class RateLimitService {
 					`App creation rate limit exceeded. Maximum ${config.appCreation.limit} apps per ${config.appCreation.period / 3600} hour${config.appCreation.period >= 7200 ? 's' : ''}`,
 					RateLimitType.APP_CREATION,
 					config.appCreation.limit,
-					config.appCreation.period
+					config.appCreation.period,
+                    ['Please try again in an hour when the limit resets for you.']
 				);
 			}
 		} catch (error) {
@@ -240,7 +241,8 @@ export class RateLimitService {
 					`AI inference rate limit exceeded. Maximum ${config.llmCalls.limit} calls per ${config.llmCalls.period / 3600} hour${config.llmCalls.period >= 7200 ? 's' : ''}. Consider using your own API keys to remove this limit.`,
 					RateLimitType.LLM_CALLS,
 					config.llmCalls.limit,
-					config.llmCalls.period
+					config.llmCalls.period,
+                    ['Please try again in an hour when the limit resets for you.']
 				);
 			}
 		} catch (error) {

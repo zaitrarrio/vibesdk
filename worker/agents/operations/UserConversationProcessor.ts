@@ -10,6 +10,8 @@ import { StructuredLogger } from "../../logger";
 import { getToolDefinitions } from "../tools/customTools";
 import { XmlStreamFormat, XmlParsingState, XmlStreamingCallbacks } from "../streaming-formats/xml-stream";
 import { IdGenerator } from "../utils/idGenerator";
+import { RateLimitExceededError } from "../../services/rate-limit/errors";
+import { SecurityError } from "../../types/security";
 
 // Constants
 const CHUNK_SIZE = 64;
@@ -228,6 +230,9 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
                 messages: messages
             };
         } catch (error) {
+            if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
+                throw error;
+            }   
             logger.error("Error processing user message:", error);
             
             // Fallback response
