@@ -1624,7 +1624,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             // CF_AI_API_KEY: this.env.CLOUDFLARE_AI_GATEWAY_TOKEN,
         }
         
-        const createResponse = await this.getSandboxServiceClient().createInstance(templateName, `v1-${projectName}`, webhookUrl, true, localEnvVars);
+        const createResponse = await this.getSandboxServiceClient().createInstance(templateName, `v1-${projectName}`, webhookUrl, localEnvVars);
         if (!createResponse || !createResponse.success || !createResponse.runId) {
             throw new Error(`Failed to create sandbox instance: ${createResponse?.error || 'Unknown error'}`);
         }

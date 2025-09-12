@@ -56,6 +56,16 @@ Apart from these files, All SHADCN Components are present in ./src/components/ui
 Template Usage Instructions: 
 ${template.description.usage}
 
+<DO NOT TOUCH FILES>
+These files are forbidden to be modified by you. Do not touch them under any circumstances.
+${template.dontTouchFiles.join('\n')}
+</DO NOT TOUCH FILES>
+
+<REDACTED FILES>
+These files are redacted. They exist but their contents are hidden for security reasons. Do not touch them under any circumstances.
+${template.redactedFiles.join('\n')}
+</REDACTED FILES>
+
 **Websockets and dynamic imports are not supported, so please avoid using them.**
 
 </TEMPLATE DETAILS>`;
