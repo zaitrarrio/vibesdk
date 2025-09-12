@@ -1,6 +1,6 @@
 import { TemplateDetails } from "../../services/sandbox/sandboxTypes";
 import { createAssistantMessage, createSystemMessage, createUserMessage } from "../inferutils/common";
-import { Blueprint, FileOutputType, PhaseConceptType } from "../schemas";
+import { FileOutputType, PhaseConceptType } from "../schemas";
 import { createObjectLogger } from "../../logger";
 import { executeInference } from "../inferutils/infer";
 import { PROMPT_UTILS } from "../prompts";
@@ -20,7 +20,6 @@ const FUZZY_THRESHOLD = 0.87;
 export interface RealtimeCodeFixerContext {
     previousFiles?: FileOutputType[];
     query: string;
-    blueprint: Blueprint;
     template: TemplateDetails;
 }
 
@@ -241,13 +240,7 @@ export class RealtimeCodeFixer extends Assistant<Env> {
                 this.logger.info(`Skipping realtime code fixer for file: ${generatedFile.filePath}`);
                 return generatedFile;
             }
-
-            // Skip files that are less than 30 lines
-            if (generatedFile.fileContents.split('\n').length < 50) {
-                this.logger.info(`Skipping realtime code fixer for file: ${generatedFile.filePath}`);
-                return generatedFile;
-            }
-
+            
             let content = generatedFile.fileContents;
 
             this.save([createSystemMessage(this.systemPrompt)]);

@@ -395,7 +395,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
                                 )
                             };
 
-                            if (shouldEnableRealtimeCodeFixer) {
+                            if (shouldEnableRealtimeCodeFixer && generatedFile.fileContents.split('\n').length > 50) {
                                 // Call realtime code fixer immediately - this is the "realtime" aspect
                                 const realtimeCodeFixer = new RealtimeCodeFixer(env, options.inferenceContext);
                                 const fixPromise = realtimeCodeFixer.run(
@@ -403,7 +403,6 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
                                     {
                                         // previousFiles: previousFiles,
                                         query: context.query,
-                                        blueprint: context.blueprint,
                                         template: context.templateDetails
                                     },
                                     phase
