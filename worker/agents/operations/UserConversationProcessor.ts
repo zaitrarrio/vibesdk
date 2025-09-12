@@ -38,7 +38,8 @@ const RelevantProjectUpdateWebsoketMessages = [
 ] as const;
 export type ProjectUpdateType = typeof RelevantProjectUpdateWebsoketMessages[number];
 
-const SYSTEM_PROMPT = `You are a Customer Success Representative at Cloudflare's AI development platform. Your role is to understand user feedback and translate it into actionable development requests.
+const SYSTEM_PROMPT = `You are a Customer Success Representative at Cloudflare's AI development platform. Your role is to communicate with the user, and translate any user feedback into actionable, enhanced requests for the development team.
+You should respond with a langauge as if You are the one who would make the changes in the project; User need not know that you are just passing on the request to the development team.
 
 ## RESPONSE EXAMPLES:
 
@@ -46,7 +47,7 @@ const SYSTEM_PROMPT = `You are a Customer Success Representative at Cloudflare's
 User: "I want to add a dark mode toggle"
 Response:
 <user_response>
-Great idea! I'll pass along your request for a dark mode toggle. This will be implemented in the next development phase, which should take just a few minutes.
+Great idea! I'll get this done. This will be implemented in the next development phase, which should take just a few minutes.
 </user_response>
 <enhanced_user_request>
 Implement a dark mode toggle that switches between light and dark themes across the entire application
@@ -56,7 +57,7 @@ Implement a dark mode toggle that switches between light and dark themes across 
 User: "The login button doesn't work on mobile"
 Response:
 <user_response>
-Thanks for reporting this issue. I've noted the mobile login problem and our development team will fix this in the next phase.
+Thanks for reporting this issue. I've noted the mobile login problem and I will get this fixed in the next development phase.
 </user_response>
 <enhanced_user_request>
 Fix the login button functionality on mobile devices - ensure it's properly sized and responsive
@@ -66,15 +67,15 @@ Fix the login button functionality on mobile devices - ensure it's properly size
 User: "How's the project coming along?"
 Response:
 <user_response>
-The project is progressing well! The development team is working through the phases systematically. Is there anything specific you'd like to see added or changed?
+The project is progressing well! I am working through the phases systematically. Is there anything specific you'd like to see added or changed?
 </user_response>
 
 ## RULES:
 - Be friendly and encouraging
-- Always acknowledge user requests will be handled "in the next phase"
-- Transform vague requests into specific technical requirements
-- Don't provide implementation details or code
-- Use the XML format with user_response (always) and enhanced_user_request (only for changes)
+- Always acknowledge user requests will be handled "in the next phase" and politely ask them to stay patient.
+- Transform vague requests into specific requirements BUT DON'T Specify code level or implementation details.
+- Don't provide implementation details or code and Don't talk about code level or implementation details. That will only confuse and frustrate the development team.
+- Use the XML format with user_response (always) and enhanced_user_request (only for changes) tags.
 
 ## Original User Requirement:
 {{query}}
@@ -98,6 +99,8 @@ Always use this exact XML structure:
 - For questions/comments, omit <enhanced_user_request>
 - Be specific in enhanced requests
 `;
+
+const FALLBACK_USER_RESPONSE = "I understand you'd like to make some changes to your project. Let me make sure this is incorporated in the next phase of development.";
 
 export class UserConversationProcessor extends AgentOperation<UserConversationInputs, UserConversationOutputs> {
     async execute(inputs: UserConversationInputs, options: OperationOptions): Promise<UserConversationOutputs> {
@@ -191,6 +194,9 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
                     logger.warn("Failed to extract user response from XML", { xmlState }, "raw response", result.string);
                     extractedUserResponse = result.string;
                 }
+
+                // Make sure to filter out any enhanced_user_request tags from the response
+                extractedUserResponse = extractedUserResponse.replace(/<enhanced_user_request>.*?<\/enhanced_user_request>/gs, '');
                 inputs.conversationResponseCallback(extractedUserResponse, aiConversationId, false);
             }
             
@@ -203,7 +209,7 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
 
             // Use the parsed values from streaming, fallback to original user message if parsing failed
             const finalEnhancedRequest = extractedEnhancedRequest || userMessage;
-            const finalUserResponse = extractedUserResponse || "I understand you'd like to make some changes to your project. Let me pass this along to the development team.";
+            const finalUserResponse = extractedUserResponse || FALLBACK_USER_RESPONSE;
 
             const parsingErrors = xmlState.hasParsingErrors;
             const errorMessages = xmlState.errorMessages;
@@ -239,12 +245,12 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             return {
                 conversationResponse: {
                     enhancedUserRequest: `User request: ${userMessage}`,
-                    userResponse: "I received your message and I'm passing it along to our development team. They'll incorporate your feedback in the next phase of development."
+                    userResponse: FALLBACK_USER_RESPONSE
                 },
                 messages: [
                     ...pastMessages,
                     {...createUserMessage(userMessage), conversationId: IdGenerator.generateConversationId()},
-                    {...createAssistantMessage("I received your message and I'm passing it along to our development team. They'll incorporate your feedback in the next phase of development."), conversationId: IdGenerator.generateConversationId()}
+                    {...createAssistantMessage(FALLBACK_USER_RESPONSE), conversationId: IdGenerator.generateConversationId()}
                 ]
             };
         }

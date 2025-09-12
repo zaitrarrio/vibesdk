@@ -52,20 +52,37 @@ export type SecurityEventType =
 	| 'jwt_invalid'
 	| string;
 
-export function captureSecurityEvent(type: SecurityEventType, data: Record<string, unknown>): void {
-	try {
-		Sentry.withScope((scope) => {
-			scope.setTag('security_event', type);
-			scope.setContext('security', data);
-			Sentry.addBreadcrumb({
-				category: 'security',
-				level: 'warning',
-				data: { type, ...data },
-			});
-			Sentry.captureMessage(`[security] ${type}`, 'warning');
-		});
-	} catch {
-		// no-op: telemetry must not break the app
+export type SecuritySeverity = 'debug' | 'info' | 'warning' | 'error' | 'fatal';
+
+export interface SecurityEventOptions {
+    level?: SecuritySeverity;
+    error?: unknown;
+}
+
+export function captureSecurityEvent(
+    type: SecurityEventType,
+    data: Record<string, unknown> = {},
+    options: SecurityEventOptions = {},
+): void {
+    try {
+        const level: SecuritySeverity = options.level ?? 'warning';
+        Sentry.withScope((scope) => {
+            scope.setTag('security_event', type);
+            scope.setContext('security', data);
+            scope.setLevel(level);
+            Sentry.addBreadcrumb({
+                category: 'security',
+                level,
+                data: { type, ...data },
+            });
+            if (options.error !== undefined) {
+                Sentry.captureException(options.error, { level, extra: data });
+            } else {
+                Sentry.captureMessage(`[security] ${type}`, level);
+            }
+        });
+    } catch {
+        // no-op: telemetry must not break the app
         console.error('Failed to capture security event');
-	}
+    }
 }

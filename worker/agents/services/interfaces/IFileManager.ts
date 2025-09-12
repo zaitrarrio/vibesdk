@@ -32,6 +32,11 @@ export interface IFileManager {
     saveGeneratedFiles(files: FileOutputType[]): void;
 
     /**
+     * Delete files from the file manager
+     */
+    deleteFiles(filePaths: string[]): void;
+
+    /**
      * Get file contents by path (template or generated)
      */
     getFileContents(path: string): string;

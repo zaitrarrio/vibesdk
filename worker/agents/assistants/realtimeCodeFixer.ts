@@ -1,6 +1,6 @@
 import { TemplateDetails } from "../../services/sandbox/sandboxTypes";
 import { createAssistantMessage, createSystemMessage, createUserMessage } from "../inferutils/common";
-import { Blueprint, FileOutputType, PhaseConceptType } from "../schemas";
+import { FileOutputType, PhaseConceptType } from "../schemas";
 import { createObjectLogger } from "../../logger";
 import { executeInference } from "../inferutils/infer";
 import { PROMPT_UTILS } from "../prompts";
@@ -20,7 +20,6 @@ const FUZZY_THRESHOLD = 0.87;
 export interface RealtimeCodeFixerContext {
     previousFiles?: FileOutputType[];
     query: string;
-    blueprint: Blueprint;
     template: TemplateDetails;
 }
 
@@ -69,6 +68,9 @@ Review Process:
       - setState called during render: setCount(count + 1) in component body
       - useEffect without dependencies: useEffect(() => setState(...))
       - Object dependencies in useEffect: useEffect(..., [objectRef])
+      - Zustand selector anti-patterns that cause unstable references:
+        - Object-literal selectors with destructuring: const { a, b } = useStore((s) => ({ a: s.a, b: s.b }))
+        - Fix required: select primitives individually with separate useStore(...) calls for each value
    b. Import/Export integrity errors
       - @xyflow/react: Must use { ReactFlow }, not default import
       - Missing @/lib/utils import for cn function
@@ -241,13 +243,7 @@ export class RealtimeCodeFixer extends Assistant<Env> {
                 this.logger.info(`Skipping realtime code fixer for file: ${generatedFile.filePath}`);
                 return generatedFile;
             }
-
-            // Skip files that are less than 30 lines
-            if (generatedFile.fileContents.split('\n').length < 50) {
-                this.logger.info(`Skipping realtime code fixer for file: ${generatedFile.filePath}`);
-                return generatedFile;
-            }
-
+            
             let content = generatedFile.fileContents;
 
             this.save([createSystemMessage(this.systemPrompt)]);

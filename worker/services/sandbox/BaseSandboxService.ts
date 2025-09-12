@@ -128,7 +128,7 @@ import {
      * Create a new instance from a template
      * Returns: { success: boolean, instanceId?: string, error?: string }
      */
-    abstract createInstance(templateName: string, projectName: string, webhookUrl?: string, wait?: boolean, localEnvVars?: Record<string, string>): Promise<BootstrapResponse>;
+    abstract createInstance(templateName: string, projectName: string, webhookUrl?: string, localEnvVars?: Record<string, string>): Promise<BootstrapResponse>;
 
     /**
      * List all instances across all sessions

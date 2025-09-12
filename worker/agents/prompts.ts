@@ -56,6 +56,16 @@ Apart from these files, All SHADCN Components are present in ./src/components/ui
 Template Usage Instructions: 
 ${template.description.usage}
 
+<DO NOT TOUCH FILES>
+These files are forbidden to be modified by you. Do not touch them under any circumstances.
+${template.dontTouchFiles.join('\n')}
+</DO NOT TOUCH FILES>
+
+<REDACTED FILES>
+These files are redacted. They exist but their contents are hidden for security reasons. Do not touch them under any circumstances.
+${template.redactedFiles.join('\n')}
+</REDACTED FILES>
+
 **Websockets and dynamic imports are not supported, so please avoid using them.**
 
 </TEMPLATE DETAILS>`;
@@ -292,8 +302,9 @@ function App() {
 \`\`\`
 
 **State Management Library Selectors:**
+Never use object literals to select multiple values from a store. Always select individual values.
 \`\`\`tsx
-// BAD CODE ❌ Selector returns new object every render
+// BAD CODE ❌ Multiple values in selector: Selector returns new object every render
 const { score, bestScore } = useGameStore((state) => ({
     score: state.score,
     bestScore: state.bestScore,
@@ -302,6 +313,23 @@ const { score, bestScore } = useGameStore((state) => ({
 // GOOD CODE ✅ Select primitive values individually
 const score = useGameStore((state) => state.score);
 const bestScore = useGameStore((state) => state.bestScore);
+\`\`\`
+
+**STRICT POLICY:** Do NOT destructure multiple values from an object-literal selector. Always call useStore multiple times for primitives.
+\`\`\`tsx
+// BAD CODE ❌ Object-literal selector with destructuring (causes unstable references)
+const { servers, selectedServerId, selectedChannelId, selectChannel } = useAppStore((state) => ({
+  servers: state.servers,
+  selectedServerId: state.selectedServerId,
+  selectedChannelId: state.selectedChannelId,
+  selectChannel: state.selectChannel,
+}));
+
+// GOOD CODE ✅ Select slices individually to keep snapshots stable
+const servers = useAppStore((state) => state.servers);
+const selectedServerId = useAppStore((state) => state.selectedServerId);
+const selectedChannelId = useAppStore((state) => state.selectedChannelId);
+const selectChannel = useAppStore((state) => state.selectChannel);
 \`\`\`
 
 ## Other Common Loop-Inducing Patterns
@@ -414,7 +442,7 @@ const derivedValue = propValue.toUpperCase(); // No state needed
 \`\`\`
 </REACT_RENDER_LOOP_PREVENTION>`,
 
-    COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
+COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
     **TOP 6 MISSION-CRITICAL RULES (FAILURE WILL CRASH THE APP):**
     1. **DEPENDENCY VALIDATION:** BEFORE writing any import statement, verify it exists in <DEPENDENCIES>. Common failures: @xyflow/react uses { ReactFlow } not default import, @/lib/utils for cn function. If unsure, check the dependency list first.
     2. **IMPORT & EXPORT INTEGRITY:** Ensure every component, function, or variable is correctly defined and imported properly (and exported properly). Mismatched default/named imports will cause crashes.
@@ -441,6 +469,12 @@ const derivedValue = propValue.toUpperCase(); // No state needed
         - Always maximize code reuse and minimize code redundancy and duplicacy. 
         - Strict DRY (Don't Repeat Yourself) principle.
         - Always try to import or extend existing types, components, functions, variables, etc. instead of redefining something similar.
+
+    •   **When using Zustand with Zustand's immer middleware, never define computed getters on the store. Export typed selectors/hooks that derive from primitive IDs.**
+    •   **Use useStore(selector) with functions that depend on raw state fields (e.g., IDs), not on derived getters.**
+    •   **Keep actions responsible for side-effects (fetch/poll), and selectors responsible for derivation only.**
+    •   **STRICT Zustand Selector Policy (ZERO TOLERANCE):** Do NOT return objects/arrays from \`useStore\` selectors nor destructure multiple values from an object-literal selector. Always select primitives individually. If you need multiple values, call \`useStore\` multiple times.
+    •   If you absolutely must read multiple values in one call, pass zustand's shallow comparator: \`useStore(selector, shallow)\`. Avoid object literals and avoid \`useStore(s => s)\`.
 
     **ALGORITHMIC PRECISION & LOGICAL REASONING:**
     •   **Mathematical Accuracy:** For games/calculations, implement precise algorithms step-by-step. ALWAYS validate boundaries: if (x >= 0 && x < width && y >= 0 && y < height). Use === for exact comparisons.
@@ -479,6 +513,7 @@ const derivedValue = propValue.toUpperCase(); // No state needed
     - All imports use correct syntax and paths. Be cautious about named vs default imports wherever needed.
     - All variables are defined before use  
     - No setState calls during render phase
+    - No object-literal selectors in Zustand (avoid \`useStore((state) => ({ ... }))\`; select primitives individually)
     - All Tailwind classes exist in config
     - External dependencies are available
     - Error boundaries around components that might fail

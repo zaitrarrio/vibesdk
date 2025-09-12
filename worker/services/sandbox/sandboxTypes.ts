@@ -34,6 +34,8 @@ export const TemplateDetailsSchema = z.object({
     language: z.string().optional(),
     deps: z.record(z.string(), z.string()),
     frameworks: z.array(z.string()).optional(),
+    dontTouchFiles: z.array(z.string()),
+    redactedFiles: z.array(z.string()),
 })
 export type TemplateDetails = z.infer<typeof TemplateDetailsSchema>
 
@@ -126,7 +128,6 @@ export type GetTemplateFilesResponse = z.infer<typeof GetTemplateFilesResponseSc
 export const BootstrapRequestSchema = z.object({
     templateName: z.string(),
     projectName: z.string(),
-    wait: z.boolean(),
     webhookUrl: z.string().url().optional(),
     envVars: z.record(z.string(), z.string()).optional(),
 })
