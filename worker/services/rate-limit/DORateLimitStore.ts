@@ -29,7 +29,7 @@ export interface RateLimitResult {
  * Provides distributed rate limiting using bucketed sliding window algorithm
  * similar to the KV implementation but with better scalability, consistency and cost-effectiveness
  */
-export class DORateLimitStore extends DurableObject {
+export class DORateLimitStore extends DurableObject<Env> {
     private state: RateLimitState = {
         buckets: new Map(),
         lastCleanup: Date.now()

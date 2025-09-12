@@ -63,6 +63,20 @@ export class FileManager implements IFileManager {
         });
     }
 
+    deleteFiles(filePaths: string[]): void {
+        const state = this.stateManager.getState();
+        const newFilesMap = { ...state.generatedFilesMap };
+        
+        for (const filePath of filePaths) {
+            delete newFilesMap[filePath];
+        }
+        
+        this.stateManager.setState({
+            ...state,
+            generatedFilesMap: newFilesMap
+        });
+    }
+
     getFile(path: string): FileOutputType | null {
         const generatedFile = this.getGeneratedFile(path);
         if (generatedFile) {

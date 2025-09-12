@@ -8,6 +8,7 @@ import { SecurityError, SecurityErrorType } from '../../types/security';
 import { generateSecureToken } from '../../utils/cryptoUtils';
 import { parseCookies, createSecureCookie } from '../../utils/authUtils';
 import { getCSRFConfig } from '../../config/security';
+import { captureSecurityEvent } from '../../observability/sentry';
 import { env } from 'cloudflare:workers'
 
 const logger = createLogger('CsrfService');
@@ -123,6 +124,15 @@ export class CsrfService {
                 origin: request.headers.get('Origin'),
                 referer: request.headers.get('Referer')
             });
+            captureSecurityEvent('csrf_violation', {
+                reason: 'missing_token',
+                hasCookie: !!cookieToken,
+                hasHeader: !!headerToken,
+                method,
+                path: new URL(request.url).pathname,
+                origin: request.headers.get('Origin'),
+                referer: request.headers.get('Referer'),
+            });
             return false;
         }
         
@@ -131,6 +141,15 @@ export class CsrfService {
                 method,
                 path: new URL(request.url).pathname,
                 userAgent: request.headers.get('User-Agent')?.substring(0, 100),
+                origin: request.headers.get('Origin'),
+                referer: request.headers.get('Referer'),
+                cookieTokenPrefix: cookieToken.substring(0, 8),
+                headerTokenPrefix: headerToken.substring(0, 8)
+            });
+            captureSecurityEvent('csrf_violation', {
+                reason: 'token_mismatch',
+                method,
+                path: new URL(request.url).pathname,
                 origin: request.headers.get('Origin'),
                 referer: request.headers.get('Referer'),
                 cookieTokenPrefix: cookieToken.substring(0, 8),

@@ -185,7 +185,7 @@ These are the instructions and quality standards that must be followed to implem
     •   **ALWAYS export ALL the components, variables, functions, classes, and types from each and every file**
     •   Some React specific guidelines:
         - **Rendering Should Be a Pure Function of Props and State**: A component's render method should be predictable. Given the same inputs (props and state), it should always produce the same JSX output
-        - **Effects are Managed Lifecycles, Not Afterthoughts**: Use useEffect for side effects, not for state updates or other logic. useEffect is for managing the lifecycle of a component, not for afterthoughts.
+        - **Effects are Managed Lifecycles, Not Afterthoughts**: Use useEffect for side effects and state synchronization; never unconditionally update state in render or effects. Guard effect updates with proper dependency arrays and conditions.
         - **The principle of having a "single source of truth" is paramount in React**
 
 Also understand the following:
@@ -201,6 +201,12 @@ Every single file listed in <CURRENT_PHASE> needs to be implemented in this phas
 - ALWAYS use proper dependency arrays in useEffect
 - Check for patterns causing infinite loops before submitting
 - If you write problematic code, REWRITE the entire file immediately
+
+⚠️  **ZUSTAND SELECTOR POLICY** — ZERO TOLERANCE
+- Do NOT return objects/arrays from \`useStore\` selectors
+- Do NOT destructure from object-literal selectors (e.g., \`const { a, b } = useStore((s) => ({ a: s.a, b: s.b }))\`)
+- Always select primitives individually via separate \`useStore\` calls
+- If you absolutely must read multiple values in one call, pass zustand's shallow comparator: \`useStore(selector, shallow)\`. Avoid object literals.
 
 ⚠️  **BACKWARD COMPATIBILITY** - PRESERVE EXISTING FUNCTIONALITY  
 - Do NOT break anything from previous phases
@@ -395,7 +401,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
                                 )
                             };
 
-                            if (shouldEnableRealtimeCodeFixer) {
+                            if (shouldEnableRealtimeCodeFixer && generatedFile.fileContents.split('\n').length > 50) {
                                 // Call realtime code fixer immediately - this is the "realtime" aspect
                                 const realtimeCodeFixer = new RealtimeCodeFixer(env, options.inferenceContext);
                                 const fixPromise = realtimeCodeFixer.run(
@@ -403,7 +409,6 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
                                     {
                                         // previousFiles: previousFiles,
                                         query: context.query,
-                                        blueprint: context.blueprint,
                                         template: context.templateDetails
                                     },
                                     phase
