@@ -798,6 +798,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         if (result.installCommands && result.installCommands.length > 0) {
             this.executeCommands(result.installCommands);
         }
+
+        // Execute delete commands if any
+        const filesToDelete = result.files.filter(f => f.changes?.toLowerCase().trim() === 'delete');
+        if (filesToDelete.length > 0) {
+            this.logger().info(`Deleting ${filesToDelete.length} files: ${filesToDelete.map(f => f.path).join(", ")}`);
+            this.deleteFiles(filesToDelete.map(f => f.path));
+        }
         
         if (result.files.length === 0) {
             this.logger().info("No files generated for next phase");
@@ -2150,6 +2157,24 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 ...successfulCommands
             ]
         });
+    }
+
+    /**
+     * Delete files from the file manager
+     */
+    async deleteFiles(filePaths: string[]) {
+        const deleteCommands: string[] = [];
+        for (const filePath of filePaths) {
+            deleteCommands.push(`rm ${filePath}`);
+        }
+        // Remove the files from file manager
+        this.fileManager.deleteFiles(filePaths);
+        try {
+            await this.executeCommands(deleteCommands);
+            this.logger().info(`Deleted ${filePaths.length} files: ${filePaths.join(", ")}`);
+        } catch (error) {
+            this.logger().error('Error deleting files:', error);
+        }
     }
 
     /**
