@@ -80,34 +80,3 @@ export function useToggleFavorite() {
 
   return { toggleFavorite: protectedToggleFavorite };
 }
-
-/**
- * Hook for protected fork app functionality
- */
-export function useForkApp() {
-  const { requireAuth } = useAuthGuard();
-
-  const forkApp = async (appId: string): Promise<any | null> => {
-    if (!requireAuth({ 
-      requireFullAuth: true, 
-      actionContext: 'to fork this app' 
-    })) {
-      return null;
-    }
-
-    try {
-      const response = await apiClient.forkApp(appId);
-      if (response.success) {
-        return response.data;
-      }
-      throw new Error(response.error || 'Failed to fork app');
-    } catch (err) {
-      if (err instanceof ApiError) {
-        throw new Error(`Failed to fork app: ${err.message}`);
-      }
-      throw err;
-    }
-  };
-
-  return { forkApp };
-}

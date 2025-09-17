@@ -36,7 +36,6 @@ export type {
 export type {
   AppDetailsData,
   AppStarToggleData,
-  ForkAppData,
   GeneratedCodeFile
 } from 'worker/api/controllers/appView/types';
 
