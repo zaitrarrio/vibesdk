@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { RouteContext } from './types/route-context';
 import { AppEnv } from '../types/appenv';
 import { BaseController } from './controllers/baseController';
+import { enforceAuthRequirement } from '../middleware/auth/routeAuth';
 
 /*
 * This is a simple adapter to convert Hono context to our base controller's expected arguments
@@ -20,6 +21,10 @@ export function adaptController<T extends BaseController>(
     method: ControllerMethod<T>
 ) {
     return async (c: Context<AppEnv>): Promise<Response> => {
+        const authResult = await enforceAuthRequirement(c);
+        if (authResult) {
+            return authResult;
+        }
 
         const routeContext: RouteContext = {
             user: c.get('user'),
