@@ -14,99 +14,99 @@ import {
     AppDeleteData
 } from './types';
 import { withCache } from '../../../services/cache/wrapper';
+import { createLogger } from '../../../logger';
 
 export class AppController extends BaseController {
-    private appService: AppService;
-    
-    constructor(env: Env) {
-        super(env);
-        this.appService = new AppService(this.db);
-    }
+    static logger = createLogger('AppController');
 
     // Get all apps for the current user
-    async getUserApps(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppsListData>>> {
+    static async getUserApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppsListData>>> {
         try {
             const user = context.user!;
             
-            const userApps = await this.appService.getUserAppsWithFavorites(user.id);
+            const appService = new AppService(env);
+            const userApps = await appService.getUserAppsWithFavorites(user.id);
 
             const responseData: AppsListData = {
                 apps: userApps // Already properly typed and formatted by DatabaseService
             };
 
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching user apps:', error);
-            return this.createErrorResponse<AppsListData>('Failed to fetch apps', 500);
+            AppController.logger.error('Error fetching user apps:', error);
+            return AppController.createErrorResponse<AppsListData>('Failed to fetch apps', 500);
         }
     }
 
     // Get recent apps (last 10)
-    async getRecentApps(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppsListData>>> {
+    static async getRecentApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppsListData>>> {
         try {
             const user = context.user!;
 
-            const recentApps = await this.appService.getRecentAppsWithFavorites(user.id, 10);
+            const appService = new AppService(env);
+            const recentApps = await appService.getRecentAppsWithFavorites(user.id, 10);
 
             const responseData: AppsListData = {
                 apps: recentApps // Already properly typed and formatted by DatabaseService
             };
 
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching recent apps:', error);
-            return this.createErrorResponse<AppsListData>('Failed to fetch recent apps', 500);
+            AppController.logger.error('Error fetching recent apps:', error);
+            return AppController.createErrorResponse<AppsListData>('Failed to fetch recent apps', 500);
         }
     }
 
     // Get favorite apps - NO CACHE (user-specific, real-time)
-    async getFavoriteApps(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppsListData>>> {
+    static async getFavoriteApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppsListData>>> {
         try {
             const user = context.user!;
 
-            const favoriteApps = await this.appService.getFavoriteAppsOnly(user.id);
+            const appService = new AppService(env);
+            const favoriteApps = await appService.getFavoriteAppsOnly(user.id);
 
             const responseData: AppsListData = {
                 apps: favoriteApps // Already properly typed and formatted by DatabaseService
             };
 
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching favorite apps:', error);
-            return this.createErrorResponse<AppsListData>('Failed to fetch favorite apps', 500);
+            AppController.logger.error('Error fetching favorite apps:', error);
+            return AppController.createErrorResponse<AppsListData>('Failed to fetch favorite apps', 500);
         }
     }
 
 
     // Toggle favorite status
-    async toggleFavorite(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<FavoriteToggleData>>> {
+    static async toggleFavorite(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<FavoriteToggleData>>> {
         try {
             const user = context.user!;
 
+            const appService = new AppService(env);
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<FavoriteToggleData>('App ID is required', 400);
+                return AppController.createErrorResponse<FavoriteToggleData>('App ID is required', 400);
             }
 
             // Check if app exists (no ownership check needed - users can bookmark any app)
-            const ownershipResult = await this.appService.checkAppOwnership(appId, user.id);
+            const ownershipResult = await appService.checkAppOwnership(appId, user.id);
             
             if (!ownershipResult.exists) {
-                return this.createErrorResponse<FavoriteToggleData>('App not found', 404);
+                return AppController.createErrorResponse<FavoriteToggleData>('App not found', 404);
             }
 
-            const result = await this.appService.toggleAppFavorite(user.id, appId);
+            const result = await appService.toggleAppFavorite(user.id, appId);
             const responseData: FavoriteToggleData = result;
                 
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error toggling favorite:', error);
-            return this.createErrorResponse<FavoriteToggleData>('Failed to toggle favorite', 500);
+            AppController.logger.error('Error toggling favorite:', error);
+            return AppController.createErrorResponse<FavoriteToggleData>('Failed to toggle favorite', 500);
         }
     }
 
     // Get public apps feed (like a global board)
-    getPublicApps = withCache(
+   static getPublicApps = withCache(
         async function(this: AppController, request: Request, env: Env, _ctx: ExecutionContext, _context: RouteContext): Promise<ControllerResponse<ApiResponse<PublicAppsData>>> {
         try {
             const url = new URL(request.url);
@@ -123,10 +123,11 @@ export class AppController extends BaseController {
             const framework = url.searchParams.get('framework') || undefined;
             const search = url.searchParams.get('search') || undefined;
             
-            const user = await this.getOptionalUser(request, env);
+            const user = await AppController.getOptionalUser(request, env);
             const userId = user?.id;
             
-            const result = await this.appService.getPublicAppsEnhanced({
+            const appService = new AppService(env);
+            const result = await appService.getPublicAppsEnhanced({
                 limit,
                 offset,
                 sort,
@@ -145,7 +146,7 @@ export class AppController extends BaseController {
             if (sort === 'popular' || sort === 'trending') {
                 // For analytics-based sorting, we need to fetch analytics for ALL apps, sort, then paginate
                 // First get all apps without pagination
-                const allAppsResult = await this.appService.getPublicAppsEnhanced({
+                const allAppsResult = await appService.getPublicAppsEnhanced({
                     framework: framework,
                     search: search,
                     userId: userId,
@@ -153,7 +154,7 @@ export class AppController extends BaseController {
                     offset: 0
                 });
                 
-                const analyticsService = new AnalyticsService(this.db);
+                const analyticsService = new AnalyticsService(env);
                 const appIds = allAppsResult.data.map(app => app.id);
                 analyticsData = await analyticsService.batchGetAppStats(appIds);
                 
@@ -195,7 +196,7 @@ export class AppController extends BaseController {
                 pagination.hasMore = offset + limit < pagination.total;
             } else {
                 // For non-analytics sorting, get analytics only for the current page
-                const analyticsService = new AnalyticsService(this.db);
+                const analyticsService = new AnalyticsService(env);
                 const appIds = apps.map(app => app.id);
                 analyticsData = await analyticsService.batchGetAppStats(appIds);
             }
@@ -218,50 +219,51 @@ export class AppController extends BaseController {
                 }
             };
             
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching public apps:', error);
-            return this.createErrorResponse<PublicAppsData>('Failed to fetch public apps', 500);
+            AppController.logger.error('Error fetching public apps:', error);
+            return AppController.createErrorResponse<PublicAppsData>('Failed to fetch public apps', 500);
         }
     },
         { ttlSeconds: 45 * 60, tags: ['public-apps'] }
     );
 
     // Get single app
-    async getApp(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SingleAppData>>> {
+    static async getApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SingleAppData>>> {
         try {
             const user = context.user!;
 
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<SingleAppData>('App ID is required', 400);
+                return AppController.createErrorResponse<SingleAppData>('App ID is required', 400);
             }
             
-            const app = await this.appService.getSingleAppWithFavoriteStatus(appId, user.id);
+            const appService = new AppService(env);
+            const app = await appService.getSingleAppWithFavoriteStatus(appId, user.id);
 
             if (!app) {
-                return this.createErrorResponse<SingleAppData>('App not found', 404);
+                return AppController.createErrorResponse<SingleAppData>('App not found', 404);
             }
 
             const responseData: SingleAppData = { app };
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching app:', error);
-            return this.createErrorResponse<SingleAppData>('Failed to fetch app', 500);
+            AppController.logger.error('Error fetching app:', error);
+            return AppController.createErrorResponse<SingleAppData>('Failed to fetch app', 500);
         }
     }
 
     // Update app visibility
-    async updateAppVisibility(request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UpdateAppVisibilityData>>> {
+    static async updateAppVisibility(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UpdateAppVisibilityData>>> {
         try {
             const user = context.user!;
 
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<UpdateAppVisibilityData>('App ID is required', 400);
+                return AppController.createErrorResponse<UpdateAppVisibilityData>('App ID is required', 400);
             }
 
-            const bodyResult = await this.parseJsonBody(request);
+            const bodyResult = await AppController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response! as ControllerResponse<ApiResponse<UpdateAppVisibilityData>>;
             }
@@ -270,17 +272,18 @@ export class AppController extends BaseController {
 
             // Validate visibility value
             if (!visibility || !['private', 'public'].includes(visibility)) {
-                return this.createErrorResponse<UpdateAppVisibilityData>('Visibility must be either "private" or "public"', 400);
+                return AppController.createErrorResponse<UpdateAppVisibilityData>('Visibility must be either "private" or "public"', 400);
             }
 
             const validVisibility = visibility as Visibility;
             
-            const result = await this.appService.updateAppVisibility(appId, user.id, validVisibility);
+            const appService = new AppService(env);
+            const result = await appService.updateAppVisibility(appId, user.id, validVisibility);
 
             if (!result.success) {
                 const statusCode = result.error === 'App not found' ? 404 : 
                                  result.error?.includes('only change visibility of your own apps') ? 403 : 500;
-                return this.createErrorResponse<UpdateAppVisibilityData>(result.error || 'Failed to update app visibility', statusCode);
+                return AppController.createErrorResponse<UpdateAppVisibilityData>(result.error || 'Failed to update app visibility', statusCode);
             }
 
             const responseData: UpdateAppVisibilityData = { 
@@ -290,39 +293,40 @@ export class AppController extends BaseController {
                 },
                 message: `App visibility updated to ${validVisibility}`
             };
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error updating app visibility:', error);
-            return this.createErrorResponse<UpdateAppVisibilityData>('Failed to update app visibility', 500);
+            AppController.logger.error('Error updating app visibility:', error);
+            return AppController.createErrorResponse<UpdateAppVisibilityData>('Failed to update app visibility', 500);
         }
     }
 
     // Delete app
-    async deleteApp(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppDeleteData>>> {
+    static async deleteApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppDeleteData>>> {
         try {
             const user = context.user!;
 
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<AppDeleteData>('App ID is required', 400);
+                return AppController.createErrorResponse<AppDeleteData>('App ID is required', 400);
             }
         
-            const result = await this.appService.deleteApp(appId, user.id);
+            const appService = new AppService(env);
+            const result = await appService.deleteApp(appId, user.id);
 
             if (!result.success) {
                 const statusCode = result.error === 'App not found' ? 404 : 
                                  result.error?.includes('only delete your own apps') ? 403 : 500;
-                return this.createErrorResponse<AppDeleteData>(result.error || 'Failed to delete app', statusCode);
+                return AppController.createErrorResponse<AppDeleteData>(result.error || 'Failed to delete app', statusCode);
             }
 
             const responseData: AppDeleteData = {
                 success: true,
                 message: 'App deleted successfully'
             };
-            return this.createSuccessResponse(responseData);
+            return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error deleting app:', error);
-            return this.createErrorResponse<AppDeleteData>('Failed to delete app', 500);
+            AppController.logger.error('Error deleting app:', error);
+            return AppController.createErrorResponse<AppDeleteData>('Failed to delete app', 500);
         }
     }
 }

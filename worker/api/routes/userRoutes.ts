@@ -7,12 +7,10 @@ import { AuthConfig, routeAuthMiddleware } from '../../middleware/auth/routeAuth
 /**
  * Setup user management routes
  */
-export function setupUserRoutes(env: Env, app: Hono<AppEnv>): void {
-    const userController = new UserController(env);
-
+export function setupUserRoutes(app: Hono<AppEnv>): void {
     // User apps with pagination (this is what the frontend needs)
-    app.get('/api/user/apps', routeAuthMiddleware(AuthConfig.authenticated), adaptController(userController, userController.getApps));
+    app.get('/api/user/apps', routeAuthMiddleware(AuthConfig.authenticated), adaptController(UserController, UserController.getApps));
 
     // User profile
-    app.put('/api/user/profile', routeAuthMiddleware(AuthConfig.authenticated), adaptController(userController, userController.updateProfile));
+    app.put('/api/user/profile', routeAuthMiddleware(AuthConfig.authenticated), adaptController(UserController, UserController.updateProfile));
 }

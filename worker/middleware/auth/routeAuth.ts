@@ -5,7 +5,6 @@
 import { createMiddleware } from 'hono/factory';
 import { AuthUser } from '../../types/auth-types';
 import { createLogger } from '../../logger';
-import { createDatabaseService } from '../../database/database';
 import { AppService } from '../../database';
 import { authMiddleware } from './auth';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
@@ -195,7 +194,7 @@ export async function checkAppOwnership(user: AuthUser, params: Record<string, s
             return false;
         }
 
-        const appService = new AppService(createDatabaseService(env));
+        const appService = new AppService(env);
         const ownershipResult = await appService.checkAppOwnership(agentId, user.id);
         return ownershipResult.isOwner;
     } catch (error) {

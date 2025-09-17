@@ -10,21 +10,17 @@ import { AiGatewayAnalyticsService } from '../../../services/analytics/AiGateway
 
 import { UserAnalyticsResponseData, AgentAnalyticsResponseData } from './types';
 import { AnalyticsError } from '../../../services/analytics/types';
+import { createLogger } from '../../../logger';
 
 export class AnalyticsController extends BaseController {
-    private analyticsService: AiGatewayAnalyticsService;
-    
-    constructor(env: Env) {
-        super(env);
-        this.analyticsService = new AiGatewayAnalyticsService(env);
-    }
+    static logger = createLogger('AnalyticsController');
 	/**
 	 * Get analytics data for a specific user
 	 * GET /api/user/:id/analytics
 	 */
-	async getUserAnalytics(
+	static async getUserAnalytics(
 		request: Request,
-		_env: Env,
+		env: Env,
 		_ctx: ExecutionContext,
 		context: RouteContext,
 	): Promise<ControllerResponse<ApiResponse<UserAnalyticsResponseData>>> {
@@ -36,7 +32,7 @@ export class AnalyticsController extends BaseController {
 			const userId = context.pathParams.id;
 
 			if (!userId) {
-				return this.createErrorResponse<UserAnalyticsResponseData>(
+				return AnalyticsController.createErrorResponse<UserAnalyticsResponseData>(
 					'User ID is required',
 					400,
 				);
@@ -55,7 +51,7 @@ export class AnalyticsController extends BaseController {
 			if (daysParam) {
 				days = parseInt(daysParam);
 				if (isNaN(days) || days < 1 || days > 365) {
-					return this.createErrorResponse<UserAnalyticsResponseData>(
+					return AnalyticsController.createErrorResponse<UserAnalyticsResponseData>(
 						'Days must be between 1 and 365',
 						400,
 					);
@@ -63,12 +59,13 @@ export class AnalyticsController extends BaseController {
 			}
 
 			// Get analytics data
-			const analyticsData = await this.analyticsService.getUserAnalytics(
+            const service = new AiGatewayAnalyticsService(env);
+			const analyticsData = await service.getUserAnalytics(
 				userId,
 				days,
 			);
 
-			this.logger.info('User analytics retrieved successfully', {
+			AnalyticsController.logger.info('User analytics retrieved successfully', {
 				userId,
 				days: days || 'all-time',
 				requestCount: analyticsData.totalRequests,
@@ -76,18 +73,18 @@ export class AnalyticsController extends BaseController {
 				requestedBy: authUser.id,
 			});
 
-			return this.createSuccessResponse(analyticsData);
+			return AnalyticsController.createSuccessResponse(analyticsData);
 		} catch (error) {
-			this.logger.error('Error fetching user analytics:', error);
+			AnalyticsController.logger.error('Error fetching user analytics:', error);
 
 			if (error instanceof AnalyticsError) {
-				return this.createErrorResponse<UserAnalyticsResponseData>(
+				return AnalyticsController.createErrorResponse<UserAnalyticsResponseData>(
 					error.message,
 					error.statusCode,
 				);
 			}
 
-			return this.createErrorResponse<UserAnalyticsResponseData>(
+			return AnalyticsController.createErrorResponse<UserAnalyticsResponseData>(
 				'Failed to fetch user analytics',
 				500,
 			);
@@ -98,9 +95,9 @@ export class AnalyticsController extends BaseController {
 	 * Get analytics data for a specific agent/chat
 	 * GET /api/agent/:id/analytics
 	 */
-	async getAgentAnalytics(
+	static async getAgentAnalytics(
 		request: Request,
-		_env: Env,
+		env: Env,
 		_ctx: ExecutionContext,
 		context: RouteContext,
 	): Promise<ControllerResponse<ApiResponse<AgentAnalyticsResponseData>>> {
@@ -111,7 +108,7 @@ export class AnalyticsController extends BaseController {
 			const agentId = context.pathParams.id;
 
 			if (!agentId) {
-				return this.createErrorResponse<AgentAnalyticsResponseData>(
+				return AnalyticsController.createErrorResponse<AgentAnalyticsResponseData>(
 					'Agent ID is required',
 					400,
 				);
@@ -130,7 +127,7 @@ export class AnalyticsController extends BaseController {
 			if (daysParam) {
 				days = parseInt(daysParam);
 				if (isNaN(days) || days < 1 || days > 365) {
-					return this.createErrorResponse<AgentAnalyticsResponseData>(
+					return AnalyticsController.createErrorResponse<AgentAnalyticsResponseData>(
 						'Days must be between 1 and 365',
 						400,
 					);
@@ -138,12 +135,13 @@ export class AnalyticsController extends BaseController {
 			}
 
 			// Get analytics data
-			const analyticsData = await this.analyticsService.getChatAnalytics(
+            const service = new AiGatewayAnalyticsService(env);
+			const analyticsData = await service.getChatAnalytics(
 				agentId,
 				days,
 			);
 
-			this.logger.info('Agent analytics retrieved successfully', {
+			AnalyticsController.logger.info('Agent analytics retrieved successfully', {
 				agentId,
 				days: days || 'all-time',
 				requestCount: analyticsData.totalRequests,
@@ -151,18 +149,18 @@ export class AnalyticsController extends BaseController {
 				requestedBy: authUser.id,
 			});
 
-			return this.createSuccessResponse(analyticsData);
+			return AnalyticsController.createSuccessResponse(analyticsData);
 		} catch (error) {
-			this.logger.error('Error fetching agent analytics:', error);
+			AnalyticsController.logger.error('Error fetching agent analytics:', error);
 
 			if (error instanceof AnalyticsError) {
-				return this.createErrorResponse<AgentAnalyticsResponseData>(
+				return AnalyticsController.createErrorResponse<AgentAnalyticsResponseData>(
 					error.message,
 					error.statusCode,
 				);
 			}
 
-			return this.createErrorResponse<AgentAnalyticsResponseData>(
+			return AnalyticsController.createErrorResponse<AgentAnalyticsResponseData>(
 				'Failed to fetch agent analytics',
 				500,
 			);

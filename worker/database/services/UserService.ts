@@ -112,7 +112,7 @@ export class UserService extends BaseService {
      */
     async getUserAppsWithAnalytics(userId: string, options: Partial<AppQueryOptions> = {}): Promise<EnhancedAppData[]> {
         // Use AppService for consistent app operations
-        const appService = new AppService(this.db);
+        const appService = new AppService(this.env);
         return appService.getUserAppsWithAnalytics(userId, options);
     }
 
@@ -121,7 +121,7 @@ export class UserService extends BaseService {
      */
     async getUserAppsCount(userId: string, options: Partial<AppQueryOptions> = {}): Promise<number> {
         // Use AppService for consistent app operations
-        const appService = new AppService(this.db);
+        const appService = new AppService(this.env);
         return appService.getUserAppsCount(userId, options);
     }
 
@@ -271,7 +271,7 @@ export class UserService extends BaseService {
      * Get comprehensive user statistics for stats controller
      */
     async getUserStatisticsEnhanced(userId: string): Promise<EnhancedUserStats> {
-        const analyticsService = new AnalyticsService(this.db);
+        const analyticsService = new AnalyticsService(this.env);
         return analyticsService.getEnhancedUserStats(userId);
     }
 
@@ -279,7 +279,7 @@ export class UserService extends BaseService {
      * Get user activity timeline for stats controller
      */
     async getUserActivityTimeline(userId: string, limit?: number): Promise<UserActivity[]> {
-        const analyticsService = new AnalyticsService(this.db);
+        const analyticsService = new AnalyticsService(this.env);
         return analyticsService.getUserActivityTimeline(userId, limit);
     }
 }

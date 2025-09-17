@@ -17,7 +17,7 @@ import { Message, MessageContent, MessageRole } from './common';
 import { ToolCall } from '../tools/types';
 import { executeTool } from '../tools/customTools';
 import { AIModels, InferenceMetadata } from './config.types';
-import { DatabaseService, SecretsService } from '../../database';
+import { SecretsService } from '../../database';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { AuthUser } from '../../types/auth-types';
 import { getGlobalConfigurableSettings } from '../../config';
@@ -113,8 +113,7 @@ function isValidApiKey(apiKey: string): boolean {
 async function getApiKey(provider: string, env: Env, userId: string): Promise<string> {
     console.log("Getting API key for provider: ", provider);
     try {
-        const db = new DatabaseService(env);
-        const secretsService = new SecretsService(db, env);
+        const secretsService = new SecretsService(env);
         const userProviderKeys = await secretsService.getUserBYOKKeysMap(userId);
         // First check if user has a custom API key for this provider
         if (userProviderKeys && provider in userProviderKeys) {

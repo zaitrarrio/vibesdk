@@ -7,7 +7,6 @@
 import { AIModels } from '../../../agents/inferutils/config.types';
 import type { UserProviderStatus, ModelsByProvider } from './types';
 import { SecretsService } from '../../../database/services/SecretsService';
-import { DatabaseService } from '../../../database/database';
 import { getBYOKTemplates } from '../../../types/secretsTemplates';
 
 /**
@@ -18,8 +17,7 @@ export async function getUserProviderStatus(
 	env: Env,
 ): Promise<UserProviderStatus[]> {
 	try {
-		const dbService = new DatabaseService({ DB: env.DB });
-		const secretsService = new SecretsService(dbService, env);
+		const secretsService = new SecretsService(env);
 
 		// Get BYOK templates dynamically
 		const byokTemplates = await getBYOKTemplates();

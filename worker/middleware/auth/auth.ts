@@ -5,7 +5,6 @@
 
 import { AuthUser } from '../../types/auth-types';
 import { createLogger } from '../../logger';
-import { createDatabaseService } from '../../database/database';
 import { AuthService } from '../../database/services/AuthService';
 import { extractToken } from '../../utils/authUtils';
 
@@ -19,8 +18,7 @@ export async function validateToken(
 ): Promise<AuthUser | null> {
     try {
         // Use AuthService for token validation and user retrieval
-        const db = createDatabaseService(env);
-        const authService = new AuthService(db, env);
+        const authService = new AuthService(env);
         return authService.validateTokenAndGetUser(token, env);
     } catch (error) {
         logger.error('Token validation error', error);

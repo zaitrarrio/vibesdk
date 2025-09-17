@@ -9,16 +9,8 @@ import { infer, InferError } from '../../agents/inferutils/core';
 import { createUserMessage } from '../../agents/inferutils/common';
 import type { TestResult, ModelTestRequest, ModelTestResult } from '../types';
 import { isErrorWithMessage } from '../types';
-import { DatabaseService } from '../database';
 
 export class ModelTestService extends BaseService {
-    constructor(
-        db: DatabaseService,
-        private env: Env
-    ) {
-        super(db);
-    }
-
     /**
      * Test a model configuration by making a simple chat request using core inference
      */

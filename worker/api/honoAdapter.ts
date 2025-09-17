@@ -7,16 +7,17 @@ import { BaseController } from './controllers/baseController';
 * This is a simple adapter to convert Hono context to our base controller's expected arguments
 */
 
-type ControllerMethod = (
+type ControllerMethod<T extends BaseController> = (
+    this: T,
     request: Request,
     env: Env,
     ctx: ExecutionContext,
     context: RouteContext
 ) => Promise<Response>;
 
-export function adaptController(
-    controllerInstance: BaseController,
-    method: ControllerMethod
+export function adaptController<T extends BaseController>(
+    controller: T,
+    method: ControllerMethod<T>
 ) {
     return async (c: Context<AppEnv>): Promise<Response> => {
 
@@ -26,10 +27,8 @@ export function adaptController(
             pathParams: c.req.param(),
             queryParams: new URL(c.req.url).searchParams,
         };
-
-        const boundMethod = method.bind(controllerInstance);
-
-        return await boundMethod(
+        return await method.call(
+            controller,
             c.req.raw,
             c.env,
             c.executionCtx,
@@ -37,3 +36,4 @@ export function adaptController(
         );
     };
 }
+

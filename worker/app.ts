@@ -69,7 +69,7 @@ export function createApp(env: Env): Hono<AppEnv> {
             throw error;
         }
     });
-    
+
     app.use('/api/*', async (c, next) => {
         // Apply global config middleware
         const config = await getGlobalConfigurableSettings(env);
@@ -84,7 +84,7 @@ export function createApp(env: Env): Hono<AppEnv> {
     // app.use('/api/*', routeAuthMiddleware(AuthConfig.authenticated));
 
     // Now setup all the routes
-    setupRoutes(env, app);
+    setupRoutes(app);
 
     // Add not found route to redirect to ASSETS
     app.notFound((c) => {

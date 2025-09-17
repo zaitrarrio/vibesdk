@@ -12,20 +12,18 @@ import { AuthConfig, routeAuthMiddleware } from '../../middleware/auth/routeAuth
 /**
  * Setup secrets-related routes
  */
-export function setupSecretsRoutes(env: Env, app: Hono<AppEnv>): void {
-    const secretsController = new SecretsController(env);
-    
+export function setupSecretsRoutes(app: Hono<AppEnv>): void {
     // Create a sub-router for secrets routes
     const secretsRouter = new Hono<AppEnv>();
     
     // Secrets management routes
-    secretsRouter.get('/', routeAuthMiddleware(AuthConfig.authenticated), adaptController(secretsController, secretsController.getAllSecrets));
-    secretsRouter.post('/', routeAuthMiddleware(AuthConfig.authenticated), adaptController(secretsController, secretsController.storeSecret));
-    secretsRouter.patch('/:secretId/toggle', routeAuthMiddleware(AuthConfig.authenticated), adaptController(secretsController, secretsController.toggleSecret));
-    secretsRouter.delete('/:secretId', routeAuthMiddleware(AuthConfig.authenticated), adaptController(secretsController, secretsController.deleteSecret));
+    secretsRouter.get('/', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.getAllSecrets));
+    secretsRouter.post('/', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.storeSecret));
+    secretsRouter.patch('/:secretId/toggle', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.toggleSecret));
+    secretsRouter.delete('/:secretId', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.deleteSecret));
     
     // Templates route
-    secretsRouter.get('/templates', routeAuthMiddleware(AuthConfig.authenticated), adaptController(secretsController, secretsController.getTemplates));
+    secretsRouter.get('/templates', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.getTemplates));
     
     // Mount the router under /api/secrets
     app.route('/api/secrets', secretsRouter);

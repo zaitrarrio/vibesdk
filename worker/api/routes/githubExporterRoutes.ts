@@ -12,11 +12,9 @@ import { AuthConfig, routeAuthMiddleware } from '../../middleware/auth/routeAuth
 /**
  * Setup GitHub Exporter routes
  */
-export function setupGitHubExporterRoutes(env: Env, app: Hono<AppEnv>): void {
-    const githubExporterController = new GitHubExporterController(env);
-    
-    app.get('/api/github-exporter/callback', routeAuthMiddleware(AuthConfig.public), adaptController(githubExporterController, githubExporterController.handleOAuthCallback));
+export function setupGitHubExporterRoutes(app: Hono<AppEnv>): void {
+    app.get('/api/github-exporter/callback', routeAuthMiddleware(AuthConfig.public), adaptController(GitHubExporterController, GitHubExporterController.handleOAuthCallback));
     
     // Repository export routes with OAuth flow
-    app.post('/api/github-app/export', routeAuthMiddleware(AuthConfig.authenticated), adaptController(githubExporterController, githubExporterController.initiateGitHubExport));
+    app.post('/api/github-app/export', routeAuthMiddleware(AuthConfig.authenticated), adaptController(GitHubExporterController, GitHubExporterController.initiateGitHubExport));
 }

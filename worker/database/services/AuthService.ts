@@ -3,7 +3,6 @@
  * Orchestrates all auth operations including login, registration, and OAuth
  */
 
-import { DatabaseService } from '../database';
 import * as schema from '../schema';
 import { eq, and, sql, or, lt } from 'drizzle-orm';
 import { JWTUtils } from '../../utils/jwtUtils';
@@ -57,11 +56,10 @@ export class AuthService extends BaseService {
     private readonly passwordService: PasswordService;
     
     constructor(
-        db: DatabaseService,
-        private env: Env,
+        env: Env,
     ) {
-        super(db);
-        this.sessionService = new SessionService(db, env);
+        super(env);
+        this.sessionService = new SessionService(env);
         this.passwordService = new PasswordService();
     }
     
