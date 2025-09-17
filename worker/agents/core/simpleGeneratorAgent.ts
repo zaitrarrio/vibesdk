@@ -37,8 +37,6 @@ import { FileFetcher, fixProjectIssues } from '../../services/code-fixer';
 import { FastCodeFixerOperation } from '../operations/FastCodeFixer';
 import { getProtocolForHost } from '../../utils/urls';
 import { looksLikeCommand } from '../utils/common';
-import { SandboxSdkClient } from '../../services/sandbox/sandboxSdkClient';
-import { selectTemplate } from '../planning/templateSelector';
 import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
@@ -95,7 +93,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     );
 
     private previewUrlCache: string = '';
-    // protected broadcaster: WebSocketBroadcaster = new WebSocketBroadcaster(this);
     
     protected operations: Operations = {
         codeReview: new CodeReviewOperation(),
@@ -201,7 +198,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         const url = `${base}/api/screenshots/${encodeURIComponent(sessionId)}/${encodeURIComponent(fileName)}`;
         return url;
     }
-    // logger: StructuredLogger = createObjectLogger(this, 'CodeGeneratorAgent');
 
     initialState: CodeGenState = {
         blueprint: {} as Blueprint, 
@@ -237,46 +233,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         ..._args: unknown[]
     ): Promise<CodeGenState> {
 
-        const { query, language, frameworks, hostname, inferenceContext } = initArgs;
-        // Fetch available templates
-        const templatesResponse = await SandboxSdkClient.listTemplates();
-        if (!templatesResponse || !templatesResponse.success) {
-            throw new Error('Failed to fetch templates from sandbox service');
-        }
-        
-        const [analyzeQueryResponse, sandboxClient] = await Promise.all([
-            selectTemplate({
-                env: this.env,
-                inferenceContext,
-                query,
-                availableTemplates: templatesResponse.templates,
-            }), 
-            getSandboxService(inferenceContext.agentId, hostname)
-        ]);
-        
-        this.logger().info('Selected template', { selectedTemplate: analyzeQueryResponse });
-            
-        // Find the selected template by name in the available templates
-        if (!analyzeQueryResponse.selectedTemplateName) {
-            this.logger().error('No suitable template found for code generation');
-            throw new Error('No suitable template found for code generation');
-        }
-            
-        const selectedTemplate = templatesResponse.templates.find(template => template.name === analyzeQueryResponse.selectedTemplateName);
-        if (!selectedTemplate) {
-            this.logger().error('Selected template not found');
-            throw new Error('Selected template not found');
-        }
-        // Now fetch all the files from the instance
-        const templateDetailsResponse = await sandboxClient.getTemplateDetails(selectedTemplate.name);
-        if (!templateDetailsResponse.success || !templateDetailsResponse.templateDetails) {
-            this.logger().error('Failed to fetch files', { templateDetailsResponse });
-            throw new Error('Failed to fetch files');
-        }
-            
-        const templateDetails = templateDetailsResponse.templateDetails;
-        initArgs.onTemplateGenerated(templateDetails);
-        
+        const { query, language, frameworks, hostname, inferenceContext, templateInfo } = initArgs;
         // Generate a blueprint
         this.logger().info('Generating blueprint', { query, queryLength: query.length });
         this.logger().info(`Using language: ${language}, frameworks: ${frameworks ? frameworks.join(", ") : "none"}`);
@@ -287,8 +244,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             query,
             language: language!,
             frameworks: frameworks!,
-            templateDetails,
-            templateMetaInfo: analyzeQueryResponse,
+            templateDetails: templateInfo.templateDetails,
+            templateMetaInfo: templateInfo.selection,
             stream: {
                 chunk_size: 256,
                 onChunk: (chunk) => {
@@ -297,14 +254,14 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             }
         })
 
-        const packageJsonFile = templateDetails?.files.find(file => file.filePath === 'package.json');
+        const packageJsonFile = templateInfo.templateDetails?.files.find(file => file.filePath === 'package.json');
         const packageJson = packageJsonFile ? packageJsonFile.fileContents : '';
         
         this.setState({
             ...this.initialState,
             query,
             blueprint,
-            templateDetails,
+            templateDetails: templateInfo.templateDetails,
             sandboxInstanceId: undefined,
             generatedPhases: [],
             commandsHistory: [],

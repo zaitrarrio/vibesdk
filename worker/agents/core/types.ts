@@ -4,6 +4,7 @@ import type { ClientReportedErrorType, FileOutputType } from '../schemas';
 import type { ConversationMessage } from '../inferutils/common';
 import type { InferenceContext } from '../inferutils/config.types';
 import type { TemplateDetails } from '../../services/sandbox/sandboxTypes';
+import { TemplateSelection } from '../planning/templateSelector';
 
 export interface AgentInitArgs {
     query: string;
@@ -11,7 +12,10 @@ export interface AgentInitArgs {
     frameworks?: string[];
     hostname: string;
     inferenceContext: InferenceContext;
-    onTemplateGenerated: (templateDetails: TemplateDetails) => void;
+    templateInfo: {
+        templateDetails: TemplateDetails;
+        selection: TemplateSelection;
+    }
     onBlueprintChunk: (chunk: string) => void;
 }
 
