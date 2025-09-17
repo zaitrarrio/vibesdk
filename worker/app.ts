@@ -69,16 +69,13 @@ export function createApp(env: Env): Hono<AppEnv> {
             throw error;
         }
     });
-
-    // Apply global config middleware
+    
     app.use('/api/*', async (c, next) => {
+        // Apply global config middleware
         const config = await getGlobalConfigurableSettings(env);
         c.set('config', config);
-        await next();
-    })
 
-    // Apply global rate limit middleware. Should this be moved after setupRoutes so that maybe 'user' is available?
-    app.use('/api/*', async (c, next) => {
+        // Apply global rate limit middleware. Should this be moved after setupRoutes so that maybe 'user' is available?
         await RateLimitService.enforceGlobalApiRateLimit(env, c.get('config').security.rateLimit, c.get('user'), c.req.raw)
         await next();
     })
