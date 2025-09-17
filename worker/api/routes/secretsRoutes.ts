@@ -7,7 +7,7 @@ import { SecretsController } from '../controllers/secrets/controller';
 import { Hono } from 'hono';
 import { AppEnv } from '../../types/appenv';
 import { adaptController } from '../honoAdapter';
-import { AuthConfig, routeAuthMiddleware } from '../../middleware/auth/routeAuth';
+import { AuthConfig, setAuthLevel } from '../../middleware/auth/routeAuth';
 
 /**
  * Setup secrets-related routes
@@ -17,13 +17,13 @@ export function setupSecretsRoutes(app: Hono<AppEnv>): void {
     const secretsRouter = new Hono<AppEnv>();
     
     // Secrets management routes
-    secretsRouter.get('/', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.getAllSecrets));
-    secretsRouter.post('/', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.storeSecret));
-    secretsRouter.patch('/:secretId/toggle', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.toggleSecret));
-    secretsRouter.delete('/:secretId', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.deleteSecret));
+    secretsRouter.get('/', setAuthLevel(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.getAllSecrets));
+    secretsRouter.post('/', setAuthLevel(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.storeSecret));
+    secretsRouter.patch('/:secretId/toggle', setAuthLevel(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.toggleSecret));
+    secretsRouter.delete('/:secretId', setAuthLevel(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.deleteSecret));
     
     // Templates route
-    secretsRouter.get('/templates', routeAuthMiddleware(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.getTemplates));
+    secretsRouter.get('/templates', setAuthLevel(AuthConfig.authenticated), adaptController(SecretsController, SecretsController.getTemplates));
     
     // Mount the router under /api/secrets
     app.route('/api/secrets', secretsRouter);

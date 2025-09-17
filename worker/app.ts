@@ -8,6 +8,7 @@ import { setupRoutes } from './api/routes';
 import { CsrfService } from './services/csrf/CsrfService';
 import { SecurityError, SecurityErrorType } from './types/security';
 import { getGlobalConfigurableSettings } from './config';
+import { AuthConfig, enforceAuthRequirement, setAuthLevel } from './middleware/auth/routeAuth';
 // import { initHonoSentry } from './observability/sentry';
 
 export function createApp(env: Env): Hono<AppEnv> {
@@ -80,8 +81,8 @@ export function createApp(env: Env): Hono<AppEnv> {
         await next();
     })
 
-    // // By default, all routes require authentication
-    // app.use('/api/*', routeAuthMiddleware(AuthConfig.authenticated));
+    // By default, all routes require authentication
+    app.use('/api/*', setAuthLevel(AuthConfig.ownerOnly));
 
     // Now setup all the routes
     setupRoutes(app);
