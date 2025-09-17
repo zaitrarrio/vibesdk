@@ -8,7 +8,7 @@ import { setupRoutes } from './api/routes';
 import { CsrfService } from './services/csrf/CsrfService';
 import { SecurityError, SecurityErrorType } from './types/security';
 import { getGlobalConfigurableSettings } from './config';
-import { AuthConfig, enforceAuthRequirement, setAuthLevel } from './middleware/auth/routeAuth';
+import { AuthConfig, setAuthLevel } from './middleware/auth/routeAuth';
 // import { initHonoSentry } from './observability/sentry';
 
 export function createApp(env: Env): Hono<AppEnv> {
