@@ -5,7 +5,6 @@ import {
 	EyeOff,
 	Github,
     Smartphone,
-	Plus,
 	Trash2,
 	Key,
 	Lock,
@@ -46,7 +45,6 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DialogTrigger,
 } from '@/components/ui/dialog';
 import {
 	Select,
@@ -695,7 +693,7 @@ export default function SettingsPage() {
 						</CardHeader>
 						<CardContent className="space-y-3 mt-4 px-6">
 							{/* App Environment Variables Section */}
-							<div className="space-y-4">
+							{/* <div className="space-y-4">
 								<div className="flex justify-between items-center">
 									<div>
 										<h4 className="font-medium">
@@ -883,9 +881,9 @@ export default function SettingsPage() {
 											))}
 									</div>
 								)}
-							</div>
+							</div> */}
 
-							<Separator />
+							{/* <Separator /> */}
 
 							{/* BYOK API Keys Section */}
 							<div className="space-y-4">
@@ -897,10 +895,12 @@ export default function SettingsPage() {
 										size="sm"
 										variant="outline"
 										onClick={() => setByokModalOpen(true)}
+                                        disabled // DISABLED: BYOK Disabled for security reasons
 										className="gap-2"
 									>
 										<Key className="h-4 w-4" />
-										Manage BYOK Keys
+										{/* Manage BYOK Keys */}
+                                        Coming Soon
 									</Button>
 								</div>
 
@@ -917,8 +917,9 @@ export default function SettingsPage() {
 												<Key className="h-8 w-8 text-text-tertiary mx-auto mb-2" />
 
 												<p className="text-sm text-text-tertiary">
-													Add your LLM keys to use
-													your own billing
+													{/* Add your LLM keys to use
+													your own billing */}
+                                                    Coming Soon: You would be able to add your own LLM keys to bypass rate limits from here.
 												</p>
 											</div>
 										);

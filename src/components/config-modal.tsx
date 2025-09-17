@@ -326,9 +326,13 @@ export function ConfigModal({
                   Select primary and fallback models - we'll use your API keys if available
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={openByokModal} className="gap-2">
+              <Button variant="outline" size="sm" 
+              onClick={openByokModal}
+              disabled // DISABLED: BYOK Disabled for security reasons
+              className="gap-2">
                 <Key className="h-4 w-4" />
-                Manage Keys
+                {/* Manage Keys */}
+                Coming Soon
               </Button>
             </div>
             

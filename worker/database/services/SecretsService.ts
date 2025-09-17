@@ -8,14 +8,13 @@ import * as schema from '../schema';
 import { eq, and } from 'drizzle-orm';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { getBYOKTemplates } from '../../types/secretsTemplates';
-import { generateId } from '../../utils/idGenerator';
 import type { SecretData, EncryptedSecret } from '../types';
 
 export class SecretsService extends BaseService {
     /**
      * Encrypt a secret value using XChaCha20-Poly1305
      */
-    private async encryptSecret(value: string): Promise<{ encryptedValue: string; keyPreview: string }> {
+    async encryptSecret(value: string): Promise<{ encryptedValue: string; keyPreview: string }> {
         try {
             if (!this.env.SECRETS_ENCRYPTION_KEY) {
                 throw new Error('SECRETS_ENCRYPTION_KEY environment variable not set');
@@ -121,48 +120,50 @@ export class SecretsService extends BaseService {
     /**
      * Store a new secret for a user
      */
-    async storeSecret(userId: string, secretData: SecretData): Promise<EncryptedSecret> {
-        try {
-            // Validate input
-            if (!secretData.value || !secretData.provider || !secretData.secretType) {
-                throw new Error('Missing required secret data');
-            }
+    async storeSecret(_userId: string, _secretData: SecretData): Promise<EncryptedSecret> {
+        // DISABLED: BYOK Disabled for security reasons
+        throw new Error('BYOK is not supported for now');
+        // try {
+        //     // Validate input
+        //     if (!secretData.value || !secretData.provider || !secretData.secretType) {
+        //         throw new Error('Missing required secret data');
+        //     }
 
-            // Encrypt the secret value
-            const { encryptedValue, keyPreview } = await this.encryptSecret(secretData.value);
+        //     // Encrypt the secret value
+        //     const { encryptedValue, keyPreview } = await this.encryptSecret(secretData.value);
 
-            // Store in database
-            const newSecret = {
-                id: generateId(),
-                userId,
-                name: secretData.name,
-                provider: secretData.provider,
-                secretType: secretData.secretType,
-                encryptedValue,
-                keyPreview,
-                description: secretData.description ?? null,
-                expiresAt: secretData.expiresAt ?? null,
-                lastUsed: null,
-                isActive: true,
-                usageCount: 0,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            };
+        //     // Store in database
+        //     const newSecret = {
+        //         id: generateId(),
+        //         userId,
+        //         name: secretData.name,
+        //         provider: secretData.provider,
+        //         secretType: secretData.secretType,
+        //         encryptedValue,
+        //         keyPreview,
+        //         description: secretData.description ?? null,
+        //         expiresAt: secretData.expiresAt ?? null,
+        //         lastUsed: null,
+        //         isActive: true,
+        //         usageCount: 0,
+        //         createdAt: new Date(),
+        //         updatedAt: new Date()
+        //     };
 
-            await this.database.insert(schema.userSecrets).values(newSecret);
+        //     await this.database.insert(schema.userSecrets).values(newSecret);
 
-            this.logger.info('Secret stored successfully', { 
-                userId, 
-                provider: secretData.provider, 
-                secretType: secretData.secretType 
-            });
+        //     this.logger.info('Secret stored successfully', { 
+        //         userId, 
+        //         provider: secretData.provider, 
+        //         secretType: secretData.secretType 
+        //     });
 
-            // Return without encrypted value
-            return this.formatSecretResponse(newSecret);
-        } catch (error) {
-            this.logger.error('Failed to store secret', error);
-            throw error;
-        }
+        //     // Return without encrypted value
+        //     return this.formatSecretResponse(newSecret);
+        // } catch (error) {
+        //     this.logger.error('Failed to store secret', error);
+        //     throw error;
+        // }
     }
 
     /**
@@ -246,22 +247,24 @@ export class SecretsService extends BaseService {
     /**
      * Delete a secret permanently
      */
-    async deleteSecret(userId: string, secretId: string): Promise<void> {
-        try {
-            await this.database
-                .delete(schema.userSecrets)
-                .where(
-                    and(
-                        eq(schema.userSecrets.id, secretId),
-                        eq(schema.userSecrets.userId, userId)
-                    )
-                );
+    async deleteSecret(_userId: string, _secretId: string): Promise<void> {
+        // DISABLED: BYOK Disabled for security reasons
+        throw new Error('BYOK is not supported for now');
+        // try {
+        //     await this.database
+        //         .delete(schema.userSecrets)
+        //         .where(
+        //             and(
+        //                 eq(schema.userSecrets.id, secretId),
+        //                 eq(schema.userSecrets.userId, userId)
+        //             )
+        //         );
 
-            this.logger.info('Secret deleted successfully', { userId, secretId });
-        } catch (error) {
-            this.logger.error('Failed to delete secret', error);
-            throw error;
-        }
+        //     this.logger.info('Secret deleted successfully', { userId, secretId });
+        // } catch (error) {
+        //     this.logger.error('Failed to delete secret', error);
+        //     throw error;
+        // }
     }
 
     /**
@@ -310,57 +313,59 @@ export class SecretsService extends BaseService {
     /**
      * Toggle secret active status
      */
-    async toggleSecretActiveStatus(userId: string, secretId: string): Promise<EncryptedSecret> {
-        try {
-            // First get the current secret to check ownership and current status
-            const [currentSecret] = await this.database
-                .select()
-                .from(schema.userSecrets)
-                .where(
-                    and(
-                        eq(schema.userSecrets.id, secretId),
-                        eq(schema.userSecrets.userId, userId)
-                    )
-                )
-                .limit(1);
+    async toggleSecretActiveStatus(_userId: string, _secretId: string): Promise<EncryptedSecret> {
+        // DISABLED: BYOK Disabled for security reasons
+        throw new Error('BYOK is not supported for now');
+        // try {
+        //     // First get the current secret to check ownership and current status
+        //     const [currentSecret] = await this.database
+        //         .select()
+        //         .from(schema.userSecrets)
+        //         .where(
+        //             and(
+        //                 eq(schema.userSecrets.id, secretId),
+        //                 eq(schema.userSecrets.userId, userId)
+        //             )
+        //         )
+        //         .limit(1);
 
-            if (!currentSecret) {
-                throw new Error('Secret not found or access denied');
-            }
+        //     if (!currentSecret) {
+        //         throw new Error('Secret not found or access denied');
+        //     }
 
-            // Toggle the status
-            const newActiveStatus = !currentSecret.isActive;
+        //     // Toggle the status
+        //     const newActiveStatus = !currentSecret.isActive;
             
-            // Update the secret
-            const [updatedSecret] = await this.database
-                .update(schema.userSecrets)
-                .set({
-                    isActive: newActiveStatus,
-                    updatedAt: new Date()
-                })
-                .where(
-                    and(
-                        eq(schema.userSecrets.id, secretId),
-                        eq(schema.userSecrets.userId, userId)
-                    )
-                )
-                .returning();
+        //     // Update the secret
+        //     const [updatedSecret] = await this.database
+        //         .update(schema.userSecrets)
+        //         .set({
+        //             isActive: newActiveStatus,
+        //             updatedAt: new Date()
+        //         })
+        //         .where(
+        //             and(
+        //                 eq(schema.userSecrets.id, secretId),
+        //                 eq(schema.userSecrets.userId, userId)
+        //             )
+        //         )
+        //         .returning();
 
-            if (!updatedSecret) {
-                throw new Error('Failed to update secret status');
-            }
+        //     if (!updatedSecret) {
+        //         throw new Error('Failed to update secret status');
+        //     }
 
-            this.logger.info(`Secret ${newActiveStatus ? 'activated' : 'deactivated'}`, { 
-                userId, 
-                secretId, 
-                provider: updatedSecret.provider 
-            });
+        //     this.logger.info(`Secret ${newActiveStatus ? 'activated' : 'deactivated'}`, { 
+        //         userId, 
+        //         secretId, 
+        //         provider: updatedSecret.provider 
+        //     });
             
-            return this.formatSecretResponse(updatedSecret);
-        } catch (error) {
-            this.logger.error('Failed to toggle secret active status', error);
-            throw error;
-        }
+        //     return this.formatSecretResponse(updatedSecret);
+        // } catch (error) {
+        //     this.logger.error('Failed to toggle secret active status', error);
+        //     throw error;
+        // }
     }
 
     /**
