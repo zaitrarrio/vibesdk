@@ -13,9 +13,9 @@ export interface FileRegenerationInputs {
 const SYSTEM_PROMPT = `You are a Senior Software Engineer at Cloudflare specializing in surgical code fixes. Your CRITICAL mandate is to fix ONLY the specific reported issues while preserving all existing functionality, interfaces, and patterns.
 
 ## CORE PRINCIPLES:
-1. **MINIMAL CHANGE POLICY** - Make the smallest possible change to fix the issue
+1. **MINIMAL CHANGE POLICY** - Make isolated, small changes to fix the issue
 2. **PRESERVE EXISTING BEHAVIOR** - Never alter working code, only fix broken code
-3. **NO NEW FEATURES** - Do not add functionality, only repair existing functionality
+3. **NO NEW FEATURES** - Do not add functionality, only repair existing functionality as explicitly requested
 4. **MAINTAIN INTERFACES** - Keep all exports, imports, and function signatures identical
 
 ## FORBIDDEN ACTIONS (Will cause new issues):
@@ -118,7 +118,6 @@ export class FileRegenerationOperation extends AgentOperation<FileRegenerationIn
                 inputs.file, {
                     previousFiles: options.context.allFiles,
                     query: options.context.query,
-                    blueprint: options.context.blueprint,
                     template: options.context.templateDetails
                 },
                 undefined,
@@ -131,6 +130,7 @@ export class FileRegenerationOperation extends AgentOperation<FileRegenerationIn
                 format: "full_content"
             };
         } catch (error) {
+            options.logger.error(`Error fixing file ${inputs.file.filePath}:`, error);
             throw error;
         }
     }

@@ -314,18 +314,24 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             inferenceContext,
         });
 
-        // Deploy to sandbox service and generate initial setup commands in parallel
-        Promise.all([this.deployToSandbox(), this.getProjectSetupAssistant().generateSetupCommands(), this.generateReadme()]).then(async ([, setupCommands, _readme]) => {
-            this.logger().info("Deployment to sandbox service and initial commands predictions completed successfully");
-            await this.executeCommands(setupCommands.commands);
-            this.logger().info("Initial commands executed successfully");
-        }).catch(error => {
+        try {
+            // Deploy to sandbox service and generate initial setup commands in parallel
+            Promise.all([this.deployToSandbox(), this.getProjectSetupAssistant().generateSetupCommands(), this.generateReadme()]).then(async ([, setupCommands, _readme]) => {
+                this.logger().info("Deployment to sandbox service and initial commands predictions completed successfully");
+                await this.executeCommands(setupCommands.commands);
+                this.logger().info("Initial commands executed successfully");
+            }).catch(error => {
+                this.logger().error("Error during deployment:", error);
+                this.broadcast(WebSocketMessageResponses.ERROR, {
+                    error: `Error during deployment: ${error instanceof Error ? error.message : String(error)}`
+                });
+            });
+        } catch (error) {
             this.logger().error("Error during deployment:", error);
             this.broadcast(WebSocketMessageResponses.ERROR, {
                 error: `Error during deployment: ${error instanceof Error ? error.message : String(error)}`
             });
-        });
-
+        }
         this.logger().info(`Agent ${this.state.sessionId} initialized successfully`);
         return this.state;
     }
@@ -663,7 +669,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 const issuesFound = reviewResult.issuesFound;
 
                 if (issuesFound) {
-                    this.logger().info(`Issues found in review cycle ${i + 1}`);
+                    this.logger().info(`Issues found in review cycle ${i + 1}`, { issuesFound });
                     const promises = [];
 
                     for (const fileToFix of reviewResult.filesToFix) {
@@ -789,6 +795,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // Execute install commands if any
         if (result.installCommands && result.installCommands.length > 0) {
             this.executeCommands(result.installCommands);
+        }
+
+        // Execute delete commands if any
+        const filesToDelete = result.files.filter(f => f.changes?.toLowerCase().trim() === 'delete');
+        if (filesToDelete.length > 0) {
+            this.logger().info(`Deleting ${filesToDelete.length} files: ${filesToDelete.map(f => f.path).join(", ")}`);
+            this.deleteFiles(filesToDelete.map(f => f.path));
         }
         
         if (result.files.length === 0) {
@@ -1608,7 +1621,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             // CF_AI_API_KEY: this.env.CLOUDFLARE_AI_GATEWAY_TOKEN,
         }
         
-        const createResponse = await this.getSandboxServiceClient().createInstance(templateName, `v1-${projectName}`, webhookUrl, true, localEnvVars);
+        const createResponse = await this.getSandboxServiceClient().createInstance(templateName, `v1-${projectName}`, webhookUrl, localEnvVars);
         if (!createResponse || !createResponse.success || !createResponse.runId) {
             throw new Error(`Failed to create sandbox instance: ${createResponse?.error || 'Unknown error'}`);
         }
@@ -2141,6 +2154,24 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 ...successfulCommands
             ]
         });
+    }
+
+    /**
+     * Delete files from the file manager
+     */
+    async deleteFiles(filePaths: string[]) {
+        const deleteCommands: string[] = [];
+        for (const filePath of filePaths) {
+            deleteCommands.push(`rm ${filePath}`);
+        }
+        // Remove the files from file manager
+        this.fileManager.deleteFiles(filePaths);
+        try {
+            await this.executeCommands(deleteCommands);
+            this.logger().info(`Deleted ${filePaths.length} files: ${filePaths.join(", ")}`);
+        } catch (error) {
+            this.logger().error('Error deleting files:', error);
+        }
     }
 
     /**

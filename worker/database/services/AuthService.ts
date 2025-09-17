@@ -146,7 +146,7 @@ export class AuthService extends BaseService {
             logger.info('User registered and logged in directly', { userId, email: data.email });
             
             // Create session and tokens immediately (log user in after registration)
-            const { accessToken, refreshToken } = await this.sessionService.createSession(
+            const { accessToken } = await this.sessionService.createSession(
                 userId,
                 request
             );
@@ -154,8 +154,7 @@ export class AuthService extends BaseService {
             return {
                 user: mapUserResponse(newUser),
                 accessToken,
-                refreshToken,
-                expiresIn: 24 * 60 * 60 // 24 hours in seconds
+                expiresIn: 3 * 24 * 60 * 60
             };
         } catch (error) {
             await this.logAuthAttempt(data.email, 'register', false, request);
@@ -215,7 +214,7 @@ export class AuthService extends BaseService {
             }
             
             // Create session
-            const { accessToken, refreshToken } = await this.sessionService.createSession(
+            const { accessToken } = await this.sessionService.createSession(
                 user.id,
                 request
             );
@@ -228,8 +227,7 @@ export class AuthService extends BaseService {
             return {
                 user: mapUserResponse(user),
                 accessToken,
-                refreshToken,
-                expiresIn: 24 * 3600 // 24 hours
+                expiresIn: 3 * 24 * 3600
             };
         } catch (error) {
             if (error instanceof SecurityError) {
@@ -250,7 +248,7 @@ export class AuthService extends BaseService {
      */
     async logout(sessionId: string): Promise<void> {
         try {
-            await this.sessionService.revokeSession(sessionId);
+            await this.sessionService.revokeSessionId(sessionId);
             logger.info('User logged out', { sessionId });
         } catch (error) {
             logger.error('Logout error', error);
@@ -415,7 +413,7 @@ export class AuthService extends BaseService {
             const user = await this.findOrCreateOAuthUser(provider, oauthUserInfo);
             
             // Create session
-            const { accessToken: sessionAccessToken, refreshToken: sessionRefreshToken } = await this.sessionService.createSession(
+            const { accessToken: sessionAccessToken } = await this.sessionService.createSession(
                 user.id,
                 request
             );
@@ -432,8 +430,7 @@ export class AuthService extends BaseService {
                     displayName: user.displayName || undefined,
                 },
                 accessToken: sessionAccessToken,
-                refreshToken: sessionRefreshToken,
-                expiresIn: 24 * 3600, // 24 hours
+                expiresIn: 3 * 24 * 3600,
                 redirectUrl: oauthState.redirectUri || undefined
             };
         } catch (error) {
@@ -450,26 +447,6 @@ export class AuthService extends BaseService {
                 500
             );
         }
-    }
-    
-    /**
-     * Refresh access token
-     */
-    async refreshToken(refreshToken: string): Promise<{
-        accessToken: string;
-        expiresIn: number;
-    }> {
-        const result = await this.sessionService.refreshSession(refreshToken);
-        
-        if (!result) {
-            throw new SecurityError(
-                SecurityErrorType.INVALID_TOKEN,
-                'Invalid refresh token',
-                401
-            );
-        }
-        
-        return result;
     }
     
     /**
@@ -680,7 +657,7 @@ export class AuthService extends BaseService {
                 .where(eq(schema.users.id, user.id));
 
             // Create session for verified user
-            const { accessToken, refreshToken } = await this.sessionService.createSession(
+            const { accessToken } = await this.sessionService.createSession(
                 user.id,
                 request
             );
@@ -692,8 +669,7 @@ export class AuthService extends BaseService {
             return {
                 user: mapUserResponse({ ...user, emailVerified: true }),
                 accessToken,
-                refreshToken,
-                expiresIn: 24 * 3600 // 24 hours
+                expiresIn: 3 * 24 * 3600
             };
         } catch (error) {
             await this.logAuthAttempt(email, 'email_verification', false, request);

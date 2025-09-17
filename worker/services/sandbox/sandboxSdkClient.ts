@@ -61,6 +61,8 @@ interface InstanceMetadata {
     tunnelURL?: string;
     processId?: string;
     allocatedPort?: number;
+    donttouch_files: Set<string>;
+    redacted_files: Set<string>;
 }
 
 type SandboxType = DurableObjectStub<Sandbox<Env>>;
@@ -190,7 +192,7 @@ export class SandboxSdkClient extends BaseSandboxService {
         }
     }
 
-    private async getInstanceMetadata(instanceId: string): Promise<InstanceMetadata | null> {
+    private async getInstanceMetadata(instanceId: string): Promise<InstanceMetadata> {
         // Check cache first
         if (this.metadataCache.has(instanceId)) {
             return this.metadataCache.get(instanceId)!;
@@ -203,7 +205,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             this.metadataCache.set(instanceId, metadata); // Cache it
             return metadata;
         } catch {
-            return null;
+            throw new Error('Failed to read instance metadata');
         }
     }
 
@@ -310,15 +312,29 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             this.logger.info('Template setup complete');
 
-            const filesResponse = await this.getFiles(templateName);    // Use template name as directory
+            const [fileTree, catalogInfo, dontTouchFiles, redactedFiles] = await Promise.all([
+                this.buildFileTree(templateName),
+                this.getTemplateFromCatalog(templateName),
+                this.fetchDontTouchFiles(templateName),
+                this.fetchRedactedFiles(templateName)
+            ]);
+            
+            if (!fileTree) {
+                throw new Error(`Failed to build file tree for template ${templateName}`);
+            }
+
+            const filesResponse = await this.getFiles(templateName, undefined, true, redactedFiles);    // Use template name as directory
 
             this.logger.info('Template files retrieved');
 
             // Parse package.json for dependencies
             let dependencies: Record<string, string> = {};
             try {
-                const packageJsonFile = await this.getSandbox().readFile(`${templateName}/package.json`);
-                const packageJson = JSON.parse(packageJsonFile.content) as {
+                const packageJsonFile = filesResponse.files.find(file => file.filePath === 'package.json');
+                if (!packageJsonFile) {
+                    throw new Error('package.json not found');
+                }
+                const packageJson = JSON.parse(packageJsonFile.fileContents) as {
                     dependencies?: Record<string, string>;
                     devDependencies?: Record<string, string>;
                 };
@@ -329,15 +345,6 @@ export class SandboxSdkClient extends BaseSandboxService {
             } catch {
                 this.logger.info('No package.json found', { templateName });
             }
-
-            // Build file tree
-            const fileTree = await this.buildFileTree(templateName);
-            if (!fileTree) {
-                throw new Error(`Failed to build file tree for template ${templateName}`);
-            }
-            
-            const catalogInfo = await this.getTemplateFromCatalog(templateName);
-            
             const templateDetails: TemplateDetails = {
                 name: templateName,
                 description: {
@@ -348,6 +355,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                 files: filesResponse.files,
                 language: catalogInfo?.language,
                 deps: dependencies,
+                dontTouchFiles,
+                redactedFiles,
                 frameworks: catalogInfo?.frameworks || []
             };
             
@@ -866,7 +875,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                         
                     return { previewURL, tunnelURL: '', processId, allocatedPort };
                 } catch (error) {
-                    this.logger.warn('Failed to start dev server or tunnel', error);
+                    this.logger.warn('Failed to start dev server', error);
                     return undefined;
                 }
             } else {
@@ -879,22 +888,48 @@ export class SandboxSdkClient extends BaseSandboxService {
         return undefined;
     }
 
-    async createInstance(templateName: string, projectName: string, webhookUrl?: string, wait?: boolean, localEnvVars?: Record<string, string>): Promise<BootstrapResponse> {
+    private async fetchDontTouchFiles(templateName: string): Promise<string[]> {
+        let donttouchFiles: string[] = [];
+        try {
+            // Read .donttouch_files.json
+            const donttouchFile = await this.getSandbox().readFile(`${templateName}/.donttouch_files.json`);
+            if (donttouchFile.exitCode !== 0) {
+                this.logger.warn(`Failed to read .donttouch_files.json: ${donttouchFile.content}`);
+            }
+            donttouchFiles = JSON.parse(donttouchFile.content) as string[];
+        } catch (error) {
+            this.logger.warn(`Failed to read .donttouch_files.json: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+        return donttouchFiles;
+    }
+
+    private async fetchRedactedFiles(templateName: string): Promise<string[]> {
+        let redactedFiles: string[] = [];
+        try {
+            // Read .redacted_files.json
+            const redactedFile = await this.getSandbox().readFile(`${templateName}/.redacted_files.json`);
+            if (redactedFile.exitCode !== 0) {
+                this.logger.warn(`Failed to read .redacted_files.json: ${redactedFile.content}`);
+            }
+            redactedFiles = JSON.parse(redactedFile.content) as string[];
+        } catch (error) {
+            this.logger.warn(`Failed to read .redacted_files.json: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+        return redactedFiles;
+    }
+
+    async createInstance(templateName: string, projectName: string, webhookUrl?: string, localEnvVars?: Record<string, string>): Promise<BootstrapResponse> {
         try {
             const instanceId = `${projectName}-${generateId()}`;
             this.logger.info('Creating sandbox instance', { instanceId, templateName, projectName });
             
-            // // Generate JWT bearer token for templates gateway authentication
-            // const jwtToken = await this.generateTemplatesGatewayToken(this.sandboxId, instanceId);
-            
-            // // Register JWT token in KV for authentication
-            // await this.registerAuthToken(jwtToken, instanceId);
-            
-            // // Set authentication environment variables for sandbox
-            // await this.setAuthEnvironmentVariables(jwtToken);
-            
             let results: {previewURL: string, tunnelURL: string, processId: string, allocatedPort: number} | undefined;
             await this.ensureTemplateExists(templateName);
+
+            const [donttouchFiles, redactedFiles] = await Promise.all([
+                this.fetchDontTouchFiles(templateName),
+                this.fetchRedactedFiles(templateName)
+            ]);
             
             const moveTemplateResult = await this.getSandbox().exec(`mv ${templateName} ${instanceId}`);
             if (moveTemplateResult.exitCode !== 0) {
@@ -902,38 +937,14 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
             
             const setupPromise = () => this.setupInstance(instanceId, projectName, localEnvVars);
-            if (wait) {
-                const setupResult = await setupPromise();
-                if (!setupResult) {
-                    return {
-                        success: false,
-                        error: 'Failed to setup instance'
-                    };
-                }
-                results = setupResult;
-            } else {
-                setupPromise().then(async (result) => {
-                    if (!result) {
-                        return {
-                            success: false,
-                            error: 'Failed to setup instance'
-                        };
-                    }
-                    // Store instance metadata
-                    const metadata = {
-                        templateName: templateName,
-                        projectName: projectName,
-                        startTime: new Date().toISOString(),
-                        webhookUrl: webhookUrl,
-                        previewURL: result.previewURL,
-                        processId: result.processId,
-                        tunnelURL: result.tunnelURL,
-                        allocatedPort: result.allocatedPort,
-                    };
-                    await this.storeInstanceMetadata(instanceId, metadata);
-                    this.logger.info('Instance metadata updated', { instanceId });
-                });
+            const setupResult = await setupPromise();
+            if (!setupResult) {
+                return {
+                    success: false,
+                    error: 'Failed to setup instance'
+                };
             }
+            results = setupResult;
             // Store instance metadata
             const metadata = {
                 templateName: templateName,
@@ -944,6 +955,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                 processId: results?.processId,
                 tunnelURL: results?.tunnelURL,
                 allocatedPort: results?.allocatedPort,
+                donttouch_files: new Set(donttouchFiles),
+                redacted_files: new Set(redactedFiles),
             };
             await this.storeInstanceMetadata(instanceId, metadata);
 
@@ -1132,7 +1145,13 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             const results = [];
 
-            const writePromises = files.map(file => sandbox.writeFile(`${instanceId}/${file.filePath}`, file.fileContents));
+            // Filter out donttouch files
+            const metadata = await this.getInstanceMetadata(instanceId);
+            const donttouchFiles = metadata.donttouch_files;
+            
+            const filteredFiles = files.filter(file => !donttouchFiles.has(file.filePath));
+
+            const writePromises = filteredFiles.map(file => sandbox.writeFile(`${instanceId}/${file.filePath}`, file.fileContents));
             
             const writeResults = await Promise.all(writePromises);
             
@@ -1154,10 +1173,24 @@ export class SandboxSdkClient extends BaseSandboxService {
                 }
             }
 
+            // Add files that were not written to results
+            const wereDontTouchFiles = files.filter(file => donttouchFiles.has(file.filePath));
+            wereDontTouchFiles.forEach(file => {
+                results.push({
+                    file: file.filePath,
+                    success: false,
+                    error: 'File is forbidden to be modified'
+                });
+            });
+
+            if (wereDontTouchFiles.length > 0) {
+                this.logger.warn('Files were not written (protected by donttouch_files)', { files: wereDontTouchFiles.map(f => f.filePath) });
+            }
+
             const successCount = results.filter(r => r.success).length;
 
             // If code files were modified, touch vite.config.ts to trigger a rebuild
-            if (successCount > 0 && files.some(file => file.filePath.endsWith('.ts') || file.filePath.endsWith('.tsx'))) {
+            if (successCount > 0 && filteredFiles.some(file => file.filePath.endsWith('.ts') || file.filePath.endsWith('.tsx'))) {
                 await sandbox.exec(`touch ${instanceId}/vite.config.ts`);
             }
 
@@ -1184,13 +1217,13 @@ export class SandboxSdkClient extends BaseSandboxService {
         }
     }
 
-    async getFiles(instanceId: string, filePaths?: string[], applyFilter: boolean = false): Promise<GetFilesResponse> {
+    async getFiles(templateOrInstanceId: string, filePaths?: string[], applyFilter: boolean = true, redactedFiles?: string[]): Promise<GetFilesResponse> {
         try {
             const sandbox = this.getSandbox();
 
             if (!filePaths) {
                 // Read '.important_files.json' in instance directory
-                const importantFiles = await sandbox.exec(`cd ${instanceId} && jq -r '.[]' .important_files.json | while read -r path; do if [ -d "$path" ]; then find "$path" -type f; elif [ -f "$path" ]; then echo "$path"; fi; done`);
+                const importantFiles = await sandbox.exec(`cd ${templateOrInstanceId} && jq -r '.[]' .important_files.json | while read -r path; do if [ -d "$path" ]; then find "$path" -type f; elif [ -f "$path" ]; then echo "$path"; fi; done`);
                 this.logger.info(`Read important files: stdout: ${importantFiles.stdout}, stderr: ${importantFiles.stderr}`);
                 filePaths = importantFiles.stdout.split('\n').filter(path => path);
                 if (!filePaths) {
@@ -1204,21 +1237,19 @@ export class SandboxSdkClient extends BaseSandboxService {
                 applyFilter = true;
             }
 
-            let donttouchPaths: string[] = [];
+            let redactedPaths: Set<string> = new Set();
 
             if (applyFilter) {
-                // Read 'donttouch_files.json'
-                const donttouchFiles = await sandbox.exec(`cd ${instanceId} && jq -r '.[]' donttouch_files.json | while read -r path; do if [ -d "$path" ]; then find "$path" -type f; elif [ -f "$path" ]; then echo "$path"; fi; done`);
-                this.logger.info(`Read donttouch files: stdout: ${donttouchFiles.stdout}, stderr: ${donttouchFiles.stderr}`);
-                donttouchPaths = donttouchFiles.stdout.split('\n').filter(path => path);
-                if (!donttouchPaths) {
-                    return {
-                        success: false,
-                        files: [],
-                        error: 'Failed to read donttouch files'
-                    };
+                if (redactedFiles) {
+                    redactedPaths = new Set(redactedFiles);
+                } else {
+                    try {
+                        const metadata = await this.getInstanceMetadata(templateOrInstanceId);
+                        redactedPaths = metadata.redacted_files;
+                    } catch (error) {
+                        this.logger.warn('Failed to get redacted files', { templateOrInstanceId });
+                    }
                 }
-                this.logger.info(`Successfully read donttouch files: ${donttouchPaths}`);
             }
 
             const files = [];
@@ -1226,7 +1257,7 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             const readPromises = filePaths.map(async (filePath) => {
                 try {
-                    const result = await sandbox.readFile(`${instanceId}/${filePath}`);
+                    const result = await sandbox.readFile(`${templateOrInstanceId}/${filePath}`);
                     return {
                         result,
                         filePath
@@ -1248,7 +1279,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     if (result && result.success) {
                         files.push({
                             filePath: filePath,
-                            fileContents: (applyFilter && donttouchPaths.includes(filePath)) ? '[REDACTED]' : result.content
+                            fileContents: (applyFilter && redactedPaths.has(filePath)) ? '[REDACTED]' : result.content
                         });
                         
                         this.logger.info('File read successfully', { filePath });
@@ -1274,7 +1305,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 errors: errors.length > 0 ? errors : undefined
             };
         } catch (error) {
-            this.logger.error('getFiles', error, { instanceId });
+            this.logger.error('getFiles', error, { templateOrInstanceId });
             return {
                 success: false,
                 files: [],

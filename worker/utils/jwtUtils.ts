@@ -2,7 +2,6 @@ import { jwtVerify, SignJWT } from 'jose';
 import { TokenPayload } from '../types/auth-types';
 import { SecurityError, SecurityErrorType } from '../types/security';
 import { createLogger } from '../logger';
-import { generateId } from './idGenerator';
 
 const logger = createLogger('JWTUtils');
 
@@ -107,32 +106,20 @@ export class JWTUtils {
         }
     }
 
-    async createTokenPair(userId: string, email: string, sessionId?: string): Promise<{
+    async createAccessToken(userId: string, email: string, sessionId: string): Promise<{
         accessToken: string;
-        refreshToken: string;
         expiresIn: number;
     }> {
-        const accessTokenExpiry = 24 * 3600;
-        const refreshTokenExpiry = 7 * 24 * 3600;
+        const accessTokenExpiry = 3 * 24 * 3600;
         
-        const basePayload = { sub: userId, email };
+        const payload = { sub: userId, email, sessionId };
         
-        const [accessToken, refreshToken] = await Promise.all([
-            this.createToken({
-                ...basePayload,
+        const accessToken = await this.createToken({
+                ...payload,
                 type: 'access' as const,
-                ...(sessionId && { sessionId })
-            }, accessTokenExpiry),
-            
-            this.createToken({
-                ...basePayload,
-                type: 'refresh' as const,
-                jti: generateId(),
-                ...(sessionId && { sessionId })
-            }, refreshTokenExpiry)
-        ]);
+            }, accessTokenExpiry);
         
-        return { accessToken, refreshToken, expiresIn: accessTokenExpiry };
+        return { accessToken, expiresIn: accessTokenExpiry };
     }
 
     async hashToken(token: string): Promise<string> {
@@ -140,25 +127,5 @@ export class JWTUtils {
         const data = encoder.encode(token);
         const hash = await crypto.subtle.digest('SHA-256', data);
         return btoa(String.fromCharCode(...new Uint8Array(hash)));
-    }
-
-    async refreshAccessToken(refreshToken: string): Promise<{
-        accessToken: string;
-        expiresIn: number;
-    } | null> {
-        const payload = await this.verifyToken(refreshToken);
-        
-        if (!payload || payload.type !== 'refresh') {
-            return null;
-        }
-        
-        const accessToken = await this.createToken({
-            sub: payload.sub,
-            email: payload.email,
-            type: 'access' as const,
-            ...(payload.sessionId && { sessionId: payload.sessionId })
-        });
-        
-        return { accessToken, expiresIn: 24 * 3600 };
     }
 }

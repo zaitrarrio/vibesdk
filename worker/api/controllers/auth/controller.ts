@@ -6,21 +6,19 @@ import { AuthService } from '../../../database/services/AuthService';
 import { SessionService } from '../../../database/services/SessionService';
 import { UserService } from '../../../database/services/UserService';
 import { ApiKeyService } from '../../../database/services/ApiKeyService';
-import { JWTUtils } from '../../../utils/jwtUtils';
 import { generateApiKey } from '../../../utils/cryptoUtils';
 import { 
     loginSchema, 
     registerSchema, 
-    refreshTokenSchema,
     oauthProviderSchema
 } from './authSchemas';
 import { SecurityError } from '../../../types/security';
 import { 
-    extractRefreshToken,
     formatAuthResponse,
     mapUserResponse, 
     setSecureAuthCookies, 
-    clearAuthCookies 
+    clearAuthCookies, 
+    extractSessionId
 } from '../../../utils/authUtils';
 import { RouteContext } from '../../types/route-context';
 import { authMiddleware } from '../../../middleware/auth/auth';
@@ -77,7 +75,6 @@ export class AuthController extends BaseController {
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                refreshToken: result.refreshToken,
                 accessTokenExpiry: result.expiresIn
             });
             
@@ -133,7 +130,6 @@ export class AuthController extends BaseController {
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                refreshToken: result.refreshToken,
                 accessTokenExpiry: result.expiresIn
             });
             
@@ -158,22 +154,19 @@ export class AuthController extends BaseController {
      */
     static async logout(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
-            const refreshToken = extractRefreshToken(request);
-            
-            if (refreshToken) {
-                try {
-                    const jwtUtils = JWTUtils.getInstance(env);
-                    const tokenPayload = await jwtUtils.verifyToken(refreshToken);
-                    if (tokenPayload && tokenPayload.type === 'refresh') {
-                        const refreshTokenHash = await jwtUtils.hashToken(refreshToken);
-                        const sessionService = new SessionService(env);
-                        await sessionService.revokeSessionByRefreshTokenHash(refreshTokenHash);
-                    }
-                } catch (error) {
-                    AuthController.logger.debug('Failed to properly logout session', error);
-                }
-            }
-            
+            const sessionId = extractSessionId(request);
+			if (sessionId) {
+				try {
+					const sessionService = new SessionService(env);
+					await sessionService.revokeSessionId(sessionId);
+				} catch (error) {
+					AuthController.logger.debug(
+						'Failed to properly logout session',
+						error,
+					);
+				}
+			}
+                        
             const response = AuthController.createSuccessResponse({ 
                 success: true, 
                 message: 'Logged out successfully' 
@@ -362,7 +355,6 @@ export class AuthController extends BaseController {
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                refreshToken: result.refreshToken
             });
             
             return response;
@@ -373,57 +365,6 @@ export class AuthController extends BaseController {
         }
     }
 
-    // GitHub integration method removed - using zero-storage OAuth flow for exports
-    
-    /**
-     * Refresh access token
-     * POST /api/auth/refresh
-     */
-    static async refreshToken(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
-        try {
-            let refreshToken: string | undefined;
-            
-            // Try body first
-            const bodyResult = await AuthController.parseJsonBody<{ refreshToken?: string }>(request);
-            if (bodyResult.success && bodyResult.data?.refreshToken) {
-                refreshToken = bodyResult.data.refreshToken;
-            }
-            
-            // Try cookies if not in body (using consolidated utility)
-            if (!refreshToken) {
-                refreshToken = extractRefreshToken(request) || undefined;
-            }
-            
-            if (!refreshToken) {
-                return AuthController.createErrorResponse('Refresh token required', 400);
-            }
-            
-            const validatedData = refreshTokenSchema.parse({ refreshToken });
-            const authService = new AuthService(env);
-            const result = await authService.refreshToken(validatedData.refreshToken);
-            
-            const response = AuthController.createSuccessResponse({
-                accessToken: result.accessToken,
-                expiresIn: result.expiresIn
-            });
-            
-            // Use utility function for consistent cookie setting
-            setSecureAuthCookies(response, {
-                accessToken: result.accessToken,
-                refreshToken: validatedData.refreshToken, // Keep the same refresh token
-                accessTokenExpiry: result.expiresIn
-            });
-            
-            return response;
-        } catch (error) {
-            if (error instanceof SecurityError) {
-                return AuthController.createErrorResponse(error.message, error.statusCode);
-            }
-            
-            return AuthController.handleError(error, 'refresh token');
-        }
-    }
-    
     /**
      * Check authentication status
      * GET /api/auth/check
@@ -495,7 +436,7 @@ export class AuthController extends BaseController {
 
             const sessionService = new SessionService(env);
             
-            await sessionService.revokeSession(sessionIdToRevoke);
+            await sessionService.revokeUserSession(sessionIdToRevoke, user.id);
 
             return AuthController.createSuccessResponse({
                 message: 'Session revoked successfully'
@@ -633,7 +574,6 @@ export class AuthController extends BaseController {
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                refreshToken: result.refreshToken,
                 accessTokenExpiry: result.expiresIn
             });
             

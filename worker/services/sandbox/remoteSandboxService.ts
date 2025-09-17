@@ -128,11 +128,10 @@ export class RemoteSandboxServiceClient extends BaseSandboxService{
     /**
      * Create a new runner instance.
      */
-    async createInstance(templateName: string, projectName: string, webhookUrl?: string, wait: boolean = false, localEnvVars?: Record<string, string>): Promise<BootstrapResponse> {
+    async createInstance(templateName: string, projectName: string, webhookUrl?: string, localEnvVars?: Record<string, string>): Promise<BootstrapResponse> {
         const requestBody: BootstrapRequest = { 
             templateName, 
             projectName, 
-            wait,
             ...(webhookUrl && { webhookUrl }),
             ...(localEnvVars && { envVars: localEnvVars })
         };

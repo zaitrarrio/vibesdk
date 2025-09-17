@@ -154,7 +154,7 @@ export class CodingAgentController extends BaseController {
                     },
                 }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
                 agentPromise.then(async (state: CodeGenState) => {
-                    CodingAgentController.logger.info('Blueprint generated successfully');
+                    CodingAgentController.logger.info(`Blueprint generated successfully for agent ${agentId}`);
                     // Save the app to database (authenticated users only)
                     const appService = new AppService(env);
                     await appService.createApp({
@@ -171,18 +171,24 @@ export class CodingAgentController extends BaseController {
                         createdAt: new Date(),
                         updatedAt: new Date()
                     });
-                    CodingAgentController.logger.info('App saved successfully to database', { 
+                    CodingAgentController.logger.info(`App saved successfully to database for agent ${agentId}`, { 
                         agentId, 
                         userId: user.id,
                         visibility: 'private'
                     });
-                    CodingAgentController.logger.info('Agent initialized successfully');
+                    CodingAgentController.logger.info(`Agent initialized successfully for agent ${agentId}`);
+                }).catch((error) => {
+                    CodingAgentController.logger.info(`Agent ${agentId} failed to initialize`, error);
                 }).finally(() => {
                     writer.write("terminate");
+                    writer.close();
+                    CodingAgentController.logger.info(`Agent ${agentId} terminated successfully`);
                 });
             });
 
             waitUntil(templateGenerationPromise);
+
+            CodingAgentController.logger.info(`Template generation for agent ${agentId} completed successfully`);
             
             return new Response(readable, {
                 status: 200,

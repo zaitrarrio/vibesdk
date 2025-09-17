@@ -21,7 +21,6 @@ export function setupAuthRoutes(app: Hono<AppEnv>): void {
     authRouter.post('/login', routeAuthMiddleware(AuthConfig.public), adaptController(AuthController, AuthController.login));
     authRouter.post('/verify-email', routeAuthMiddleware(AuthConfig.public), adaptController(AuthController, AuthController.verifyEmail));
     authRouter.post('/resend-verification', routeAuthMiddleware(AuthConfig.public), adaptController(AuthController, AuthController.resendVerificationOtp));
-    authRouter.post('/refresh', routeAuthMiddleware(AuthConfig.public), adaptController(AuthController, AuthController.refreshToken));
     authRouter.get('/check', routeAuthMiddleware(AuthConfig.public), adaptController(AuthController, AuthController.checkAuth));
     
     // Protected routes (require authentication) - must come before dynamic OAuth routes

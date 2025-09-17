@@ -73,9 +73,9 @@ Once you click "Deploy to Cloudflare", you'll be taken to your Cloudflare dashbo
 ### 🔑 What you'll configure
 
 - `GOOGLE_AI_STUDIO_API_KEY` - Your Google Gemini API key for Gemini models
-- `JWT_SECRET` - Secure random string for session management (use default: `default`)
-- `WEBHOOK_SECRET` - Webhook authentication secret (use default: `default`)
-- `SECRETS_ENCRYPTION_KEY` - Encryption key for secrets (use default: `default`)
+- `JWT_SECRET` - Secure random string for session management
+- `WEBHOOK_SECRET` - Webhook authentication secret
+- `SECRETS_ENCRYPTION_KEY` - Encryption key for secrets
 - `SANDBOX_INSTANCE_TYPE` - Container performance tier (optional, see section below)
 - `ALLOWED_EMAIL` - Email address of the user allowed to use the app. This is used to verify the user's identity and prevent unauthorized access.
 - `CUSTOM_DOMAIN` - Custom domain for your app that you have configured in Cloudflare (**Required**). This is needed for the app to work.

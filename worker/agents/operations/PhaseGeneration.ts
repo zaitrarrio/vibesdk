@@ -119,6 +119,7 @@ Adhere to the following guidelines:
 •   Always suggest phases in sequential ordering - Phase 1 comes after Phase 0, Phase 2 comes after Phase 1 and so on.
 •   **Every phase needs to be deployable with all the views/pages working properly AND looking absolutely beautiful!**
 •   **VISUAL EXCELLENCE STANDARD**: Each phase should elevate the app's visual appeal with modern design principles, ensuring users are impressed by both functionality and aesthetics.
+•   IF you need to get any file to be deleted or cleaned, please set the \`changes\` field to \`delete\` for that file.
 </SUGGESTING NEXT PHASE>
 
 Always remember our strategy for phase generation: 
