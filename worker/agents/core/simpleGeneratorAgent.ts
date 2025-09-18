@@ -40,7 +40,7 @@ import { looksLikeCommand } from '../utils/common';
 import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
-import { createRateLimitErrorResponse, RateLimitExceededError } from '../../services/rate-limit/errors';
+import { RateLimitExceededError } from '../../services/rate-limit/errors';
 
 interface WebhookPayload {
     event: {
@@ -224,6 +224,32 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         shouldBeGenerating: false
     };
 
+    async saveToDatabase() {
+        this.logger().info(`Blueprint generated successfully for agent ${this.state.sessionId}`);
+        // Save the app to database (authenticated users only)
+        const appService = new AppService(this.env);
+        await appService.createApp({
+            id: this.state.inferenceContext.agentId,
+            userId: this.state.inferenceContext.userId,
+            sessionToken: null,
+            title: this.state.blueprint.title || this.state.query.substring(0, 100),
+            description: this.state.blueprint.description || null,
+            originalPrompt: this.state.query,
+            finalPrompt: this.state.query,
+            framework: this.state.blueprint.frameworks?.[0],
+            visibility: 'private',
+            status: 'generating',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        this.logger().info(`App saved successfully to database for agent ${this.state.inferenceContext.agentId}`, { 
+            agentId: this.state.inferenceContext.agentId, 
+            userId: this.state.inferenceContext.userId,
+            visibility: 'private'
+        });
+        this.logger().info(`Agent initialized successfully for agent ${this.state.inferenceContext.agentId}`);
+    }
+
     /**
      * Initialize the code generator with project blueprint and template
      * Sets up services and begins deployment process
@@ -249,7 +275,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             stream: {
                 chunk_size: 256,
                 onChunk: (chunk) => {
-                    initArgs.onBlueprintChunk(chunk);
+                    initArgs.writer.write({chunk});
                 }
             }
         })
@@ -290,6 +316,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             });
         }
         this.logger().info(`Agent ${this.state.sessionId} initialized successfully`);
+        await this.saveToDatabase();
         return this.state;
     }
 
@@ -473,7 +500,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } catch (error) {
             this.logger().error("Error in state machine:", error);
             if (error instanceof RateLimitExceededError) {
-                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, createRateLimitErrorResponse(error));
+                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, { error });
             }
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.broadcast(WebSocketMessageResponses.ERROR, {
@@ -2289,7 +2316,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } catch (error) {
             this.logger().error('Error handling user input:', error);
             if (error instanceof RateLimitExceededError) {
-                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, createRateLimitErrorResponse(error));
+                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, error);
                 return;
             }
             this.broadcast(WebSocketMessageResponses.ERROR, {

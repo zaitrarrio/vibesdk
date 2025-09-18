@@ -3,22 +3,14 @@ import { BaseController } from '../baseController';
 import { generateId } from '../../../utils/idGenerator';
 import { CodeGenState } from '../../../agents/core/state';
 import { getAgentStub, getTemplateForQuery } from '../../../agents';
-import { AgentConnectionData, AgentPreviewResponse } from './types';
+import { AgentConnectionData, AgentPreviewResponse, CodeGenArgs } from './types';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
-import { AppService, ModelConfigService } from '../../../database';
+import { ModelConfigService } from '../../../database';
 import { ModelConfig } from '../../../agents/inferutils/config.types';
 import { RateLimitService } from '../../../services/rate-limit/rateLimits';
-import { createRateLimitErrorResponse, RateLimitExceededError } from '../../../services/rate-limit/errors';
 import { validateWebSocketOrigin } from '../../../middleware/security/websocket';
 import { createLogger } from '../../../logger';
-interface CodeGenArgs {
-    query: string;
-    language?: string;
-    frameworks?: string[];
-    selectedTemplate?: string;
-    agentMode: 'deterministic' | 'smart';
-}
 
 const defaultCodeGenArgs: CodeGenArgs = {
     query: '',
@@ -71,21 +63,12 @@ export class CodingAgentController extends BaseController {
             try {
                 await RateLimitService.enforceAppCreationRateLimit(env, context.config.security.rateLimit, user, request);
             } catch (error) {
-                CodingAgentController.logger.warn('App creation rate limited', { userId: user.id, error });
-                if (error instanceof RateLimitExceededError) {
-                    const errorResponse = createRateLimitErrorResponse(error);
-                    return CodingAgentController.createErrorResponse(errorResponse.error, 429);
+                if (error instanceof Error) {
+                    return CodingAgentController.createErrorResponse(error, 429);
+                } else {
+                    CodingAgentController.logger.error('Unknown error in enforceAppCreationRateLimit', error);
+                    return CodingAgentController.createErrorResponse(JSON.stringify(error), 429);
                 }
-                const config = context.config.security.rateLimit.appCreation;
-                return new Response(JSON.stringify({ 
-                    error: error instanceof Error ? error.message : 'Rate limit exceeded'
-                }), {
-                    status: 429,
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Retry-After': config.period.toString()
-                    }
-                });
             }
 
             const agentId = generateId();
@@ -125,49 +108,6 @@ export class CodingAgentController extends BaseController {
 
             const templateInfo = await getTemplateForQuery(env, inferenceContext, query, hostname, CodingAgentController.logger);
 
-            const agentPromise = agentInstance.initialize({
-                query,
-                language: body.language || defaultCodeGenArgs.language,
-                frameworks: body.frameworks || defaultCodeGenArgs.frameworks,
-                hostname,
-                inferenceContext,
-                onBlueprintChunk: (chunk) => {
-                        writer.write({ chunk });
-                    },
-                templateInfo,
-            }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
-            agentPromise.then(async (state: CodeGenState) => {
-                CodingAgentController.logger.info(`Blueprint generated successfully for agent ${agentId}`);
-                // Save the app to database (authenticated users only)
-                const appService = new AppService(env);
-                await appService.createApp({
-                    id: agentId,
-                    userId: user.id,
-                    sessionToken: null,
-                    title: state.blueprint.title || query.substring(0, 100),
-                    description: state.blueprint.description || null,
-                    originalPrompt: query,
-                    finalPrompt: query,
-                    framework: state.blueprint.frameworks?.[0] || defaultCodeGenArgs.frameworks?.[0],
-                    visibility: 'private',
-                    status: 'generating',
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                });
-                CodingAgentController.logger.info(`App saved successfully to database for agent ${agentId}`, { 
-                    agentId, 
-                    userId: user.id,
-                    visibility: 'private'
-                });
-                CodingAgentController.logger.info(`Agent initialized successfully for agent ${agentId}`);
-            }).catch((error) => {
-                CodingAgentController.logger.info(`Agent ${agentId} failed to initialize`, error);
-            }).finally(() => {
-                writer.write("terminate");
-                writer.close();
-                CodingAgentController.logger.info(`Agent ${agentId} terminated successfully`);
-            });
-
             const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
             const httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
         
@@ -180,6 +120,21 @@ export class CodingAgentController extends BaseController {
                     name: templateInfo.templateDetails.name,
                     files: templateInfo.templateDetails.files,
                 }
+            });
+
+            const agentPromise = agentInstance.initialize({
+                query,
+                language: body.language || defaultCodeGenArgs.language,
+                frameworks: body.frameworks || defaultCodeGenArgs.frameworks,
+                hostname,
+                inferenceContext,
+                writer,
+                templateInfo,
+            }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
+            agentPromise.then(async (_state: CodeGenState) => {
+                writer.write("terminate");
+                writer.close();
+                CodingAgentController.logger.info(`Agent ${agentId} terminated successfully`);
             });
             
             return new Response(readable, {

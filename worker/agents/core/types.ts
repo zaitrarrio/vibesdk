@@ -16,7 +16,7 @@ export interface AgentInitArgs {
         templateDetails: TemplateDetails;
         selection: TemplateSelection;
     }
-    onBlueprintChunk: (chunk: string) => void;
+    writer: WritableStreamDefaultWriter<{chunk: string}>;
 }
 
 export interface AllIssues {
