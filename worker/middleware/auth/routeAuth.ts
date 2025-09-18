@@ -141,7 +141,6 @@ export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Respo
         logger.error('No authentication level found');
         return errorResponse('No authentication level found', 500);
     }
-    logger.info('Authentication level found', requirement);
     
     // Only perform auth if we need it or don't have user yet
     if (!user && (requirement.level === 'authenticated' || requirement.level === 'owner-only')) {
