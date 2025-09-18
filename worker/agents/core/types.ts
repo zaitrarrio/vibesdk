@@ -4,7 +4,7 @@ import type { ClientReportedErrorType, FileOutputType } from '../schemas';
 import type { ConversationMessage } from '../inferutils/common';
 import type { InferenceContext } from '../inferutils/config.types';
 import type { TemplateDetails } from '../../services/sandbox/sandboxTypes';
-import { TemplateSelection } from '../planning/templateSelector';
+import { TemplateSelection } from '../schemas';
 
 export interface AgentInitArgs {
     query: string;

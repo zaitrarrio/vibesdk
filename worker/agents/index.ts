@@ -6,9 +6,10 @@ import { generateId } from '../utils/idGenerator';
 import { StructuredLogger } from '../logger';
 import { InferenceContext } from './inferutils/config.types';
 import { SandboxSdkClient } from '../services/sandbox/sandboxSdkClient';
-import { selectTemplate, TemplateSelection } from './planning/templateSelector';
+import { selectTemplate } from './planning/templateSelector';
 import { getSandboxService } from '../services/sandbox/factory';
 import { TemplateDetails } from '../services/sandbox/sandboxTypes';
+import { TemplateSelection } from './schemas';
 
 export async function getAgentStub(env: Env, agentId: string, searchInOtherJurisdictions: boolean = false, logger: StructuredLogger) : Promise<DurableObjectStub<SmartCodeGeneratorAgent>> {
     if (searchInOtherJurisdictions) {
