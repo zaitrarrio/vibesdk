@@ -16,77 +16,13 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 	error: 3,
 };
 
-/**
- * Patterns for detecting and redacting sensitive credentials
- */
-const CREDENTIAL_PATTERNS = [
-	// GitHub tokens
-	/ghp_[A-Za-z0-9_]{36}/g,
-	/gho_[A-Za-z0-9_]{36}/g,
-	/ghu_[A-Za-z0-9_]{36}/g,
-	/ghs_[A-Za-z0-9_]{36}/g,
-	/ghr_[A-Za-z0-9_]{76}/g,
-	
-	// OpenAI API keys
-	/sk-[A-Za-z0-9]{48}/g,
-	
-	// Generic Bearer tokens
-	/Bearer\s+[A-Za-z0-9._\-~+=\/]+/gi,
-	
-	// Basic auth credentials in URLs
-	/https?:\/\/[^:\/\s]*:[^@\/\s]*@[^\s\/]*/g,
-	
-	// x-oauth-basic patterns (GitHub HTTPS clone URLs with tokens)
-	/x-oauth-basic:[A-Za-z0-9_]+@/g,
-	
-	// JWT tokens (basic pattern)
-	/eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/g,
-	
-	// Cloudflare API tokens
-	/[A-Za-z0-9_\-]{40}(?=\s|$|&|"|\||,|;)/g, // 40-char tokens with word boundaries
-];
+// Credential scrubbing patterns removed by request
 
 /**
- * Efficient credential scrubbing with safe handling
+ * Scrubbing disabled: pass-through
  */
 function scrubCredentials(data: unknown): unknown {
-	if (typeof data === 'string') {
-		// Early return if no potential credentials detected
-		if (!data.includes('ghp_') && !data.includes('sk-') && !data.includes('Bearer') && 
-			!data.includes('://') && !data.includes('eyJ') && !data.includes('x-oauth-basic')) {
-			return data;
-		}
-		
-		let scrubbed = data;
-		for (const pattern of CREDENTIAL_PATTERNS) {
-			scrubbed = scrubbed.replace(pattern, '[REDACTED]');
-		}
-		return scrubbed;
-	}
-	
-	if (Array.isArray(data)) {
-		return data.map(scrubCredentials);
-	}
-	
-	if (data && typeof data === 'object' && data !== null && !(data instanceof Error) && !(data instanceof Date)) {
-		try {
-			const scrubbed: Record<string, unknown> = {};
-			for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-				// Always redact known sensitive field names
-				if (/^(token|password|secret|key|auth|credential|bearer)$/i.test(key)) {
-					scrubbed[key] = '[REDACTED]';
-				} else {
-					scrubbed[key] = scrubCredentials(value);
-				}
-			}
-			return scrubbed;
-		} catch {
-			// If object processing fails, return a safe representation
-			return '[OBJECT_SCRUB_FAILED]';
-		}
-	}
-	
-	return data;
+    return data;
 }
 
 export class StructuredLogger {
@@ -259,7 +195,21 @@ export class StructuredLogger {
 			}
 		} else {
 			// Structured JSON output for production (optimal for Cloudflare Workers Logs)
-			console[consoleMethod](JSON.stringify(logEntry));
+			try {
+				console[consoleMethod](JSON.stringify(logEntry));
+			} catch (e) {
+				// Fallback if stringify fails due to unexpected structures
+				console[consoleMethod](
+					JSON.stringify({
+						level: logEntry.level,
+						time: logEntry.time,
+						component: logEntry.component,
+						msg: '[LOG_STRINGIFY_FAILED]',
+						stringifyError:
+							e instanceof Error ? { name: e.name, message: e.message } : String(e),
+					}),
+				);
+			}
 		}
 	}
 
@@ -329,12 +279,32 @@ export class StructuredLogger {
 		let error: Error | undefined;
 		const otherArgs: unknown[] = [];
 
+		const isErrorLike = (value: unknown): value is { name?: unknown; message?: unknown; stack?: unknown } => {
+			return (
+				value !== null &&
+				typeof value === 'object' &&
+				('message' in (value as Record<string, unknown>) || 'name' in (value as Record<string, unknown>))
+			);
+		};
+
+		const toError = (value: { name?: unknown; message?: unknown; stack?: unknown }): Error => {
+			const msg = typeof value.message === 'string' ? value.message : 'Unknown error';
+			const err = new Error(msg);
+			if (typeof value.name === 'string') err.name = value.name;
+			if (typeof value.stack === 'string') (err as Error).stack = value.stack;
+			return err;
+		};
+
 		args.forEach((arg) => {
 			if (arg instanceof Error) {
 				error = arg;
-			} else {
-				otherArgs.push(arg);
+				return;
 			}
+			if (isErrorLike(arg)) {
+				error = toError(arg);
+				return;
+			}
+			otherArgs.push(arg);
 		});
 
 		return {

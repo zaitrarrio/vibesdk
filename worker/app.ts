@@ -8,13 +8,13 @@ import { setupRoutes } from './api/routes';
 import { CsrfService } from './services/csrf/CsrfService';
 import { SecurityError, SecurityErrorType } from './types/security';
 import { getGlobalConfigurableSettings } from './config';
-import { initHonoSentry } from './observability/sentry';
+// import { initHonoSentry } from './observability/sentry';
 
 export function createApp(env: Env): Hono<AppEnv> {
     const app = new Hono<AppEnv>();
 
     // Observability: Sentry error reporting & context
-    initHonoSentry(app);
+    // initHonoSentry(app);
 
     // Apply global security middlewares (skip for WebSocket upgrades)
     app.use('*', async (c, next) => {
@@ -70,15 +70,12 @@ export function createApp(env: Env): Hono<AppEnv> {
         }
     });
 
-    // Apply global config middleware
     app.use('/api/*', async (c, next) => {
+        // Apply global config middleware
         const config = await getGlobalConfigurableSettings(env);
         c.set('config', config);
-        await next();
-    })
 
-    // Apply global rate limit middleware. Should this be moved after setupRoutes so that maybe 'user' is available?
-    app.use('/api/*', async (c, next) => {
+        // Apply global rate limit middleware. Should this be moved after setupRoutes so that maybe 'user' is available?
         await RateLimitService.enforceGlobalApiRateLimit(env, c.get('config').security.rateLimit, c.get('user'), c.req.raw)
         await next();
     })
@@ -87,7 +84,7 @@ export function createApp(env: Env): Hono<AppEnv> {
     // app.use('/api/*', routeAuthMiddleware(AuthConfig.authenticated));
 
     // Now setup all the routes
-    setupRoutes(env, app);
+    setupRoutes(app);
 
     // Add not found route to redirect to ASSETS
     app.notFound((c) => {

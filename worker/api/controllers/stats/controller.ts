@@ -4,47 +4,46 @@ import { RouteContext } from '../../types/route-context';
 import { ApiResponse, ControllerResponse } from '../types';
 import { UserStatsData, UserActivityData } from './types';
 import { AnalyticsService } from '../../../database/services/AnalyticsService';
+import { createLogger } from '../../../logger';
 
 export class StatsController extends BaseController {
-    private analyticsService: AnalyticsService;
+    static logger = createLogger('StatsController');
     
-    constructor(env: Env) {
-        super(env);
-        this.analyticsService = new AnalyticsService(this.db);
-    }
     // Get user statistics
-    async getUserStats(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserStatsData>>> {
+    static async getUserStats(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserStatsData>>> {
         try {
             const user = context.user!;
 
             // Get comprehensive user statistics using analytics service
-            const enhancedStats = await this.analyticsService.getEnhancedUserStats(user.id);
+            const analyticsService = new AnalyticsService(env);
+            const enhancedStats = await analyticsService.getEnhancedUserStats(user.id);
 
             // Use EnhancedUserStats directly as response data
             const responseData = enhancedStats;
 
-            return this.createSuccessResponse(responseData);
+            return StatsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching user stats:', error);
-            return this.createErrorResponse<UserStatsData>('Failed to fetch user statistics', 500);
+            StatsController.logger.error('Error fetching user stats:', error);
+            return StatsController.createErrorResponse<UserStatsData>('Failed to fetch user statistics', 500);
         }
     }
 
 
     // Get user activity timeline
-    async getUserActivity(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserActivityData>>> {
+    static async getUserActivity(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserActivityData>>> {
         try {
             const user = context.user!;
 
             // Get user activity timeline using analytics service
-            const activities = await this.analyticsService.getUserActivityTimeline(user.id, 20);
+            const analyticsService = new AnalyticsService(env);
+            const activities = await analyticsService.getUserActivityTimeline(user.id, 20);
 
             const responseData: UserActivityData = { activities };
 
-            return this.createSuccessResponse(responseData);
+            return StatsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching user activity:', error);
-            return this.createErrorResponse<UserActivityData>('Failed to fetch user activity', 500);
+            StatsController.logger.error('Error fetching user activity:', error);
+            return StatsController.createErrorResponse<UserActivityData>('Failed to fetch user activity', 500);
         }
     }
 }

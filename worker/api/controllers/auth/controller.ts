@@ -24,21 +24,16 @@ import { RouteContext } from '../../types/route-context';
 import { authMiddleware } from '../../../middleware/auth/auth';
 import { CsrfService } from '../../../services/csrf/CsrfService';
 import { BaseController } from '../baseController';
+import { createLogger } from '../../../logger';
 /**
  * Authentication Controller
  */
 export class AuthController extends BaseController {
-    private authService: AuthService;
-    
-    constructor(env: Env) {
-        super(env);
-        this.authService = new AuthService(this.db, env);
-    }
-    
+    static logger = createLogger('AuthController');
     /**
      * Check if OAuth providers are configured
      */
-    private hasOAuthProviders(env: Env): boolean {
+    static hasOAuthProviders(env: Env): boolean {
         return (!!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET) || 
                (!!env.GITHUB_CLIENT_ID && !!env.GITHUB_CLIENT_SECRET);
     }
@@ -47,17 +42,17 @@ export class AuthController extends BaseController {
      * Register a new user
      * POST /api/auth/register
      */
-    async register(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async register(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             // Check if OAuth providers are configured - if yes, block email/password registration
-            if (this.hasOAuthProviders(env)) {
-                return this.createErrorResponse(
+            if (AuthController.hasOAuthProviders(env)) {
+                return AuthController.createErrorResponse(
                     'Email/password registration is not available when OAuth providers are configured. Please use OAuth login instead.',
                     403
                 );
             }
 
-            const bodyResult = await this.parseJsonBody(request);
+            const bodyResult = await AuthController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response!;
             }
@@ -65,15 +60,16 @@ export class AuthController extends BaseController {
             const validatedData = registerSchema.parse(bodyResult.data);
 
             if (env.ALLOWED_EMAIL && validatedData.email !== env.ALLOWED_EMAIL) {
-                return this.createErrorResponse(
+                return AuthController.createErrorResponse(
                     'Email Whitelisting is enabled. Please use the allowed email to register.',
                     403
                 );
             }
             
-            const result = await this.authService.register(validatedData, request);
+            const authService = new AuthService(env);
+            const result = await authService.register(validatedData, request);
             
-            const response = this.createSuccessResponse(
+            const response = AuthController.createSuccessResponse(
                 formatAuthResponse(result.user, undefined, result.expiresIn)
             );
             
@@ -90,10 +86,10 @@ export class AuthController extends BaseController {
             return response;
         } catch (error) {
             if (error instanceof SecurityError) {
-                return this.createErrorResponse(error.message, error.statusCode);
+                return AuthController.createErrorResponse(error.message, error.statusCode);
             }
             
-            return this.handleError(error, 'register user');
+            return AuthController.handleError(error, 'register user');
         }
     }
     
@@ -101,17 +97,17 @@ export class AuthController extends BaseController {
      * Login with email and password
      * POST /api/auth/login
      */
-    async login(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async login(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             // Check if OAuth providers are configured - if yes, block email/password login
-            if (this.hasOAuthProviders(env)) {
-                return this.createErrorResponse(
+            if (AuthController.hasOAuthProviders(env)) {
+                return AuthController.createErrorResponse(
                     'Email/password login is not available when OAuth providers are configured. Please use OAuth login instead.',
                     403
                 );
             }
 
-            const bodyResult = await this.parseJsonBody(request);
+            const bodyResult = await AuthController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response!;
             }
@@ -119,15 +115,16 @@ export class AuthController extends BaseController {
             const validatedData = loginSchema.parse(bodyResult.data);
 
             if (env.ALLOWED_EMAIL && validatedData.email !== env.ALLOWED_EMAIL) {
-                return this.createErrorResponse(
+                return AuthController.createErrorResponse(
                     'Email Whitelisting is enabled. Please use the allowed email to login.',
                     403
                 );
             }
             
-            const result = await this.authService.login(validatedData, request);
+            const authService = new AuthService(env);
+            const result = await authService.login(validatedData, request);
             
-            const response = this.createSuccessResponse(
+            const response = AuthController.createSuccessResponse(
                 formatAuthResponse(result.user, undefined, result.expiresIn)
             );
             
@@ -144,10 +141,10 @@ export class AuthController extends BaseController {
             return response;
         } catch (error) {
             if (error instanceof SecurityError) {
-                return this.createErrorResponse(error.message, error.statusCode);
+                return AuthController.createErrorResponse(error.message, error.statusCode);
             }
             
-            return this.handleError(error, 'login user');
+            return AuthController.handleError(error, 'login user');
         }
     }
     
@@ -155,23 +152,22 @@ export class AuthController extends BaseController {
      * Logout current user
      * POST /api/auth/logout
      */
-    async logout(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async logout(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             const sessionId = extractSessionId(request);
 			if (sessionId) {
 				try {
-					const sessionService = new SessionService(this.db, env);
+					const sessionService = new SessionService(env);
 					await sessionService.revokeSessionId(sessionId);
 				} catch (error) {
-					this.logger.debug(
+					AuthController.logger.debug(
 						'Failed to properly logout session',
 						error,
 					);
 				}
 			}
-            
-            
-            const response = this.createSuccessResponse({ 
+                        
+            const response = AuthController.createSuccessResponse({ 
                 success: true, 
                 message: 'Logged out successfully' 
             });
@@ -183,9 +179,9 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            this.logger.error('Logout failed', error);
+            AuthController.logger.error('Logout failed', error);
             
-            const response = this.createSuccessResponse({ 
+            const response = AuthController.createSuccessResponse({ 
                 success: true, 
                 message: 'Logged out' 
             });
@@ -203,27 +199,27 @@ export class AuthController extends BaseController {
      * Get current user profile
      * GET /api/auth/profile
      */
-    async getProfile(_request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async getProfile(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             // User is provided by middleware - no need for manual authentication
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
             
-            const userService = new UserService(this.db);
+            const userService = new UserService(env);
             const fullUser = await userService.findUserById(user.id);
             
             if (!fullUser) {
-                return this.createErrorResponse('User not found', 404);
+                return AuthController.createErrorResponse('User not found', 404);
             }
             
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 user: mapUserResponse(fullUser),
                 sessionId: user.id // Use user ID as session identifier
             });
         } catch (error) {
-            return this.handleError(error, 'get profile');
+            return AuthController.handleError(error, 'get profile');
         }
     }
     
@@ -231,14 +227,14 @@ export class AuthController extends BaseController {
      * Update user profile
      * PUT /api/auth/profile
      */
-    async updateProfile(request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async updateProfile(request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
             
-            const bodyResult = await this.parseJsonBody<{
+            const bodyResult = await AuthController.parseJsonBody<{
                 displayName?: string;
                 username?: string;
                 bio?: string;
@@ -251,12 +247,12 @@ export class AuthController extends BaseController {
             }
             
             const updateData = bodyResult.data!;
-            const userService = new UserService(this.db);
+            const userService = new UserService(env);
             
             if (updateData.username) {
                 const isAvailable = await userService.isUsernameAvailable(updateData.username, user.id);
                 if (!isAvailable) {
-                    return this.createErrorResponse('Username already taken', 400);
+                    return AuthController.createErrorResponse('Username already taken', 400);
                 }
             }
             
@@ -271,15 +267,15 @@ export class AuthController extends BaseController {
             const updatedUser = await userService.findUserById(user.id);
             
             if (!updatedUser) {
-                return this.createErrorResponse('User not found', 404);
+                return AuthController.createErrorResponse('User not found', 404);
             }
             
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 user: mapUserResponse(updatedUser),
                 message: 'Profile updated successfully'
             });
         } catch (error) {
-            return this.handleError(error, 'update profile');
+            return AuthController.handleError(error, 'update profile');
         }
     }
     
@@ -287,14 +283,15 @@ export class AuthController extends BaseController {
      * Initiate OAuth flow
      * GET /api/auth/oauth/:provider
      */
-    async initiateOAuth(request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async initiateOAuth(request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const validatedProvider = oauthProviderSchema.parse(routeContext.pathParams.provider);
             
             // Get intended redirect URL from query parameter
             const intendedRedirectUrl = routeContext.queryParams.get('redirect_url') || undefined;
             
-            const authUrl = await this.authService.getOAuthAuthorizationUrl(
+            const authService = new AuthService(env);
+            const authUrl = await authService.getOAuthAuthorizationUrl(
                 validatedProvider,
                 request,
                 intendedRedirectUrl
@@ -302,13 +299,13 @@ export class AuthController extends BaseController {
             
             return Response.redirect(authUrl, 302);
         } catch (error) {
-            this.logger.error('OAuth initiation failed', error);
+            AuthController.logger.error('OAuth initiation failed', error);
             
             if (error instanceof SecurityError) {
-                return this.createErrorResponse(error.message, error.statusCode);
+                return AuthController.createErrorResponse(error.message, error.statusCode);
             }
             
-            return this.handleError(error, 'initiate OAuth');
+            return AuthController.handleError(error, 'initiate OAuth');
         }
     }
     
@@ -316,7 +313,7 @@ export class AuthController extends BaseController {
      * Handle OAuth callback
      * GET /api/auth/callback/:provider
      */
-    async handleOAuthCallback(request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async handleOAuthCallback(request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const validatedProvider = oauthProviderSchema.parse(routeContext.pathParams.provider);
             
@@ -325,7 +322,7 @@ export class AuthController extends BaseController {
             const error = routeContext.queryParams.get('error');
             
             if (error) {
-                this.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
+                AuthController.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
                 const baseUrl = new URL(request.url).origin;
                 return Response.redirect(`${baseUrl}/?error=oauth_failed`, 302);
             }
@@ -335,7 +332,8 @@ export class AuthController extends BaseController {
                 return Response.redirect(`${baseUrl}/?error=missing_params`, 302);
             }
             
-            const result = await this.authService.handleOAuthCallback(
+            const authService = new AuthService(env);
+            const result = await authService.handleOAuthCallback(
                 validatedProvider,
                 code,
                 state,
@@ -361,31 +359,29 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            this.logger.error('OAuth callback failed', error);
+            AuthController.logger.error('OAuth callback failed', error);
             const baseUrl = new URL(request.url).origin;
             return Response.redirect(`${baseUrl}/?error=auth_failed`, 302);
         }
     }
 
-    // GitHub integration method removed - using zero-storage OAuth flow for exports
-
     /**
      * Check authentication status
      * GET /api/auth/check
      */
-    async checkAuth(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async checkAuth(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             // Use the same middleware authentication logic but don't require auth
             const user = await authMiddleware(request, env);
             
             if (!user) {
-                return this.createSuccessResponse({
+                return AuthController.createSuccessResponse({
                     authenticated: false,
                     user: null
                 });
             }
             
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 authenticated: true,
                 user: {
                     id: user.id,
@@ -395,7 +391,7 @@ export class AuthController extends BaseController {
                 sessionId: user.id
             });
         } catch (error) {
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 authenticated: false,
                 user: null
             });
@@ -406,21 +402,21 @@ export class AuthController extends BaseController {
      * Get active sessions for current user
      * GET /api/auth/sessions
      */
-    async getActiveSessions(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async getActiveSessions(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
 
-            const sessionService = new SessionService(this.db, env);
+            const sessionService = new SessionService(env);
             const sessions = await sessionService.getUserSessions(user.id);
 
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 sessions: sessions
             });
         } catch (error) {
-            return this.handleError(error, 'get active sessions');
+            return AuthController.handleError(error, 'get active sessions');
         }
     }
 
@@ -428,25 +424,25 @@ export class AuthController extends BaseController {
      * Revoke a specific session
      * DELETE /api/auth/sessions/:sessionId
      */
-    async revokeSession(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async revokeSession(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
 
             // Extract session ID from URL
             const sessionIdToRevoke = routeContext.pathParams.sessionId;
 
-            const sessionService = new SessionService(this.db, env);
+            const sessionService = new SessionService(env);
             
             await sessionService.revokeUserSession(sessionIdToRevoke, user.id);
 
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 message: 'Session revoked successfully'
             });
         } catch (error) {
-            return this.handleError(error, 'revoke session');
+            return AuthController.handleError(error, 'revoke session');
         }
     }
 
@@ -454,17 +450,17 @@ export class AuthController extends BaseController {
      * Get API keys for current user
      * GET /api/auth/api-keys
      */
-    async getApiKeys(_request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async getApiKeys(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
 
-            const apiKeyService = new ApiKeyService(this.db);
+            const apiKeyService = new ApiKeyService(env);
             const keys = await apiKeyService.getUserApiKeys(user.id);
 
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 keys: keys.map(key => ({
                     id: key.id,
                     name: key.name,
@@ -475,7 +471,7 @@ export class AuthController extends BaseController {
                 }))
             });
         } catch (error) {
-            return this.handleError(error, 'get API keys');
+            return AuthController.handleError(error, 'get API keys');
         }
     }
 
@@ -483,14 +479,14 @@ export class AuthController extends BaseController {
      * Create a new API key
      * POST /api/auth/api-keys
      */
-    async createApiKey(request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async createApiKey(request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
 
-            const bodyResult = await this.parseJsonBody<{ name?: string }>(request);
+            const bodyResult = await AuthController.parseJsonBody<{ name?: string }>(request);
             if (!bodyResult.success) {
                 return bodyResult.response!;
             }
@@ -498,14 +494,14 @@ export class AuthController extends BaseController {
             const { name } = bodyResult.data!;
 
             if (!name || typeof name !== 'string' || name.trim().length === 0) {
-                return this.createErrorResponse('API key name is required', 400);
+                return AuthController.createErrorResponse('API key name is required', 400);
             }
 
             const sanitizedName = name.trim().substring(0, 100);
 
             const { key, keyHash, keyPreview } = await generateApiKey();
             
-            const apiKeyService = new ApiKeyService(this.db);
+            const apiKeyService = new ApiKeyService(env);
             await apiKeyService.createApiKey({
                 userId: user.id,
                 name: sanitizedName,
@@ -513,16 +509,16 @@ export class AuthController extends BaseController {
                 keyPreview
             });
 
-            this.logger.info('API key created', { userId: user.id, name: sanitizedName });
+            AuthController.logger.info('API key created', { userId: user.id, name: sanitizedName });
 
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 key, // Return the actual key only once
                 keyPreview,
                 name: sanitizedName,
                 message: 'API key created successfully'
             });
         } catch (error) {
-            return this.handleError(error, 'create API key');
+            return AuthController.handleError(error, 'create API key');
         }
     }
 
@@ -530,25 +526,25 @@ export class AuthController extends BaseController {
      * Revoke an API key
      * DELETE /api/auth/api-keys/:keyId
      */
-    async revokeApiKey(_request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async revokeApiKey(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const user = routeContext.user;
             if (!user) {
-                return this.createErrorResponse('Unauthorized', 401);
+                return AuthController.createErrorResponse('Unauthorized', 401);
             }
 
             const keyId = routeContext.pathParams.keyId;            
             
-            const apiKeyService = new ApiKeyService(this.db);
+            const apiKeyService = new ApiKeyService(env);
             await apiKeyService.revokeApiKey(keyId, user.id);
 
-            this.logger.info('API key revoked', { userId: user.id, keyId });
+            AuthController.logger.info('API key revoked', { userId: user.id, keyId });
 
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 message: 'API key revoked successfully'
             });
         } catch (error) {
-            return this.handleError(error, 'revoke API key');
+            return AuthController.handleError(error, 'revoke API key');
         }
     }
 
@@ -556,9 +552,9 @@ export class AuthController extends BaseController {
      * Verify email with OTP
      * POST /api/auth/verify-email
      */
-    async verifyEmail(request: Request, _env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async verifyEmail(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
-            const bodyResult = await this.parseJsonBody<{ email: string; otp: string }>(request);
+            const bodyResult = await AuthController.parseJsonBody<{ email: string; otp: string }>(request);
             if (!bodyResult.success) {
                 return bodyResult.response!;
             }
@@ -566,12 +562,13 @@ export class AuthController extends BaseController {
             const { email, otp } = bodyResult.data!;
 
             if (!email || !otp) {
-                return this.createErrorResponse('Email and OTP are required', 400);
+                return AuthController.createErrorResponse('Email and OTP are required', 400);
             }
 
-            const result = await this.authService.verifyEmailWithOtp(email, otp, request);
+            const authService = new AuthService(env);
+            const result = await authService.verifyEmailWithOtp(email, otp, request);
             
-            const response = this.createSuccessResponse(
+            const response = AuthController.createSuccessResponse(
                 formatAuthResponse(result.user, undefined, result.expiresIn)
             );
             
@@ -583,10 +580,10 @@ export class AuthController extends BaseController {
             return response;
         } catch (error) {
             if (error instanceof SecurityError) {
-                return this.createErrorResponse(error.message, error.statusCode);
+                return AuthController.createErrorResponse(error.message, error.statusCode);
             }
             
-            return this.handleError(error, 'verify email');
+            return AuthController.handleError(error, 'verify email');
         }
     }
 
@@ -594,9 +591,9 @@ export class AuthController extends BaseController {
      * Resend verification OTP
      * POST /api/auth/resend-verification
      */
-    async resendVerificationOtp(request: Request, _env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async resendVerificationOtp(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
-            const bodyResult = await this.parseJsonBody<{ email: string }>(request);
+            const bodyResult = await AuthController.parseJsonBody<{ email: string }>(request);
             if (!bodyResult.success) {
                 return bodyResult.response!;
             }
@@ -604,20 +601,21 @@ export class AuthController extends BaseController {
             const { email } = bodyResult.data!;
 
             if (!email) {
-                return this.createErrorResponse('Email is required', 400);
+                return AuthController.createErrorResponse('Email is required', 400);
             }
 
-            await this.authService.resendVerificationOtp(email);
+            const authService = new AuthService(env);
+            await authService.resendVerificationOtp(email);
             
-            return this.createSuccessResponse({
+            return AuthController.createSuccessResponse({
                 message: 'Verification code sent successfully'
             });
         } catch (error) {
             if (error instanceof SecurityError) {
-                return this.createErrorResponse(error.message, error.statusCode);
+                return AuthController.createErrorResponse(error.message, error.statusCode);
             }
             
-            return this.handleError(error, 'resend verification OTP');
+            return AuthController.handleError(error, 'resend verification OTP');
         }
     }
 
@@ -625,11 +623,11 @@ export class AuthController extends BaseController {
      * Get CSRF token with proper expiration and rotation
      * GET /api/auth/csrf-token
      */
-    async getCsrfToken(request: Request, _env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+    static async getCsrfToken(request: Request, _env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             const token = CsrfService.getOrGenerateToken(request, false);
             
-            const response = this.createSuccessResponse({ 
+            const response = AuthController.createSuccessResponse({ 
                 token,
                 headerName: CsrfService.defaults.headerName,
                 expiresIn: Math.floor(CsrfService.defaults.tokenTTL / 1000)
@@ -641,7 +639,7 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            return this.handleError(error, 'get CSRF token');
+            return AuthController.handleError(error, 'get CSRF token');
         }
     }
     
@@ -649,7 +647,7 @@ export class AuthController extends BaseController {
      * Get available authentication providers
      * GET /api/auth/providers
      */
-    async getAuthProviders(
+    static async getAuthProviders(
         request: Request,
         env: Env,
         _ctx: ExecutionContext,
@@ -665,7 +663,7 @@ export class AuthController extends BaseController {
             // Include CSRF token with provider info
             const csrfToken = CsrfService.getOrGenerateToken(request, false);
             
-            const response = this.createSuccessResponse({
+            const response = AuthController.createSuccessResponse({
                 providers,
                 hasOAuth: providers.google || providers.github,
                 requiresEmailAuth: !providers.google && !providers.github,
@@ -680,7 +678,7 @@ export class AuthController extends BaseController {
             return response;
         } catch (error) {
             console.error('Get auth providers error:', error);
-            return this.createErrorResponse('Failed to get authentication providers', 500);
+            return AuthController.createErrorResponse('Failed to get authentication providers', 500);
         }
     }
 }

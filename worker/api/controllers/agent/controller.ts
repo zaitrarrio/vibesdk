@@ -6,12 +6,13 @@ import { getAgentStub } from '../../../agents';
 import { AgentConnectionData, AgentPreviewResponse } from './types';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
-import { AppService, DatabaseService, ModelConfigService } from '../../../database';
+import { AppService, ModelConfigService } from '../../../database';
 import { ModelConfig } from '../../../agents/inferutils/config.types';
 import { RateLimitService } from '../../../services/rate-limit/rateLimits';
 import { createRateLimitErrorResponse, RateLimitExceededError } from '../../../services/rate-limit/errors';
 import { validateWebSocketOrigin } from '../../../middleware/security/websocket';
 import { waitUntil } from 'cloudflare:workers';
+import { createLogger } from '../../../logger';
 interface CodeGenArgs {
     query: string;
     language?: string;
@@ -33,16 +34,13 @@ const defaultCodeGenArgs: CodeGenArgs = {
  * CodingAgentController to handle all code generation related endpoints
  */
 export class CodingAgentController extends BaseController {
-    constructor(env: Env) {
-        super(env);
-    }
-
+    static logger = createLogger('CodingAgentController');
     /**
      * Start the incremental code generation process
      */
-    async startCodeGeneration(request: Request, env: Env, _: ExecutionContext, context: RouteContext): Promise<Response> {
+    static async startCodeGeneration(request: Request, env: Env, _: ExecutionContext, context: RouteContext): Promise<Response> {
         try {
-            this.logger.info('Starting code generation process');
+            CodingAgentController.logger.info('Starting code generation process');
 
             const url = new URL(request.url);
             const hostname = url.hostname === 'localhost' ? `localhost:${url.port}`: url.hostname;
@@ -51,12 +49,12 @@ export class CodingAgentController extends BaseController {
             try {
                 body = await request.json() as CodeGenArgs;
             } catch (error) {
-                return this.createErrorResponse(`Invalid JSON in request body: ${JSON.stringify(error, null, 2)}`, 400);
+                return CodingAgentController.createErrorResponse(`Invalid JSON in request body: ${JSON.stringify(error, null, 2)}`, 400);
             }
 
             const query = body.query;
             if (!query) {
-                return this.createErrorResponse('Missing "query" field in request body', 400);
+                return CodingAgentController.createErrorResponse('Missing "query" field in request body', 400);
             }
             const { readable, writable } = new TransformStream({
                 transform(chunk, controller) {
@@ -74,10 +72,10 @@ export class CodingAgentController extends BaseController {
             try {
                 await RateLimitService.enforceAppCreationRateLimit(env, context.config.security.rateLimit, user, request);
             } catch (error) {
-                this.logger.warn('App creation rate limited', { userId: user.id, error });
+                CodingAgentController.logger.warn('App creation rate limited', { userId: user.id, error });
                 if (error instanceof RateLimitExceededError) {
                     const errorResponse = createRateLimitErrorResponse(error);
-                    return this.createErrorResponse(errorResponse.error, 429);
+                    return CodingAgentController.createErrorResponse(errorResponse.error, 429);
                 }
                 const config = context.config.security.rateLimit.appCreation;
                 return new Response(JSON.stringify({ 
@@ -92,13 +90,12 @@ export class CodingAgentController extends BaseController {
             }
 
             const agentId = generateId();
-            const db = new DatabaseService(env);
-            const modelConfigService = new ModelConfigService(db);
+            const modelConfigService = new ModelConfigService(env);
                                 
             // Fetch all user model configs, api keys and agent instance at once
             const [userConfigsRecord, agentInstance] = await Promise.all([
                 modelConfigService.getUserModelConfigs(user.id),
-                getAgentStub(env, agentId, false, this.logger)
+                getAgentStub(env, agentId, false, CodingAgentController.logger)
             ]);
                                 
             // Convert Record to Map and extract only ModelConfig properties
@@ -123,7 +120,7 @@ export class CodingAgentController extends BaseController {
                 enableRealtimeCodeFix: true, // For now disabled from the model configs itself
             }
                                 
-            this.logger.info(`Initialized inference context for user ${user.id}`, {
+            CodingAgentController.logger.info(`Initialized inference context for user ${user.id}`, {
                 modelConfigsCount: Object.keys(userModelConfigs).length,
             });
 
@@ -157,9 +154,9 @@ export class CodingAgentController extends BaseController {
                     },
                 }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
                 agentPromise.then(async (state: CodeGenState) => {
-                    this.logger.info(`Blueprint generated successfully for agent ${agentId}`);
+                    CodingAgentController.logger.info(`Blueprint generated successfully for agent ${agentId}`);
                     // Save the app to database (authenticated users only)
-                    const appService = new AppService(this.db);
+                    const appService = new AppService(env);
                     await appService.createApp({
                         id: agentId,
                         userId: user.id,
@@ -174,24 +171,24 @@ export class CodingAgentController extends BaseController {
                         createdAt: new Date(),
                         updatedAt: new Date()
                     });
-                    this.logger.info(`App saved successfully to database for agent ${agentId}`, { 
+                    CodingAgentController.logger.info(`App saved successfully to database for agent ${agentId}`, { 
                         agentId, 
                         userId: user.id,
                         visibility: 'private'
                     });
-                    this.logger.info(`Agent initialized successfully for agent ${agentId}`);
+                    CodingAgentController.logger.info(`Agent initialized successfully for agent ${agentId}`);
                 }).catch((error) => {
-                    this.logger.info(`Agent ${agentId} failed to initialize`, error);
+                    CodingAgentController.logger.info(`Agent ${agentId} failed to initialize`, error);
                 }).finally(() => {
                     writer.write("terminate");
                     writer.close();
-                    this.logger.info(`Agent ${agentId} terminated successfully`);
+                    CodingAgentController.logger.info(`Agent ${agentId} terminated successfully`);
                 });
             });
 
             waitUntil(templateGenerationPromise);
 
-            this.logger.info(`Template generation for agent ${agentId} completed successfully`);
+            CodingAgentController.logger.info(`Template generation for agent ${agentId} completed successfully`);
             
             return new Response(readable, {
                 status: 200,
@@ -206,8 +203,8 @@ export class CodingAgentController extends BaseController {
                 }
             });
         } catch (error) {
-            this.logger.error('Error starting code generation', error);
-            return this.handleError(error, 'start code generation');
+            CodingAgentController.logger.error('Error starting code generation', error);
+            return CodingAgentController.handleError(error, 'start code generation');
         }
     }
 
@@ -215,7 +212,7 @@ export class CodingAgentController extends BaseController {
      * Handle WebSocket connections for code generation
      * This routes the WebSocket connection directly to the Agent
      */
-    async handleWebSocketConnection(
+    static async handleWebSocketConnection(
         request: Request,
         env: Env,
         _: ExecutionContext,
@@ -224,7 +221,7 @@ export class CodingAgentController extends BaseController {
         try {
             const chatId = context.pathParams.agentId; // URL param is still agentId for backward compatibility
             if (!chatId) {
-                return this.createErrorResponse('Missing agent ID parameter', 400);
+                return CodingAgentController.createErrorResponse('Missing agent ID parameter', 400);
             }
 
             // Ensure the request is a WebSocket upgrade request
@@ -240,17 +237,17 @@ export class CodingAgentController extends BaseController {
             // Extract user for rate limiting
             const user = context.user!;
             if (!user) {
-                return this.createErrorResponse('Missing user', 401);
+                return CodingAgentController.createErrorResponse('Missing user', 401);
             }
 
-            this.logger.info(`WebSocket connection request for chat: ${chatId}`);
+            CodingAgentController.logger.info(`WebSocket connection request for chat: ${chatId}`);
             
             // Log request details for debugging
             const headers: Record<string, string> = {};
             request.headers.forEach((value, key) => {
                 headers[key] = value;
             });
-            this.logger.info('WebSocket request details', {
+            CodingAgentController.logger.info('WebSocket request details', {
                 headers,
                 url: request.url,
                 chatId
@@ -258,14 +255,14 @@ export class CodingAgentController extends BaseController {
 
             try {
                 // Get the agent instance to handle the WebSocket connection
-                const agentInstance = await getAgentStub(env, chatId, true, this.logger);
+                const agentInstance = await getAgentStub(env, chatId, true, CodingAgentController.logger);
                 
-                this.logger.info(`Successfully got agent instance for chat: ${chatId}`);
+                CodingAgentController.logger.info(`Successfully got agent instance for chat: ${chatId}`);
 
                 // Let the agent handle the WebSocket connection directly
                 return agentInstance.fetch(request);
             } catch (error) {
-                this.logger.error(`Failed to get agent instance with ID ${chatId}:`, error);
+                CodingAgentController.logger.error(`Failed to get agent instance with ID ${chatId}:`, error);
                 // Return an appropriate WebSocket error response
                 // We need to emulate a WebSocket response even for errors
                 const { 0: client, 1: server } = new WebSocketPair();
@@ -284,8 +281,8 @@ export class CodingAgentController extends BaseController {
                 });
             }
         } catch (error) {
-            this.logger.error('Error handling WebSocket connection', error);
-            return this.handleError(error, 'handle WebSocket connection');
+            CodingAgentController.logger.error('Error handling WebSocket connection', error);
+            return CodingAgentController.handleError(error, 'handle WebSocket connection');
         }
     }
 
@@ -293,7 +290,7 @@ export class CodingAgentController extends BaseController {
      * Connect to an existing agent instance
      * Returns connection information for an already created agent
      */
-    async connectToExistingAgent(
+    static async connectToExistingAgent(
         request: Request,
         env: Env,
         _: ExecutionContext,
@@ -302,18 +299,18 @@ export class CodingAgentController extends BaseController {
         try {
             const agentId = context.pathParams.agentId;
             if (!agentId) {
-                return this.createErrorResponse<AgentConnectionData>('Missing agent ID parameter', 400);
+                return CodingAgentController.createErrorResponse<AgentConnectionData>('Missing agent ID parameter', 400);
             }
 
-            this.logger.info(`Connecting to existing agent: ${agentId}`);
+            CodingAgentController.logger.info(`Connecting to existing agent: ${agentId}`);
 
             try {
                 // Verify the agent instance exists
-                const agentInstance = await getAgentStub(env, agentId, true, this.logger);
+                const agentInstance = await getAgentStub(env, agentId, true, CodingAgentController.logger);
                 if (!agentInstance || !(await agentInstance.isInitialized())) {
-                    return this.createErrorResponse<AgentConnectionData>('Agent instance not found or not initialized', 404);
+                    return CodingAgentController.createErrorResponse<AgentConnectionData>('Agent instance not found or not initialized', 404);
                 }
-                this.logger.info(`Successfully connected to existing agent: ${agentId}`);
+                CodingAgentController.logger.info(`Successfully connected to existing agent: ${agentId}`);
 
                 // Construct WebSocket URL
                 const url = new URL(request.url);
@@ -324,18 +321,18 @@ export class CodingAgentController extends BaseController {
                     agentId,
                 };
 
-                return this.createSuccessResponse(responseData);
+                return CodingAgentController.createSuccessResponse(responseData);
             } catch (error) {
-                this.logger.error(`Failed to connect to agent ${agentId}:`, error);
-                return this.createErrorResponse<AgentConnectionData>(`Agent instance not found or unavailable: ${error instanceof Error ? error.message : String(error)}`, 404);
+                CodingAgentController.logger.error(`Failed to connect to agent ${agentId}:`, error);
+                return CodingAgentController.createErrorResponse<AgentConnectionData>(`Agent instance not found or unavailable: ${error instanceof Error ? error.message : String(error)}`, 404);
             }
         } catch (error) {
-            this.logger.error('Error connecting to existing agent', error);
-            return this.handleError(error, 'connect to existing agent') as ControllerResponse<ApiResponse<AgentConnectionData>>;
+            CodingAgentController.logger.error('Error connecting to existing agent', error);
+            return CodingAgentController.handleError(error, 'connect to existing agent') as ControllerResponse<ApiResponse<AgentConnectionData>>;
         }
     }
 
-    async deployPreview(
+    static async deployPreview(
         _request: Request,
         env: Env,
         _: ExecutionContext,
@@ -344,33 +341,33 @@ export class CodingAgentController extends BaseController {
         try {
             const agentId = context.pathParams.agentId;
             if (!agentId) {
-                return this.createErrorResponse<AgentPreviewResponse>('Missing agent ID parameter', 400);
+                return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Missing agent ID parameter', 400);
             }
 
-            this.logger.info(`Deploying preview for agent: ${agentId}`);
+            CodingAgentController.logger.info(`Deploying preview for agent: ${agentId}`);
 
             try {
                 // Get the agent instance
-                const agentInstance = await getAgentStub(env, agentId, true, this.logger);
+                const agentInstance = await getAgentStub(env, agentId, true, CodingAgentController.logger);
                 
                 // Deploy the preview
                 const preview = await agentInstance.deployToSandbox();
                 if (!preview) {
-                    return this.createErrorResponse<AgentPreviewResponse>('Failed to deploy preview', 500);
+                    return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Failed to deploy preview', 500);
                 }
-                this.logger.info('Preview deployed successfully', {
+                CodingAgentController.logger.info('Preview deployed successfully', {
                     agentId,
                     previewUrl: preview.previewURL
                 });
 
-                return this.createSuccessResponse(preview);
+                return CodingAgentController.createSuccessResponse(preview);
             } catch (error) {
-                this.logger.error('Failed to deploy preview', { agentId, error });
-                return this.createErrorResponse<AgentPreviewResponse>('Failed to deploy preview', 500);
+                CodingAgentController.logger.error('Failed to deploy preview', { agentId, error });
+                return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Failed to deploy preview', 500);
             }
         } catch (error) {
-            this.logger.error('Error deploying preview', error);
-            const appError = this.handleError(error, 'deploy preview') as ControllerResponse<ApiResponse<AgentPreviewResponse>>;
+            CodingAgentController.logger.error('Error deploying preview', error);
+            const appError = CodingAgentController.handleError(error, 'deploy preview') as ControllerResponse<ApiResponse<AgentPreviewResponse>>;
             return appError;
         }
     }

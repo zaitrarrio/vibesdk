@@ -12,42 +12,42 @@ import { setupScreenshotRoutes } from './screenshotRoutes';
 import { Hono } from "hono";
 import { AppEnv } from "../../types/appenv";
 
-export function setupRoutes(env: Env, app: Hono<AppEnv>): void {
+export function setupRoutes(app: Hono<AppEnv>): void {
     // Health check route
     app.get('/api/health', (c) => {
         return c.json({ status: 'ok' });
     });
 
     // Authentication and user management routes
-    setupAuthRoutes(env, app);
+    setupAuthRoutes(app);
     
     // Codegen routes
-    setupCodegenRoutes(env, app);
+    setupCodegenRoutes(app);
     
     // User dashboard and profile routes
-    setupUserRoutes(env, app);
+    setupUserRoutes(app);
     
     // App management routes
-    setupAppRoutes(env, app);
+    setupAppRoutes(app);
     
     // Stats routes
-    setupStatsRoutes(env, app);
+    setupStatsRoutes(app);
     
     // AI Gateway Analytics routes
-    setupAnalyticsRoutes(env, app);
+    setupAnalyticsRoutes(app);
     
     // Secrets management routes
-    setupSecretsRoutes(env, app);
+    setupSecretsRoutes(app);
     
     // Model configuration and provider keys routes
-    setupModelConfigRoutes(env, app);
+    setupModelConfigRoutes(app);
     
     // Model provider routes
-    setupModelProviderRoutes(env, app);
+    setupModelProviderRoutes(app);
 
     // GitHub Exporter routes
-    setupGitHubExporterRoutes(env, app);
+    setupGitHubExporterRoutes(app);
 
     // Screenshot serving routes (public)
-    setupScreenshotRoutes(env, app);
+    setupScreenshotRoutes(app);
 }

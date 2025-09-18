@@ -31,6 +31,7 @@ import {
     validateModelAccessForEnvironment
 } from './byokHelper';
 import { z } from 'zod';
+import { createLogger } from '../../../logger';
 
 // Validation schemas
 const modelConfigUpdateSchema = z.object({
@@ -51,22 +52,17 @@ const modelTestSchema = z.object({
 });
 
 export class ModelConfigController extends BaseController {
-    private modelConfigService: ModelConfigService;
-    constructor(env: Env) {
-        super(env);
-        this.modelConfigService = new ModelConfigService(this.db);
-    }
-    
+    static logger = createLogger('ModelConfigController');
     /**
      * Get all model configurations for the current user
      * GET /api/model-configs
      */
-    async getModelConfigs(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigsData>>> {
+    static async getModelConfigs(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigsData>>> {
         try {
             const user = context.user!;
-
-            const configs = await this.modelConfigService.getUserModelConfigs(user.id);
-            const defaults = this.modelConfigService.getDefaultConfigs();
+            const modelConfigService = new ModelConfigService(env);
+            const configs = await modelConfigService.getUserModelConfigs(user.id);
+            const defaults = modelConfigService.getDefaultConfigs();
 
             const responseData: ModelConfigsData = {
                 configs,
@@ -74,10 +70,10 @@ export class ModelConfigController extends BaseController {
                 message: 'Model configurations retrieved successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting model configurations:', error);
-            return this.createErrorResponse<ModelConfigsData>('Failed to get model configurations', 500);
+            ModelConfigController.logger.error('Error getting model configurations:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigsData>('Failed to get model configurations', 500);
         }
     }
 
@@ -85,7 +81,7 @@ export class ModelConfigController extends BaseController {
      * Get a specific model configuration
      * GET /api/model-configs/:agentAction
      */
-    async getModelConfig(request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigData>>> {
+    static async getModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigData>>> {
         try {
             const user = context.user!;
 
@@ -93,11 +89,12 @@ export class ModelConfigController extends BaseController {
             const agentAction = url.pathname.split('/').pop() as AgentActionKey;
 
             if (!agentAction || !(agentAction in AGENT_CONFIG)) {
-                return this.createErrorResponse<ModelConfigData>('Invalid agent action name', 400);
+                return ModelConfigController.createErrorResponse<ModelConfigData>('Invalid agent action name', 400);
             }
+            const modelConfigService = new ModelConfigService(env);
 
-            const config = await this.modelConfigService.getUserModelConfig(user.id, agentAction);
-            const defaultConfig = this.modelConfigService.getDefaultConfigs()[agentAction];
+            const config = await modelConfigService.getUserModelConfig(user.id, agentAction);
+            const defaultConfig = modelConfigService.getDefaultConfigs()[agentAction];
 
             const responseData: ModelConfigData = {
                 config,
@@ -105,10 +102,10 @@ export class ModelConfigController extends BaseController {
                 message: 'Model configuration retrieved successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting model configuration:', error);
-            return this.createErrorResponse<ModelConfigData>('Failed to get model configuration', 500);
+            ModelConfigController.logger.error('Error getting model configuration:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigData>('Failed to get model configuration', 500);
         }
     }
 
@@ -116,7 +113,7 @@ export class ModelConfigController extends BaseController {
      * Update a specific model configuration
      * PUT /api/model-configs/:agentAction
      */
-    async updateModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigUpdateData>>> {
+    static async updateModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigUpdateData>>> {
         try {
             const user = context.user!;
 
@@ -124,10 +121,10 @@ export class ModelConfigController extends BaseController {
             const agentAction = url.pathname.split('/').pop() as AgentActionKey;
 
             if (!agentAction || !(agentAction in AGENT_CONFIG)) {
-                return this.createErrorResponse<ModelConfigUpdateData>('Invalid agent action name', 400);
+                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Invalid agent action name', 400);
             }
 
-            const bodyResult = await this.parseJsonBody(request);
+            const bodyResult = await ModelConfigController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response! as ControllerResponse<ApiResponse<ModelConfigUpdateData>>;
             }
@@ -167,7 +164,7 @@ export class ModelConfigController extends BaseController {
                     
                     if (!isValidAccess) {
                         const provider = modelConfig.name.split('/')[0];
-                        return this.createErrorResponse<ModelConfigUpdateData>(
+                        return ModelConfigController.createErrorResponse<ModelConfigUpdateData>(
                             `Model requires API key for provider '${provider}'. Please add your API key in the BYOK settings or contact your platform administrator.`,
                             403
                         );
@@ -184,7 +181,7 @@ export class ModelConfigController extends BaseController {
                     
                     if (!isValidAccess) {
                         const provider = modelConfig.fallbackModel.split('/')[0];
-                        return this.createErrorResponse<ModelConfigUpdateData>(
+                        return ModelConfigController.createErrorResponse<ModelConfigUpdateData>(
                             `Fallback model requires API key for provider '${provider}'. Please add your API key in the BYOK settings or contact your platform administrator.`,
                             403
                         );
@@ -192,7 +189,8 @@ export class ModelConfigController extends BaseController {
                 }
             }
 
-            const updatedConfig = await this.modelConfigService.upsertUserModelConfig(
+            const modelConfigService = new ModelConfigService(env);
+            const updatedConfig = await modelConfigService.upsertUserModelConfig(
                 user.id,
                 agentAction,
                 modelConfig
@@ -203,13 +201,13 @@ export class ModelConfigController extends BaseController {
                 message: 'Model configuration updated successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
             if (error instanceof z.ZodError) {
-                return this.createErrorResponse<ModelConfigUpdateData>('Validation failed: ' + JSON.stringify(error.errors), 400);
+                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Validation failed: ' + JSON.stringify(error.errors), 400);
             }
-            this.logger.error('Error updating model configuration:', error);
-            return this.createErrorResponse<ModelConfigUpdateData>('Failed to update model configuration', 500);
+            ModelConfigController.logger.error('Error updating model configuration:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Failed to update model configuration', 500);
         }
     }
 
@@ -217,7 +215,7 @@ export class ModelConfigController extends BaseController {
      * Delete/reset a model configuration to default
      * DELETE /api/model-configs/:agentAction
      */
-    async deleteModelConfig(request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigDeleteData>>> {
+    static async deleteModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigDeleteData>>> {
         try {
             const user = context.user!;
 
@@ -225,23 +223,24 @@ export class ModelConfigController extends BaseController {
             const agentAction = url.pathname.split('/').pop() as AgentActionKey;
 
             if (!agentAction || !(agentAction in AGENT_CONFIG)) {
-                return this.createErrorResponse<ModelConfigDeleteData>('Invalid agent action name', 400);
+                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Invalid agent action name', 400);
             }
 
-            const deleted = await this.modelConfigService.deleteUserModelConfig(user.id, agentAction);
+            const modelConfigService = new ModelConfigService(env);
+            const deleted = await modelConfigService.deleteUserModelConfig(user.id, agentAction);
 
             if (!deleted) {
-                return this.createErrorResponse<ModelConfigDeleteData>('Configuration not found or already using defaults', 404);
+                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Configuration not found or already using defaults', 404);
             }
 
             const responseData: ModelConfigDeleteData = {
                 message: 'Model configuration reset to default successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error deleting model configuration:', error);
-            return this.createErrorResponse<ModelConfigDeleteData>('Failed to delete model configuration', 500);
+            ModelConfigController.logger.error('Error deleting model configuration:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Failed to delete model configuration', 500);
         }
     }
 
@@ -249,11 +248,11 @@ export class ModelConfigController extends BaseController {
      * Test a model configuration
      * POST /api/model-configs/test
      */
-    async testModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigTestData>>> {
+    static async testModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigTestData>>> {
         try {
             const user = context.user!;
 
-            const bodyResult = await this.parseJsonBody(request);
+            const bodyResult = await ModelConfigController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response! as ControllerResponse<ApiResponse<ModelConfigTestData>>;
             }
@@ -262,14 +261,15 @@ export class ModelConfigController extends BaseController {
             const agentAction = validatedData.agentActionName as AgentActionKey;
 
             if (!(agentAction in AGENT_CONFIG)) {
-                return this.createErrorResponse<ModelConfigTestData>('Invalid agent action name', 400);
+                return ModelConfigController.createErrorResponse<ModelConfigTestData>('Invalid agent action name', 400);
             }
 
-            const secretsService = new SecretsService(this.db, env);
-            const modelTestService = new ModelTestService(this.db, env);
+            const modelConfigService = new ModelConfigService(env);
+            const secretsService = new SecretsService(env);
+            const modelTestService = new ModelTestService(env);
 
             // Get base configuration and merge with temporary changes if provided
-            const baseConfig = await this.modelConfigService.getUserModelConfig(user.id, agentAction);
+            const baseConfig = await modelConfigService.getUserModelConfig(user.id, agentAction);
             
             const configToTest: ModelConfig = validatedData.tempConfig ? {
                 ...baseConfig,
@@ -303,13 +303,13 @@ export class ModelConfigController extends BaseController {
                     : 'Model configuration test failed'
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
             if (error instanceof z.ZodError) {
-                return this.createErrorResponse<ModelConfigTestData>('Validation failed: ' + JSON.stringify(error.errors), 400);
+                return ModelConfigController.createErrorResponse<ModelConfigTestData>('Validation failed: ' + JSON.stringify(error.errors), 400);
             }
-            this.logger.error('Error testing model configuration:', error);
-            return this.createErrorResponse<ModelConfigTestData>('Failed to test model configuration', 500);
+            ModelConfigController.logger.error('Error testing model configuration:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigTestData>('Failed to test model configuration', 500);
         }
     }
 
@@ -317,21 +317,22 @@ export class ModelConfigController extends BaseController {
      * Reset all model configurations to defaults
      * POST /api/model-configs/reset-all
      */
-    async resetAllConfigs(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigResetData>>> {
+    static async resetAllConfigs(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigResetData>>> {
         try {
             const user = context.user!;
 
-            const resetCount = await this.modelConfigService.resetAllUserConfigs(user.id);
+            const modelConfigService = new ModelConfigService(env);
+            const resetCount = await modelConfigService.resetAllUserConfigs(user.id);
 
             const responseData: ModelConfigResetData = {
                 resetCount,
                 message: `${resetCount} model configurations reset to defaults`
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error resetting all model configurations:', error);
-            return this.createErrorResponse<ModelConfigResetData>('Failed to reset model configurations', 500);
+            ModelConfigController.logger.error('Error resetting all model configurations:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigResetData>('Failed to reset model configurations', 500);
         }
     }
 
@@ -339,19 +340,20 @@ export class ModelConfigController extends BaseController {
      * Get default configurations
      * GET /api/model-configs/defaults
      */
-    async getDefaults(_request: Request, _env: Env, _ctx: ExecutionContext): Promise<ControllerResponse<ApiResponse<ModelConfigDefaultsData>>> {
+    static async getDefaults(_request: Request, env: Env, _ctx: ExecutionContext): Promise<ControllerResponse<ApiResponse<ModelConfigDefaultsData>>> {
         try {
-            const defaults = this.modelConfigService.getDefaultConfigs();
+            const modelConfigService = new ModelConfigService(env);
+            const defaults = modelConfigService.getDefaultConfigs();
             
             const responseData: ModelConfigDefaultsData = {
                 defaults,
                 message: 'Default configurations retrieved successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting default configurations:', error);
-            return this.createErrorResponse<ModelConfigDefaultsData>('Failed to get default configurations', 500);
+            ModelConfigController.logger.error('Error getting default configurations:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigDefaultsData>('Failed to get default configurations', 500);
         }
     }
 
@@ -359,7 +361,7 @@ export class ModelConfigController extends BaseController {
      * Get BYOK providers and available models
      * GET /api/model-configs/byok-providers
      */
-    async getByokProviders(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ByokProvidersData>>> {
+    static async getByokProviders(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ByokProvidersData>>> {
         try {
             const user = context.user!;
 
@@ -378,10 +380,10 @@ export class ModelConfigController extends BaseController {
                 platformModels
             };
 
-            return this.createSuccessResponse(responseData);
+            return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting BYOK providers:', error);
-            return this.createErrorResponse<ByokProvidersData>('Failed to get BYOK providers', 500);
+            ModelConfigController.logger.error('Error getting BYOK providers:', error);
+            return ModelConfigController.createErrorResponse<ByokProvidersData>('Failed to get BYOK providers', 500);
         }
     }
 }

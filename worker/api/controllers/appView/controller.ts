@@ -10,47 +10,44 @@ import {
     ForkAppData, 
 } from './types';
 import { AgentSummary } from '../../../agents/core/types';
+import { createLogger } from '../../../logger';
 
 export class AppViewController extends BaseController {
-    appService: AppService;
-
-    constructor(env: Env) {
-        super(env);
-        this.appService = new AppService(this.db);
-    }
-
+    static logger = createLogger('AppViewController');
+    
     // Get single app details (public endpoint, auth optional for ownership check)
-    async getAppDetails(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppDetailsData>>> {
+    static async getAppDetails(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppDetailsData>>> {
         try {
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<AppDetailsData>('App ID is required', 400);
+                return AppViewController.createErrorResponse<AppDetailsData>('App ID is required', 400);
             }
             
             // Try to get user if authenticated (optional for public endpoint)
-            const user = await this.getOptionalUser(request, env);
+            const user = await AppViewController.getOptionalUser(request, env);
             const userId = user?.id;
 
             // Get app details with stats using app service
-            const appResult = await this.appService.getAppDetailsEnhanced(appId, userId);
+            const appService = new AppService(env);
+            const appResult = await appService.getAppDetailsEnhanced(appId, userId);
 
             if (!appResult) {
-                return this.createErrorResponse<AppDetailsData>('App not found', 404);
+                return AppViewController.createErrorResponse<AppDetailsData>('App not found', 404);
             }
 
             // Check if user has permission to view
             if (appResult.visibility === 'private' && appResult.userId !== userId) {
-                return this.createErrorResponse<AppDetailsData>('App not found', 404);
+                return AppViewController.createErrorResponse<AppDetailsData>('App not found', 404);
             }
 
             // Track view for all users (including owners and anonymous users)
             if (userId) {
                 // Authenticated user view
-                await this.appService.recordAppView(appId, userId);
+                await appService.recordAppView(appId, userId);
             } else {
                 // Anonymous user view - use a special anonymous identifier
                 // This could be enhanced with session tracking or IP-based deduplication
-                await this.appService.recordAppView(appId, 'anonymous-' + Date.now());
+                await appService.recordAppView(appId, 'anonymous-' + Date.now());
             }
 
             // Try to fetch current agent state to get latest generated code
@@ -58,13 +55,13 @@ export class AppViewController extends BaseController {
             let previewUrl: string = '';
             
             try {
-                const agentStub = await getAgentStub(env, appResult.id, true, this.logger);
+                const agentStub = await getAgentStub(env, appResult.id, true, AppViewController.logger);
                 agentSummary = await agentStub.getSummary();
 
                 previewUrl = await agentStub.getPreviewUrlCache();
             } catch (agentError) {
                 // If agent doesn't exist or error occurred, fall back to database stored files
-                this.logger.warn('Could not fetch agent state, using stored files:', agentError);
+                AppViewController.logger.warn('Could not fetch agent state, using stored files:', agentError);
             }
 
             const responseData: AppDetailsData = {
@@ -79,82 +76,84 @@ export class AppViewController extends BaseController {
                 agentSummary,
             };
 
-            return this.createSuccessResponse(responseData);
+            return AppViewController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error fetching app details:', error);
-            return this.createErrorResponse<AppDetailsData>('Internal server error', 500);
+            AppViewController.logger.error('Error fetching app details:', error);
+            return AppViewController.createErrorResponse<AppDetailsData>('Internal server error', 500);
         }
     }
 
     // Star/unstar an app
-    async toggleAppStar(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppStarToggleData>>> {
+    static async toggleAppStar(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<AppStarToggleData>>> {
         try {
             const user = context.user!;
 
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<AppStarToggleData>('App ID is required', 400);
+                return AppViewController.createErrorResponse<AppStarToggleData>('App ID is required', 400);
             }
 
             // Check if app exists and toggle star using app service
-            const app = await this.appService.getSingleAppWithFavoriteStatus(appId, user.id);
+            const appService = new AppService(env);
+            const app = await appService.getSingleAppWithFavoriteStatus(appId, user.id);
             if (!app) {
-                return this.createErrorResponse<AppStarToggleData>('App not found', 404);
+                return AppViewController.createErrorResponse<AppStarToggleData>('App not found', 404);
             }
 
             // Toggle star using app service
-            const result = await this.appService.toggleAppStar(user.id, appId);
+            const result = await appService.toggleAppStar(user.id, appId);
             
             const responseData: AppStarToggleData = result;
-            return this.createSuccessResponse(responseData);
+            return AppViewController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error toggling star:', error);
-            return this.createErrorResponse<AppStarToggleData>('Internal server error', 500);
+            AppViewController.logger.error('Error toggling star:', error);
+            return AppViewController.createErrorResponse<AppStarToggleData>('Internal server error', 500);
         }
     }
 
     // Fork an app
-    async forkApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ForkAppData>>> {
+    static async forkApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ForkAppData>>> {
         try {
             const user = context.user!;
 
             const appId = context.pathParams.id;
             if (!appId) {
-                return this.createErrorResponse<ForkAppData>('App ID is required', 400);
+                return AppViewController.createErrorResponse<ForkAppData>('App ID is required', 400);
             }
 
             // Get original app with permission checks using app service
-            const { app: originalApp, canFork } = await this.appService.getAppForFork(appId, user.id);
+            const appService = new AppService(env);
+            const { app: originalApp, canFork } = await appService.getAppForFork(appId, user.id);
 
             if (!originalApp) {
-                return this.createErrorResponse<ForkAppData>('App not found', 404);
+                return AppViewController.createErrorResponse<ForkAppData>('App not found', 404);
             }
 
             if (!canFork) {
-                return this.createErrorResponse<ForkAppData>('App not found', 404);
+                return AppViewController.createErrorResponse<ForkAppData>('App not found', 404);
             }
 
             // Duplicate agent state first
             try {
-                const { newAgentId } = await cloneAgent(env, appId, this.logger);
-                this.logger.info(`Successfully duplicated agent state from ${appId} to ${newAgentId}`);
+                const { newAgentId } = await cloneAgent(env, appId, AppViewController.logger);
+                AppViewController.logger.info(`Successfully duplicated agent state from ${appId} to ${newAgentId}`);
 
                 // Create forked app using app service
-                const forkedApp = await this.appService.createForkedApp(originalApp, newAgentId, user.id);
+                const forkedApp = await appService.createForkedApp(originalApp, newAgentId, user.id);
                 
                 const responseData: ForkAppData = {
                     forkedAppId: forkedApp.id,
                     message: 'App forked successfully'
                 };
 
-                return this.createSuccessResponse(responseData);
+                return AppViewController.createSuccessResponse(responseData);
             } catch (error) {
-                this.logger.error('Failed to duplicate agent state:', error);
-                return this.createErrorResponse<ForkAppData>('Failed to duplicate agent state', 500);
+                AppViewController.logger.error('Failed to duplicate agent state:', error);
+                return AppViewController.createErrorResponse<ForkAppData>('Failed to duplicate agent state', 500);
             }
         } catch (error) {
-            this.logger.error('Error forking app:', error);
-            return this.createErrorResponse<ForkAppData>('Internal server error', 500);
+            AppViewController.logger.error('Error forking app:', error);
+            return AppViewController.createErrorResponse<ForkAppData>('Internal server error', 500);
         }
     }
 }

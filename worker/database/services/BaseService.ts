@@ -3,7 +3,7 @@
  * Provides common database functionality and patterns for all domain services
  */
 
-import { DatabaseService } from '../database';
+import { createDatabaseService, DatabaseService } from '../database';
 import { SQL, and } from 'drizzle-orm';
 import { createLogger } from '../../logger';
 
@@ -13,7 +13,12 @@ import { createLogger } from '../../logger';
  */
 export abstract class BaseService {
     protected logger = createLogger(this.constructor.name);
-    constructor(protected db: DatabaseService) {}
+    protected db: DatabaseService;
+    protected env: Env;
+    constructor(env: Env) {
+        this.db = createDatabaseService(env);
+        this.env = env;
+    }
 
     /**
      * Helper to build type-safe where conditions

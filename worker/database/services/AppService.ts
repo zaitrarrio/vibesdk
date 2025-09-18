@@ -831,7 +831,7 @@ export class AppService extends BaseService {
             userFavorites
         ] = await Promise.all([
             // 1. Batch analytics (views, forks, likes) - 3 queries in parallel
-            new AnalyticsService(this.db).batchGetAppStats(appIds),
+            new AnalyticsService(this.env).batchGetAppStats(appIds),
             
             // 2. Batch star counts for all apps - 1 query
             this.database

@@ -7,19 +7,11 @@ import { BaseService } from './BaseService';
 import * as schema from '../schema';
 import { eq, and } from 'drizzle-orm';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { DatabaseService } from '../database';
 import { getBYOKTemplates } from '../../types/secretsTemplates';
 import { generateId } from '../../utils/idGenerator';
 import type { SecretData, EncryptedSecret } from '../types';
 
 export class SecretsService extends BaseService {
-    constructor(
-        db: DatabaseService,
-        private env: { SECRETS_ENCRYPTION_KEY: string }
-    ) {
-        super(db);
-    }
-
     /**
      * Encrypt a secret value using XChaCha20-Poly1305
      */

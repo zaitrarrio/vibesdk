@@ -14,17 +14,10 @@ import {
  * Handles user dashboard, profile management, and app history
  */
 export class UserController extends BaseController {
-    private userService: UserService;
-    
-    constructor(env: Env) {
-        super(env);
-        this.userService = new UserService(this.db);
-    }
-
     /**
      * Get user's apps with pagination and filtering
      */
-    async getApps(request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserAppsData>>> {
+    static async getApps(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserAppsData>>> {
         try {
             const user = context.user!;
 
@@ -51,11 +44,13 @@ export class UserController extends BaseController {
                 order,
                 period
             };
+
+            const userService = new UserService(env);
             
             // Get user apps with analytics and proper total count
             const [apps, totalCount] = await Promise.all([
-                this.userService.getUserAppsWithAnalytics(user.id, queryOptions),
-                this.userService.getUserAppsCount(user.id, queryOptions)
+                userService.getUserAppsWithAnalytics(user.id, queryOptions),
+                userService.getUserAppsCount(user.id, queryOptions)
             ]);
 
             const responseData: UserAppsData = {
@@ -68,21 +63,21 @@ export class UserController extends BaseController {
                 }
             };
 
-            return this.createSuccessResponse(responseData);
+            return UserController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting user apps:', error);
-            return this.createErrorResponse<UserAppsData>('Failed to get user apps', 500);
+            UserController.logger.error('Error getting user apps:', error);
+            return UserController.createErrorResponse<UserAppsData>('Failed to get user apps', 500);
         }
     }
 
     /**
      * Update user profile
      */
-    async updateProfile(request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ProfileUpdateData>>> {
+    static async updateProfile(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ProfileUpdateData>>> {
         try {
             const user = context.user!;
 
-            const bodyResult = await this.parseJsonBody<{
+            const bodyResult = await UserController.parseJsonBody<{
                 username?: string;
                 displayName?: string;
                 bio?: string;
@@ -93,17 +88,18 @@ export class UserController extends BaseController {
                 return bodyResult.response! as ControllerResponse<ApiResponse<ProfileUpdateData>>;
             }
 
-            const result = await this.userService.updateUserProfileWithValidation(user.id, bodyResult.data!);
+            const userService = new UserService(env);
+            const result = await userService.updateUserProfileWithValidation(user.id, bodyResult.data!);
 
             if (!result.success) {
-                return this.createErrorResponse<ProfileUpdateData>(result.message, 400);
+                return UserController.createErrorResponse<ProfileUpdateData>(result.message, 400);
             }
 
             const responseData: ProfileUpdateData = result;
-            return this.createSuccessResponse(responseData);
+            return UserController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error updating user profile:', error);
-            return this.createErrorResponse<ProfileUpdateData>('Failed to update profile', 500);
+            UserController.logger.error('Error updating user profile:', error);
+            return UserController.createErrorResponse<ProfileUpdateData>('Failed to update profile', 500);
         }
     }
 }

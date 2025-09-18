@@ -5,7 +5,6 @@
 
 import { AuthSession } from '../../types/auth-types';
 import { SecurityError, SecurityErrorType } from '../../types/security';
-import { DatabaseService } from '../database';
 import * as schema from '../schema';
 import { eq, and, lt, gt, desc, ne } from 'drizzle-orm';
 import { createLogger } from '../../logger';
@@ -40,10 +39,9 @@ export class SessionService extends BaseService {
     private jwtUtils: JWTUtils;
     
     constructor(
-        protected db: DatabaseService,
         env: Env
     ) {
-        super(db);
+        super(env);
         this.jwtUtils = JWTUtils.getInstance(env);
     }
 

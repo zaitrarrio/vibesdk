@@ -26,7 +26,6 @@ import { CodeReviewOperation } from '../operations/CodeReview';
 import { FileRegenerationOperation } from '../operations/FileRegeneration';
 import { PhaseGenerationOperation } from '../operations/PhaseGeneration';
 import { ScreenshotAnalysisOperation } from '../operations/ScreenshotAnalysis';
-import { createDatabaseService, DatabaseService } from '../../database/database';
 // Database schema imports removed - using zero-storage OAuth flow
 import { BaseSandboxService } from '../../services/sandbox/BaseSandboxService';
 import { getSandboxService } from '../../services/sandbox/factory';
@@ -524,8 +523,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 error: `Error during generation: ${errorMessage}`
             });
         } finally {
-            const db = createDatabaseService(this.env);
-            const appService = new AppService(db);
+            const appService = new AppService(this.env);
             await appService.updateApp(
                 this.state.sessionId,
                 {
@@ -974,8 +972,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         }
 
         try {
-            const db = new DatabaseService(this.env);
-            const modelConfigService = new ModelConfigService(db);
+            const modelConfigService = new ModelConfigService(this.env);
             
             // Get all user configs
             const userConfigsRecord = await modelConfigService.getUserModelConfigs(userId);
@@ -1825,7 +1822,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 message: deploymentResult.message
             });
 
-            const appService = new AppService(createDatabaseService(this.env));
+            const appService = new AppService(this.env);
             // Update cloudflare URL in database
             await appService.updateDeploymentUrl(
                 this.state.sessionId,
@@ -2242,8 +2239,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             });
 
             this.logger().info('Finalizing GitHub export...');
-            const db = createDatabaseService(this.env);
-            const appService = new AppService(db);
+            const appService = new AppService(this.env);
             // Update database with GitHub repository URL and visibility
             await appService.updateGitHubRepository(
                 this.state.sessionId || '',
@@ -2459,8 +2455,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             // Persist in database
             try {
-                const db = createDatabaseService(this.env);
-                const appService = new AppService(db);
+                const appService = new AppService(this.env);
                 await appService.updateAppScreenshot(this.state.sessionId, publicUrl);
             } catch (dbError) {
                 const error = `Database update failed: ${dbError instanceof Error ? dbError.message : 'Unknown database error'}`;

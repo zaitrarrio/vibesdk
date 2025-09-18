@@ -2,8 +2,8 @@ import { BaseController } from '../baseController';
 import { RouteContext } from '../../types/route-context';
 import { GitHubService } from '../../../services/github';
 import { GitHubExporterOAuthProvider } from '../../../services/oauth/github-exporter';
-import { createLogger } from '../../../logger';
 import { getAgentStub } from '../../../agents';
+import { createLogger } from '../../../logger';
 
 export interface GitHubExportData {
     success: boolean;
@@ -25,13 +25,8 @@ interface GitHubOAuthCallbackState {
 }
 
 export class GitHubExporterController extends BaseController {
-    protected logger = createLogger('GitHubExporterController');
-
-    constructor(env: Env) {
-        super(env);
-    }
-    
-    async handleOAuthCallback(
+    static logger = createLogger('GitHubExporterController');
+    static async handleOAuthCallback(
         request: Request,
         env: Env,
         _ctx: ExecutionContext,
@@ -43,7 +38,7 @@ export class GitHubExporterController extends BaseController {
             const error = context.queryParams.get('error');
 
             if (error) {
-                this.logger.error('OAuth authorization error', { error });
+                GitHubExporterController.logger.error('OAuth authorization error', { error });
                 return Response.redirect(
                     `${new URL(request.url).origin}/settings?integration=github&status=error&reason=${encodeURIComponent(error)}`,
                     302,
@@ -65,7 +60,7 @@ export class GitHubExporterController extends BaseController {
                         Buffer.from(stateParam, 'base64').toString(),
                     ) as GitHubOAuthCallbackState;
                 } catch (error) {
-                    this.logger.error('Failed to parse OAuth state parameter', error);
+                    GitHubExporterController.logger.error('Failed to parse OAuth state parameter', error);
                 }
             }
 
@@ -87,7 +82,7 @@ export class GitHubExporterController extends BaseController {
             const tokenResult = await oauthProvider.exchangeCodeForTokens(code);
 
             if (!tokenResult || !tokenResult.accessToken) {
-                this.logger.error('Failed to exchange OAuth code', { userId });
+                GitHubExporterController.logger.error('Failed to exchange OAuth code', { userId });
                 
                 return Response.redirect(
                     `${returnUrl}?github_export=error&reason=token_exchange_failed`,
@@ -95,7 +90,7 @@ export class GitHubExporterController extends BaseController {
                 );
             }
 
-            this.logger.info('OAuth authorization successful', {
+            GitHubExporterController.logger.info('OAuth authorization successful', {
                 userId,
                 purpose
             });
@@ -109,7 +104,7 @@ export class GitHubExporterController extends BaseController {
                 });
 
                 if (!createResult.success || !createResult.repository) {
-                    this.logger.error('Failed to create repository during export', {
+                    GitHubExporterController.logger.error('Failed to create repository during export', {
                         error: createResult.error,
                         userId,
                         repositoryName: exportData.repositoryName
@@ -120,7 +115,7 @@ export class GitHubExporterController extends BaseController {
                     );
                 }
 
-                this.logger.info('Repository created successfully, now pushing files', {
+                GitHubExporterController.logger.info('Repository created successfully, now pushing files', {
                     userId,
                     repositoryUrl: createResult.repository.html_url,
                     repositoryName: exportData.repositoryName,
@@ -129,7 +124,7 @@ export class GitHubExporterController extends BaseController {
 
                 if (agentId) {
                     try {
-                        const agentStub = await getAgentStub(env, agentId, true, this.logger);
+                        const agentStub = await getAgentStub(env, agentId, true, GitHubExporterController.logger);
 
                         const pushRequest = {
                             cloneUrl: createResult.repository.clone_url,
@@ -141,7 +136,7 @@ export class GitHubExporterController extends BaseController {
                             commitMessage: `Initial commit - Generated app\n\n🤖 Generated with vibesdk\nRepository: ${exportData.repositoryName}`
                         };
 
-                        this.logger.info('Pushing files to repository via agent', {
+                        GitHubExporterController.logger.info('Pushing files to repository via agent', {
                             agentId,
                             repositoryUrl: createResult.repository.html_url
                         });
@@ -149,7 +144,7 @@ export class GitHubExporterController extends BaseController {
                         const pushResult = await agentStub.pushToGitHub(pushRequest);
 
                         if (!pushResult?.success) {
-                            this.logger.error('Failed to push files to repository', {
+                            GitHubExporterController.logger.error('Failed to push files to repository', {
                                 error: pushResult?.error,
                                 agentId,
                                 repositoryUrl: createResult.repository.html_url
@@ -160,14 +155,14 @@ export class GitHubExporterController extends BaseController {
                             );
                         }
 
-                        this.logger.info('Successfully completed GitHub export with files', {
+                        GitHubExporterController.logger.info('Successfully completed GitHub export with files', {
                             userId,
                             agentId,
                             repositoryUrl: createResult.repository.html_url,
                             repositoryName: exportData.repositoryName
                         });
                     } catch (pushError) {
-                        this.logger.error('Error during file push', {
+                        GitHubExporterController.logger.error('Error during file push', {
                             error: pushError,
                             agentId,
                             repositoryUrl: createResult.repository.html_url
@@ -178,7 +173,7 @@ export class GitHubExporterController extends BaseController {
                         );
                     }
                 } else {
-                    this.logger.warn('No agentId provided - repository created but files not pushed', {
+                    GitHubExporterController.logger.warn('No agentId provided - repository created but files not pushed', {
                         repositoryUrl: createResult.repository.html_url
                     });
                 }
@@ -194,7 +189,7 @@ export class GitHubExporterController extends BaseController {
                 302,
             );
         } catch (error) {
-            this.logger.error('Failed to handle OAuth callback', error);
+            GitHubExporterController.logger.error('Failed to handle OAuth callback', error);
             return Response.redirect(
                 `${new URL(request.url).origin}/settings?integration=github&status=error`,
                 302,
@@ -202,7 +197,7 @@ export class GitHubExporterController extends BaseController {
         }
     }
 
-    async initiateGitHubExport(
+    static async initiateGitHubExport(
         request: Request,
         env: Env,
         _ctx: ExecutionContext,
@@ -210,7 +205,7 @@ export class GitHubExporterController extends BaseController {
     ): Promise<Response> {
         try {
             if (!context.user) {
-                return this.createErrorResponse<never>(
+                return GitHubExporterController.createErrorResponse<never>(
                     'Authentication required',
                     401,
                 );
@@ -224,14 +219,14 @@ export class GitHubExporterController extends BaseController {
             };
 
             if (!body.repositoryName) {
-                return this.createErrorResponse<never>(
+                return GitHubExporterController.createErrorResponse<never>(
                     'Repository name is required',
                     400,
                 );
             }
 
             if (!body.agentId) {
-                return this.createErrorResponse<never>(
+                return GitHubExporterController.createErrorResponse<never>(
                     'Instance ID is required for file pushing',
                     400,
                 );
@@ -260,17 +255,17 @@ export class GitHubExporterController extends BaseController {
                 Buffer.from(JSON.stringify(state)).toString('base64')
             );
 
-            this.logger.info('Initiating GitHub export with OAuth', {
+            GitHubExporterController.logger.info('Initiating GitHub export with OAuth', {
                 userId: context.user.id,
                 repositoryName: body.repositoryName,
             });
 
-            return this.createSuccessResponse<{ authUrl: string }>({
+            return GitHubExporterController.createSuccessResponse<{ authUrl: string }>({
                 authUrl
             });
         } catch (error) {
-            this.logger.error('Failed to initiate GitHub export', error);
-            return this.createErrorResponse<never>(
+            GitHubExporterController.logger.error('Failed to initiate GitHub export', error);
+            return GitHubExporterController.createErrorResponse<never>(
                 'Failed to initiate GitHub export',
                 500,
             );

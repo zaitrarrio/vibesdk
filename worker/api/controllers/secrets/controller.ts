@@ -13,42 +13,26 @@ import {
     SecretDeleteData,
     SecretTemplatesData,
 } from './types';
-import { getTemplatesData, SecretTemplate } from '../../../types/secretsTemplates';
+import { getTemplatesData } from '../../../types/secretsTemplates';
 
 export class SecretsController extends BaseController {
-    private secretsService: SecretsService;
-    
-    constructor(env: Env) {
-        super(env);
-        this.secretsService = new SecretsService(this.db, env);
-    }
-
-    /**
-     * Extract provider name from BYOK template
-     * Example: "OPENAI_API_KEY_BYOK" -> "openai"
-     */
-    public extractProviderFromBYOKTemplate(template: SecretTemplate): string {
-        return template.envVarName
-            .replace('_API_KEY_BYOK', '')
-            .toLowerCase()
-            .replace(/_/g, '-');
-    }
 
     /**
      * Get all user secrets including inactive ones
      * GET /api/secrets
      */
-    async getAllSecrets(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretsData>>> {
+    static async getAllSecrets(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretsData>>> {
         try {
             const user = context.user!;
 
-            const secrets = await this.secretsService.getAllUserSecrets(user.id);
+            const secretsService = new SecretsService(env);
+            const secrets = await secretsService.getAllUserSecrets(user.id);
 
             const responseData: SecretsData = { secrets };
-            return this.createSuccessResponse(responseData);
+            return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting all user secrets:', error);
-            return this.createErrorResponse<SecretsData>('Failed to get all user secrets', 500);
+            SecretsController.logger.error('Error getting all user secrets:', error);
+            return SecretsController.createErrorResponse<SecretsData>('Failed to get all user secrets', 500);
         }
     }
 
@@ -56,11 +40,11 @@ export class SecretsController extends BaseController {
      * Store a new secret
      * POST /api/secrets
      */
-    async storeSecret(request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretStoreData>>> {
+    static async storeSecret(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretStoreData>>> {
         try {
             const user = context.user!;
 
-            const bodyResult = await this.parseJsonBody<{
+            const bodyResult = await SecretsController.parseJsonBody<{
                 templateId?: string;  // For predefined templates
                 name?: string;        // For custom secrets
                 envVarName?: string;  // For custom secrets
@@ -76,7 +60,7 @@ export class SecretsController extends BaseController {
 
             // Validate required fields
             if (!value) {
-                return this.createErrorResponse<SecretStoreData>('Missing required field: value', 400);
+                return SecretsController.createErrorResponse<SecretStoreData>('Missing required field: value', 400);
             }
 
             let secretData;
@@ -87,12 +71,12 @@ export class SecretsController extends BaseController {
                 const template = templates.find(t => t.id === templateId);
                 
                 if (!template) {
-                    return this.createErrorResponse<SecretStoreData>('Invalid template ID', 400);
+                    return SecretsController.createErrorResponse<SecretStoreData>('Invalid template ID', 400);
                 }
 
                 // Validate against template validation if provided
                 if (template.validation && !new RegExp(template.validation).test(value)) {
-                    return this.createErrorResponse<SecretStoreData>(`Invalid format for ${template.displayName}. Expected format: ${template.placeholder}`, 400);
+                    return SecretsController.createErrorResponse<SecretStoreData>(`Invalid format for ${template.displayName}. Expected format: ${template.placeholder}`, 400);
                 }
 
                 secretData = {
@@ -106,12 +90,12 @@ export class SecretsController extends BaseController {
             } else {
                 // Custom secret
                 if (!name || !envVarName) {
-                    return this.createErrorResponse<SecretStoreData>('Missing required fields for custom secret: name, envVarName', 400);
+                    return SecretsController.createErrorResponse<SecretStoreData>('Missing required fields for custom secret: name, envVarName', 400);
                 }
 
                 // Validate environment variable name format
                 if (!/^[A-Z][A-Z0-9_]*$/.test(envVarName)) {
-                    return this.createErrorResponse<SecretStoreData>('Environment variable name must be uppercase and contain only letters, numbers, and underscores', 400);
+                    return SecretsController.createErrorResponse<SecretStoreData>('Environment variable name must be uppercase and contain only letters, numbers, and underscores', 400);
                 }
 
                 secretData = {
@@ -124,17 +108,18 @@ export class SecretsController extends BaseController {
                 };
             }
 
-            const storedSecret = await this.secretsService.storeSecret(user.id, secretData);
+            const secretsService = new SecretsService(env);
+            const storedSecret = await secretsService.storeSecret(user.id, secretData);
 
             const responseData: SecretStoreData = {
                 secret: storedSecret,
                 message: 'Secret stored successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error storing secret:', error);
-            return this.createErrorResponse<SecretStoreData>('Failed to store secret', 500);
+            SecretsController.logger.error('Error storing secret:', error);
+            return SecretsController.createErrorResponse<SecretStoreData>('Failed to store secret', 500);
         }
     }
 
@@ -142,26 +127,27 @@ export class SecretsController extends BaseController {
      * Delete a secret
      * DELETE /api/secrets/:secretId
      */
-    async deleteSecret(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretDeleteData>>> {
+    static async deleteSecret(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretDeleteData>>> {
         try {
             const user = context.user!;
 
             const secretId = context.pathParams.secretId;
 
             if (!secretId) {
-                return this.createErrorResponse<SecretDeleteData>('Secret ID is required', 400);
+                return SecretsController.createErrorResponse<SecretDeleteData>('Secret ID is required', 400);
             }
 
-            await this.secretsService.deleteSecret(user.id, secretId);
+            const secretsService = new SecretsService(env);
+            await secretsService.deleteSecret(user.id, secretId);
 
             const responseData: SecretDeleteData = {
                 message: 'Secret deleted successfully'
             };
 
-            return this.createSuccessResponse(responseData);
+            return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error deleting secret:', error);
-            return this.createErrorResponse<SecretDeleteData>('Failed to delete secret', 500);
+            SecretsController.logger.error('Error deleting secret:', error);
+            return SecretsController.createErrorResponse<SecretDeleteData>('Failed to delete secret', 500);
         }
     }
 
@@ -169,27 +155,28 @@ export class SecretsController extends BaseController {
      * Toggle secret active status
      * PATCH /api/secrets/:secretId/toggle
      */
-    async toggleSecret(_request: Request, _env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretStoreData>>> {
+    static async toggleSecret(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretStoreData>>> {
         try {
             const user = context.user!;
 
             const secretId = context.pathParams.secretId;
 
             if (!secretId) {
-                return this.createErrorResponse<SecretStoreData>('Secret ID is required', 400);
+                return SecretsController.createErrorResponse<SecretStoreData>('Secret ID is required', 400);
             }
 
-            const toggledSecret = await this.secretsService.toggleSecretActiveStatus(user.id, secretId);
+            const secretsService = new SecretsService(env);
+            const toggledSecret = await secretsService.toggleSecretActiveStatus(user.id, secretId);
 
             const responseData: SecretStoreData = {
                 secret: toggledSecret,
                 message: `Secret ${toggledSecret.isActive ? 'activated' : 'deactivated'} successfully`
             };
 
-            return this.createSuccessResponse(responseData);
+            return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error toggling secret status:', error);
-            return this.createErrorResponse<SecretStoreData>('Failed to toggle secret status', 500);
+            SecretsController.logger.error('Error toggling secret status:', error);
+            return SecretsController.createErrorResponse<SecretStoreData>('Failed to toggle secret status', 500);
         }
     }
 
@@ -197,7 +184,7 @@ export class SecretsController extends BaseController {
      * Get predefined secret templates for common providers
      * GET /api/secrets/templates
      */
-    async getTemplates(request: Request, _env: Env, _ctx: ExecutionContext): Promise<ControllerResponse<ApiResponse<SecretTemplatesData>>> {
+    static async getTemplates(request: Request, _env: Env, _ctx: ExecutionContext): Promise<ControllerResponse<ApiResponse<SecretTemplatesData>>> {
         try {
             const url = new URL(request.url);
             const category = url.searchParams.get('category');
@@ -209,10 +196,10 @@ export class SecretsController extends BaseController {
             }
             
             const responseData: SecretTemplatesData = { templates };
-            return this.createSuccessResponse(responseData);
+            return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting secret templates:', error);
-            return this.createErrorResponse<SecretTemplatesData>('Failed to get secret templates', 500);
+            SecretsController.logger.error('Error getting secret templates:', error);
+            return SecretsController.createErrorResponse<SecretTemplatesData>('Failed to get secret templates', 500);
         }
     }
 }
