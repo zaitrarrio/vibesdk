@@ -275,7 +275,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             stream: {
                 chunk_size: 256,
                 onChunk: (chunk) => {
-                    initArgs.writer.write({chunk});
+                    // initArgs.writer.write({chunk});
+                    initArgs.onBlueprintChunk(chunk);
                 }
             }
         })

@@ -128,7 +128,9 @@ export class CodingAgentController extends BaseController {
                 frameworks: body.frameworks || defaultCodeGenArgs.frameworks,
                 hostname,
                 inferenceContext,
-                writer,
+                onBlueprintChunk: (chunk: string) => {
+                    writer.write({chunk});
+                },
                 templateInfo,
             }, body.agentMode || defaultCodeGenArgs.agentMode) as Promise<CodeGenState>;
             agentPromise.then(async (_state: CodeGenState) => {
@@ -136,6 +138,8 @@ export class CodingAgentController extends BaseController {
                 writer.close();
                 CodingAgentController.logger.info(`Agent ${agentId} terminated successfully`);
             });
+
+            CodingAgentController.logger.info(`Agent ${agentId} init launched successfully`);
             
             return new Response(readable, {
                 status: 200,

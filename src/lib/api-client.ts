@@ -104,6 +104,7 @@ interface RequestOptions {
 	headers?: Record<string, string>;
 	body?: unknown;
 	credentials?: RequestCredentials;
+	skipJsonParsing?: boolean; // Skip JSON parsing for streaming responses
 }
 
 /**
@@ -281,6 +282,14 @@ class ApiClient {
         noToast: boolean = false,
 	): Promise<ApiResponse<T>> {
 		const { data } = await this.requestRaw<T>(endpoint, options, false, noToast);
+		if (!data) {
+			throw new ApiError(
+				500,
+				'Internal Error',
+				'Unexpected null response data',
+				endpoint,
+			);
+		}
 		return data;
 	}
 
@@ -289,7 +298,7 @@ class ApiClient {
 		options: RequestOptions = {},
 		isRetry: boolean = false,
         noToast: boolean = false,
-	): Promise<{ response: Response; data: ApiResponse<T> }> {
+	): Promise<{ response: Response; data: ApiResponse<T> | null }> {
 		this.ensureSessionToken();
 		
 		if (!await this.ensureCsrfToken(options.method || 'GET')) {
@@ -321,6 +330,12 @@ class ApiClient {
 
 		try {
 			const response = await fetch(url, config);
+			
+			// For streaming responses, skip JSON parsing if response is ok
+			if (options.skipJsonParsing && response.ok) {
+				return { response, data: null };
+			}
+			
 			const data = await response.json() as ApiResponse<T>;
 
 			if (!response.ok) {
@@ -546,11 +561,13 @@ class ApiClient {
 		const { response } = await this.requestRaw('/api/agent', {
 			method: 'POST',
 			body: args,
+			skipJsonParsing: true, // Don't parse JSON for streaming response
 		});
+		
 		return {
-            success: true,
-            stream: response
-        }
+			success: true,
+			stream: response
+		};
 	}
 
 	/**
