@@ -1,7 +1,7 @@
 import { CodingAgentController } from '../controllers/agent/controller';
 import { AppEnv } from '../../types/appenv';
 import { Hono } from 'hono';
-import { AuthConfig, routeAuthMiddleware } from '../../middleware/auth/routeAuth';
+import { AuthConfig, setAuthLevel } from '../../middleware/auth/routeAuth';
 import { adaptController } from '../honoAdapter';
 
 /**
@@ -13,7 +13,7 @@ export function setupCodegenRoutes(app: Hono<AppEnv>): void {
     // ========================================
     
     // CRITICAL: Create new app - requires full authentication
-    app.post('/api/agent', routeAuthMiddleware(AuthConfig.authenticated), adaptController(CodingAgentController, CodingAgentController.startCodeGeneration));
+    app.post('/api/agent', setAuthLevel(AuthConfig.authenticated), adaptController(CodingAgentController, CodingAgentController.startCodeGeneration));
     
     // ========================================
     // APP EDITING ROUTES (/chat/:id frontend)
@@ -21,11 +21,11 @@ export function setupCodegenRoutes(app: Hono<AppEnv>): void {
     
     // WebSocket for app editing - OWNER ONLY (for /chat/:id route)
     // Only the app owner should be able to connect and modify via WebSocket
-    app.get('/api/agent/:agentId/ws', routeAuthMiddleware(AuthConfig.ownerOnly), adaptController(CodingAgentController, CodingAgentController.handleWebSocketConnection));
+    app.get('/api/agent/:agentId/ws', setAuthLevel(AuthConfig.ownerOnly), adaptController(CodingAgentController, CodingAgentController.handleWebSocketConnection));
     
     // Connect to existing agent for editing - OWNER ONLY
     // Only the app owner should be able to connect for editing purposes
-    app.get('/api/agent/:agentId/connect', routeAuthMiddleware(AuthConfig.ownerOnly), adaptController(CodingAgentController, CodingAgentController.connectToExistingAgent));
+    app.get('/api/agent/:agentId/connect', setAuthLevel(AuthConfig.ownerOnly), adaptController(CodingAgentController, CodingAgentController.connectToExistingAgent));
 
-    app.get('/api/agent/:agentId/preview', routeAuthMiddleware(AuthConfig.public), adaptController(CodingAgentController, CodingAgentController.deployPreview));
+    app.get('/api/agent/:agentId/preview', setAuthLevel(AuthConfig.public), adaptController(CodingAgentController, CodingAgentController.deployPreview));
 }

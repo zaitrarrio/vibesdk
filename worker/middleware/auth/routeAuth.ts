@@ -8,6 +8,9 @@ import { createLogger } from '../../logger';
 import { AppService } from '../../database';
 import { authMiddleware } from './auth';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
+import { errorResponse } from '../../api/responses';
+import { Context } from 'hono';
+import { AppEnv } from '../../types/appenv';
 
 const logger = createLogger('RouteAuth');
 
@@ -92,14 +95,18 @@ export async function routeAuthChecks(
             }
 
             // Check resource ownership if function provided
-            if (requirement.resourceOwnershipCheck && params) {
-                const isOwner = await requirement.resourceOwnershipCheck(user, params, env);
-                if (!isOwner) {
+            if (requirement.resourceOwnershipCheck) {
+                if (params) {
+                    const isOwner = await requirement.resourceOwnershipCheck(user, params, env);
                     return {
-                        success: false,
-                        response: createForbiddenResponse('You can only access your own resources')
-                    };
+                        success: isOwner,
+                        response: isOwner ? undefined : createForbiddenResponse('You can only access your own resources')
+                    }
                 }
+                return {
+                    success: false,
+                    response: createForbiddenResponse('Invalid resource ownership')
+                };
             }
 
             return { success: true };
@@ -123,26 +130,38 @@ export async function routeAuthChecks(
 }
 
 /*
- * Hono compatible Route authentication middleware
+ * Enforce authentication requirement
  */
-export function routeAuthMiddleware(requirement: AuthRequirement) {
-    return createMiddleware(async (c, next) => {
-        let user: AuthUser | null = c.get('user') || null;
-        
-        // Only perform auth if we need it or don't have user yet
-        if (!user && (requirement.level === 'authenticated' || requirement.level === 'owner-only')) {
-            user = await authMiddleware(c.req.raw, c.env);
-            c.set('user', user);
+export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Response | undefined> {
+    let user: AuthUser | null = c.get('user') || null;
 
-            await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
-        }
-        
-        const params = c.req.param();
-        const env = c.env;
-        const result = await routeAuthChecks(user, env, requirement, params);
-        if (!result.success) {
-            return result.response;
-        }
+    const requirement = c.get('authLevel');
+    if (!requirement) {
+        logger.error('No authentication level found');
+        return errorResponse('No authentication level found', 500);
+    }
+    logger.info('Authentication level found', requirement);
+    
+    // Only perform auth if we need it or don't have user yet
+    if (!user && (requirement.level === 'authenticated' || requirement.level === 'owner-only')) {
+        user = await authMiddleware(c.req.raw, c.env);
+        c.set('user', user);
+
+        await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
+    }
+    
+    const params = c.req.param();
+    const env = c.env;
+    const result = await routeAuthChecks(user, env, requirement, params);
+    if (!result.success) {
+        logger.error('Authentication check failed', result.response);
+        return result.response;
+    }
+}
+
+export function setAuthLevel(requirement: AuthRequirement) {
+    return createMiddleware(async (c, next) => {
+        c.set('authLevel', requirement);
         return await next();
     })
 }
