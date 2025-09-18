@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Check authentication status
   const checkAuth = useCallback(async () => {
     try {
-      const response = await apiClient.getProfile();
+      const response = await apiClient.getProfile(true);
       
       if (response.success && response.data?.user) {
         setUser({ ...response.data.user, isAnonymous: false } as User);
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up session validation timer - less frequent since cookies handle refresh
     refreshTimerRef.current = setInterval(async () => {
       try {
-        const response = await apiClient.getProfile();
+        const response = await apiClient.getProfile(true);
 
         if (!response.success) {
           // Session invalid, user needs to login again

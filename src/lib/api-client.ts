@@ -278,8 +278,9 @@ class ApiClient {
 	private async request<T>(
 		endpoint: string,
 		options: RequestOptions = {},
+        noToast: boolean = false,
 	): Promise<ApiResponse<T>> {
-		const { data } = await this.requestRaw<T>(endpoint, options, false);
+		const { data } = await this.requestRaw<T>(endpoint, options, false, noToast);
 		return data;
 	}
 
@@ -287,6 +288,7 @@ class ApiClient {
 		endpoint: string,
 		options: RequestOptions = {},
 		isRetry: boolean = false,
+        noToast: boolean = false,
 	): Promise<{ response: Response; data: ApiResponse<T> }> {
 		this.ensureSessionToken();
 		
@@ -336,7 +338,9 @@ class ApiClient {
                     const errorData = data.error;
                     if (errorData && errorData.type) {
                         // Send a toast notification for typed errors
-                        toast.error(errorData.message);
+                        if (!noToast) {
+                            toast.error(errorData.message);
+                        }
                         switch (errorData.type) {
                             case SecurityErrorType.CSRF_VIOLATION:
                                 // Handle CSRF failures with retry
@@ -1063,8 +1067,8 @@ class ApiClient {
 	/**
 	 * Get current user profile
 	 */
-	async getProfile(): Promise<ApiResponse<ProfileResponseData>> {
-		return this.request<ProfileResponseData>('/api/auth/profile');
+	async getProfile(noToast: boolean = false): Promise<ApiResponse<ProfileResponseData>> {
+		return this.request<ProfileResponseData>('/api/auth/profile', undefined, noToast);
 	}
 
 	/**
