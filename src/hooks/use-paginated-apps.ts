@@ -132,7 +132,7 @@ export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginated
           hasMore: newPagination.hasMore
         });
       } else {
-        throw new Error(response.error || 'Failed to fetch apps');
+        throw new Error(response.error?.message || 'Failed to fetch apps');
       }
     } catch (err) {
       console.error('Error fetching apps:', err);

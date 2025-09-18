@@ -148,7 +148,7 @@ export function useGitHubExport(_websocket?: WebSocket | null, agentId?: string)
                 
                 // Small delay for user feedback, then redirect
                 setTimeout(() => {
-                    window.location.href = response.data.authUrl;
+                    window.location.href = response.data?.authUrl || '';
                 }, 500);
             } else {
                 setState(prev => ({

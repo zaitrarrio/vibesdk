@@ -52,7 +52,7 @@ export async function toggleFavorite(appId: string): Promise<boolean> {
     if (response.success && response.data) {
       return response.data.isFavorite;
     }
-    throw new Error(response.error || 'Failed to toggle favorite');
+    throw new Error(response.error?.message || 'Failed to toggle favorite');
   } catch (err) {
     if (err instanceof ApiError) {
       throw new Error(`Failed to toggle favorite: ${err.message}`);

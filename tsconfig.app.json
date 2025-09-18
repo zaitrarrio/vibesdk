@@ -28,10 +28,13 @@
 		  "@/*": [
 			"./src/*"
 		  ],
-        //   "worker/*": [
-        //     "./worker/*"
-        //   ]
+          "shared/*": [
+            "./shared/*"
+          ],
+          "worker/*": [
+            "./worker/*"
+          ]
 		}
 	},
-	"include": ["src"],
+	"include": ["src", "shared"],
 }

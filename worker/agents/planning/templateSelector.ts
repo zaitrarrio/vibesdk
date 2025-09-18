@@ -1,26 +1,12 @@
 import { MessageRole } from '../inferutils/common';
 import { TemplateListResponse} from '../../services/sandbox/sandboxTypes';
-import z from 'zod';
 import { createLogger } from '../../logger';
 import { executeInference } from '../inferutils/infer';
 import { InferenceContext } from '../inferutils/config.types';
-import { RateLimitExceededError } from '../../services/rate-limit/errors';
-import { SecurityError } from '../../types/security';
+import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
+import { TemplateSelection, TemplateSelectionSchema } from '../../agents/schemas';
 
 const logger = createLogger('TemplateSelector');
-
-// Schema for AI template selection output
-export const TemplateSelectionSchema = z.object({
-    selectedTemplateName: z.string().nullable().describe('The name of the most suitable template, or null if none are suitable.'),
-    reasoning: z.string().describe('Brief explanation for the selection or why no template was chosen.'),
-    useCase: z.enum(['SaaS Product Website', 'Dashboard', 'Blog', 'Portfolio', 'E-Commerce', 'General', 'Other']).describe('The use case for which the template is selected, if applicable.').nullable(),
-    complexity: z.enum(['simple', 'moderate', 'complex']).describe('The complexity of developing the project based on the the user query').nullable(),
-    styleSelection: z.enum(['Minimalist Design', 'Brutalism', 'Retro', 'Illustrative', 'Kid_Playful']).describe('Pick a style relevant to the user query').nullable(),
-    projectName: z.string().describe('The name of the project based on the user query'),
-});
-
-export type TemplateSelection = z.infer<typeof TemplateSelectionSchema>;
-
 interface SelectTemplateArgs {
     env: Env;
     query: string;

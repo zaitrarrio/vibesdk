@@ -61,8 +61,8 @@ interface InstanceMetadata {
     tunnelURL?: string;
     processId?: string;
     allocatedPort?: number;
-    donttouch_files: Set<string>;
-    redacted_files: Set<string>;
+    donttouch_files: string[];
+    redacted_files: string[];
 }
 
 type SandboxType = DurableObjectStub<Sandbox<Env>>;
@@ -955,8 +955,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                 processId: results?.processId,
                 tunnelURL: results?.tunnelURL,
                 allocatedPort: results?.allocatedPort,
-                donttouch_files: new Set(donttouchFiles),
-                redacted_files: new Set(redactedFiles),
+                donttouch_files: donttouchFiles,
+                redacted_files: redactedFiles,
             };
             await this.storeInstanceMetadata(instanceId, metadata);
 
@@ -1147,7 +1147,7 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             // Filter out donttouch files
             const metadata = await this.getInstanceMetadata(instanceId);
-            const donttouchFiles = metadata.donttouch_files;
+            const donttouchFiles = new Set(metadata.donttouch_files);
             
             const filteredFiles = files.filter(file => !donttouchFiles.has(file.filePath));
 
@@ -1245,7 +1245,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 } else {
                     try {
                         const metadata = await this.getInstanceMetadata(templateOrInstanceId);
-                        redactedPaths = metadata.redacted_files;
+                        redactedPaths = new Set(metadata.redacted_files);
                     } catch (error) {
                         this.logger.warn('Failed to get redacted files', { templateOrInstanceId });
                     }

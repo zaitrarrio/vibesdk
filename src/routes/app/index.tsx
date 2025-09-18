@@ -23,9 +23,9 @@ import {
 	Trash2,
 	Github,
 } from 'lucide-react';
-import { MonacoEditor } from '../../components/monaco-editor/monaco-editor';
-import { getFileType } from '../../utils/string';
-import { SmartPreviewIframe } from '../chat/components/smart-preview-iframe';
+import { MonacoEditor } from '@/components/monaco-editor/monaco-editor';
+import { getFileType } from '@/utils/string';
+import { SmartPreviewIframe } from '@/routes/chat/components/smart-preview-iframe';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -113,7 +113,7 @@ export default function AppView() {
 				setIsStarred(appData.userStarred || false);
 			} else {
 				throw new Error(
-					appResponse.error || 'Failed to fetch app details',
+					appResponse.error?.message || 'Failed to fetch app details',
 				);
 			}
 		} catch (err) {
@@ -203,7 +203,7 @@ export default function AppView() {
 							prev
 								? {
 										...prev,
-										starCount: response.data.starCount,
+										starCount: response.data?.starCount || 0,
 									}
 								: null,
 						);
@@ -211,7 +211,7 @@ export default function AppView() {
 							response.data.isStarred ? 'Starred!' : 'Unstarred',
 						);
 					} else {
-						throw new Error(response.error || 'Failed to star app');
+						throw new Error(response.error?.message || 'Failed to star app');
 					}
 				},
 				errorMessage: 'Failed to update star',
@@ -239,7 +239,7 @@ export default function AppView() {
 			// 			navigate(`/chat/${response.data.forkedAppId}`);
 			// 		} else {
 			// 			throw new Error(
-			// 				response.error || 'Failed to remix app',
+			// 				response.error?.message || 'Failed to remix app',
 			// 			);
 			// 		}
 			// 	},
@@ -442,7 +442,7 @@ export default function AppView() {
 				);
 			} else {
 				throw new Error(
-					response.error || 'Failed to update visibility',
+					response.error?.message || 'Failed to update visibility',
 				);
 			}
 		} catch (error) {
@@ -480,9 +480,7 @@ export default function AppView() {
 					// No history available, go to apps page
 					navigate('/apps');
 				}
-			} else {
-				toast.error(response.error || 'Failed to delete app');
-			}
+            }
 		} catch (error) {
 			console.error('Error deleting app:', error);
 			toast.error('An unexpected error occurred while deleting the app');

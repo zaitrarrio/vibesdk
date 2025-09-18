@@ -4,7 +4,7 @@
  */
 
 import { createLogger } from '../../logger';
-import { SecurityError, SecurityErrorType } from '../../types/security';
+import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 import { generateSecureToken } from '../../utils/cryptoUtils';
 import { parseCookies, createSecureCookie } from '../../utils/authUtils';
 import { getCSRFConfig } from '../../config/security';

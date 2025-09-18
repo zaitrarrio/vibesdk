@@ -4,7 +4,7 @@
  * Features 401 response interception to trigger authentication modals
  */
 
-import type {
+import type{
 	ApiResponse,
 	AppsListData,
 	PublicAppsData,
@@ -52,8 +52,17 @@ import type {
 	AuthProvidersResponseData,
 	CsrfTokenResponseData,
 	OAuthProvider,
+    RateLimitErrorResponse,
+    CodeGenArgs,
+    AgentPreviewResponse
 } from '@/api-types';
-import { AgentPreviewResponse } from 'worker/api/controllers/agent/types';
+import {
+    
+    RateLimitExceededError,
+    SecurityError,
+    SecurityErrorType,
+} from '@/api-types';
+import { toast } from 'sonner';
 
 /**
  * Global auth modal trigger for 401 interception
@@ -95,6 +104,7 @@ interface RequestOptions {
 	headers?: Record<string, string>;
 	body?: unknown;
 	credentials?: RequestCredentials;
+	skipJsonParsing?: boolean; // Skip JSON parsing for streaming responses
 }
 
 /**
@@ -269,15 +279,26 @@ class ApiClient {
 	private async request<T>(
 		endpoint: string,
 		options: RequestOptions = {},
+        noToast: boolean = false,
 	): Promise<ApiResponse<T>> {
-		return this.requestWithCsrfRetry(endpoint, options, false);
+		const { data } = await this.requestRaw<T>(endpoint, options, false, noToast);
+		if (!data) {
+			throw new ApiError(
+				500,
+				'Internal Error',
+				'Unexpected null response data',
+				endpoint,
+			);
+		}
+		return data;
 	}
 
-	private async requestWithCsrfRetry<T>(
+	private async requestRaw<T>(
 		endpoint: string,
 		options: RequestOptions = {},
 		isRetry: boolean = false,
-	): Promise<ApiResponse<T>> {
+        noToast: boolean = false,
+	): Promise<{ response: Response; data: ApiResponse<T> | null }> {
 		this.ensureSessionToken();
 		
 		if (!await this.ensureCsrfToken(options.method || 'GET')) {
@@ -309,36 +330,67 @@ class ApiClient {
 
 		try {
 			const response = await fetch(url, config);
-			const data = await response.json();
+			
+			// For streaming responses, skip JSON parsing if response is ok
+			if (options.skipJsonParsing && response.ok) {
+				return { response, data: null };
+			}
+			
+			const data = await response.json() as ApiResponse<T>;
 
 			if (!response.ok) {
-				// Handle CSRF failures with retry
-				if (response.status === 403 && 
-					(data.error?.includes('CSRF') || data.error?.includes('csrf') || data.code === 'CSRF_VIOLATION') && 
-					!isRetry) {
-					// Clear expired token and retry with fresh one
-					this.csrfTokenInfo = null;
-					return this.requestWithCsrfRetry(endpoint, options, true);
-				}
+                // Try parsing error data
+                try {
+                    if (
+                        response.status === 401 &&
+                        globalAuthModalTrigger &&
+                        this.shouldTriggerAuthModal(endpoint)
+                    ) {
+                        const authContext = this.getAuthContextForEndpoint(endpoint);
+                        globalAuthModalTrigger(authContext);
+                    }
 
-				if (
-					response.status === 401 &&
-					globalAuthModalTrigger &&
-					this.shouldTriggerAuthModal(endpoint)
-				) {
-					const authContext = this.getAuthContextForEndpoint(endpoint);
-					globalAuthModalTrigger(authContext);
-				}
+                    const errorData = data.error;
+                    if (errorData && errorData.type) {
+                        // Send a toast notification for typed errors
+                        if (!noToast) {
+                            toast.error(errorData.message);
+                        }
+                        switch (errorData.type) {
+                            case SecurityErrorType.CSRF_VIOLATION:
+                                // Handle CSRF failures with retry
+                                if (response.status === 403 && !isRetry) {
+                                    // Clear expired token and retry with fresh one
+                                    this.csrfTokenInfo = null;
+                                    return this.requestRaw(endpoint, options, true);
+                                }
+                                break;
+                            case SecurityErrorType.RATE_LIMITED:
+                                // Handle rate limiting
+                                throw RateLimitExceededError.fromRateLimitError((errorData as RateLimitErrorResponse).details);
+                            default:
+                                // Security error
+                                throw new SecurityError(errorData.type, errorData.message);
+                        }
+                    }
 
-				throw new ApiError(
-					response.status,
-					response.statusText,
-					data.error || data.message || 'Request failed',
-					endpoint,
-				);
+                    throw new ApiError(
+                        response.status,
+                        response.statusText,
+                        data.error?.message || data.message || 'Request failed',
+                        endpoint,
+                    );
+                } catch {
+                    throw new ApiError(
+                        response.status,
+                        response.statusText,
+                        'Request failed',
+                        endpoint,
+                    );
+                }
 			}
 
-			return data;
+			return { response, data };
 		} catch (error) {
 			if (error instanceof ApiError) {
 				throw error;
@@ -505,88 +557,17 @@ class ApiClient {
 		return this.request<UserAppsData>(endpoint);
 	}
 
-	async createAgentSession(data: {
-		query: string;
-		agentMode?: 'deterministic' | 'smart';
-		language?: string;
-		frameworks?: string[];
-		selectedTemplate?: string;
-	}): Promise<AgentStreamingResponse> {
-		return this.createAgentSessionWithRetry(data, false);
-	}
-
-	private async createAgentSessionWithRetry(
-		data: {
-			query: string;
-			agentMode?: 'deterministic' | 'smart';
-			language?: string;
-			frameworks?: string[];
-			selectedTemplate?: string;
-		},
-		isRetry: boolean = false,
-	): Promise<AgentStreamingResponse> {
-		this.ensureSessionToken();
-
-		if (!await this.ensureCsrfToken('POST')) {
-			return {
-				success: false,
-				error: 'Failed to obtain CSRF token',
-				statusCode: 500,
-			};
-		}
-
-		const url = `${this.baseUrl}/api/agent`;
-		const config: RequestInit = {
+	async createAgentSession(args: CodeGenArgs): Promise<AgentStreamingResponse> {
+		const { response } = await this.requestRaw('/api/agent', {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				// Hint server/CDN that we expect a streaming NDJSON response
-				'Accept': 'application/x-ndjson, text/event-stream;q=0.9, */*;q=0.8',
-				...this.getAuthHeaders(),
-			},
-			credentials: 'include',
-			body: JSON.stringify(data),
+			body: args,
+			skipJsonParsing: true, // Don't parse JSON for streaming response
+		});
+		
+		return {
+			success: true,
+			stream: response
 		};
-
-		try {
-			const response = await fetch(url, config);
-
-			if (!response.ok) {
-				let errorMessage = 'Request failed';
-				try {
-					const errorData = await response.json();
-					errorMessage = errorData.error || errorData.message || errorMessage;
-					
-					// Handle CSRF failures with retry
-					if (response.status === 403 && 
-						(errorMessage.toLowerCase().includes('csrf') || errorData.code === 'CSRF_VIOLATION') && 
-						!isRetry) {
-						// Clear expired token and retry with fresh one
-						this.csrfTokenInfo = null;
-						return this.createAgentSessionWithRetry(data, true);
-					}
-				} catch {
-					errorMessage = response.statusText || errorMessage;
-				}
-
-				return {
-					success: false,
-					error: errorMessage,
-					statusCode: response.status,
-				};
-			}
-
-			return {
-				success: true,
-				stream: response,
-			};
-		} catch (error) {
-			return {
-				success: false,
-				error: error instanceof Error ? error.message : 'Network error',
-				statusCode: 0,
-			};
-		}
 	}
 
 	/**
@@ -1103,8 +1084,8 @@ class ApiClient {
 	/**
 	 * Get current user profile
 	 */
-	async getProfile(): Promise<ApiResponse<ProfileResponseData>> {
-		return this.request<ProfileResponseData>('/api/auth/profile');
+	async getProfile(noToast: boolean = false): Promise<ApiResponse<ProfileResponseData>> {
+		return this.request<ProfileResponseData>('/api/auth/profile', undefined, noToast);
 	}
 
 	/**

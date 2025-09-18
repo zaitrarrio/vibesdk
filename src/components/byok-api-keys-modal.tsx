@@ -139,7 +139,7 @@ export function ByokApiKeysModal({ isOpen, onClose, onKeyAdded }: ByokApiKeysMod
       setIsLoading(true);
       const response = await apiClient.getBYOKTemplates();
       
-      if (response.success) {
+      if (response.success && response.data) {
         const providers = response.data.templates.map(templateToBYOKProvider);
         setBYOKProviders(providers);
       } else {
@@ -158,7 +158,7 @@ export function ByokApiKeysModal({ isOpen, onClose, onKeyAdded }: ByokApiKeysMod
       setLoadingSecrets(true);
       const response = await apiClient.getAllSecrets(); // Use getAllSecrets for toggle functionality
       
-      if (response.success) {
+      if (response.success && response.data) {
         // Filter BYOK secrets only (show both active and inactive for management)
         const byokSecrets = response.data.secrets.filter(secret => 
           secret.secretType.endsWith('_BYOK')
@@ -239,7 +239,7 @@ export function ByokApiKeysModal({ isOpen, onClose, onKeyAdded }: ByokApiKeysMod
     try {
       const response = await apiClient.toggleSecret(secretId);
       
-      if (response.success) {
+      if (response.success && response.data) {
         const updatedSecret = response.data.secret;
         toast.success(response.data.message);
         

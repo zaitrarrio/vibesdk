@@ -158,7 +158,12 @@ export type {
   ProviderOverrideType as ProviderOverride
 } from 'worker/agents/inferutils/config.types';
 
-export { AIModels } from 'worker/agents/inferutils/config.types';
+export type { RateLimitError } from "worker/services/rate-limit/errors";
+export type { AgentPreviewResponse, CodeGenArgs } from 'worker/api/controllers/agent/types';
+export type { RateLimitErrorResponse } from 'worker/api/responses';
+export { RateLimitExceededError, SecurityError, SecurityErrorType } from 'shared/types/errors';
+
+export type { AIModels } from 'worker/agents/inferutils/config.types';
 // Model selection types
 export type ModelSelectionMode = 'platform' | 'byok' | 'custom';
 
@@ -179,13 +184,7 @@ export interface StreamingResponse {
   stream: Response;
 }
 
-export interface StreamingError {
-  success: false;
-  error: string;
-  statusCode: number;
-}
-
-export type AgentStreamingResponse = StreamingResponse | StreamingError;
+export type AgentStreamingResponse = StreamingResponse;
 
 // Auth types imported from worker
 export type { 

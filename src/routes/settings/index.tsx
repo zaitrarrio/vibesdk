@@ -220,7 +220,7 @@ export default function SettingsPage() {
 				setDefaultConfigs(response.data.defaults || {});
 			} else {
 				throw new Error(
-					response.error || 'Failed to load model configurations',
+					response.error?.message || 'Failed to load model configurations',
 				);
 			}
 		} catch (error) {
@@ -245,8 +245,6 @@ export default function SettingsPage() {
 			if (response.success) {
 				toast.success('Configuration saved successfully');
 				await loadModelConfigs(); // Reload to get updated data
-			} else {
-				toast.error(response.error || 'Failed to save configuration');
 			}
 		} catch (error) {
 			console.error('Error saving model configuration:', error);
@@ -275,8 +273,6 @@ export default function SettingsPage() {
 				} else {
 					toast.error(`Test failed: ${result.error}`);
 				}
-			} else {
-				toast.error(response.error || 'Test failed');
 			}
 		} catch (error) {
 			console.error('Error testing configuration:', error);

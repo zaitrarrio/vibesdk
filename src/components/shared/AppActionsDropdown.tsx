@@ -45,8 +45,6 @@ export function AppActionsDropdown({
         
         appEvents.emitAppDeleted(appId);
         onAppDeleted?.();
-      } else {
-        toast.error(response.error || 'Failed to delete app');
       }
     } catch (error) {
       console.error('Error deleting app:', error);

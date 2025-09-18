@@ -1,4 +1,4 @@
-import type { BlueprintType } from '../api-types';
+import type { BlueprintType } from '@/api-types';
 import clsx from 'clsx';
 import { Markdown } from './messages';
 

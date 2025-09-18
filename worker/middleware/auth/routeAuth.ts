@@ -11,6 +11,7 @@ import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { errorResponse } from '../../api/responses';
 import { Context } from 'hono';
 import { AppEnv } from '../../types/appenv';
+import { RateLimitExceededError } from 'shared/types/errors';
 
 const logger = createLogger('RouteAuth');
 
@@ -140,14 +141,21 @@ export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Respo
         logger.error('No authentication level found');
         return errorResponse('No authentication level found', 500);
     }
-    logger.info('Authentication level found', requirement);
     
     // Only perform auth if we need it or don't have user yet
     if (!user && (requirement.level === 'authenticated' || requirement.level === 'owner-only')) {
         user = await authMiddleware(c.req.raw, c.env);
         c.set('user', user);
 
-        await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
+        try {
+            await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
+        } catch (error) {
+            if (error instanceof RateLimitExceededError) {
+                return errorResponse(error, 429);
+            }
+            logger.error('Error enforcing auth rate limit', error);
+            return errorResponse('Internal server error', 500);
+        }
     }
     
     const params = c.req.param();

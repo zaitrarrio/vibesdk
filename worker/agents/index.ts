@@ -4,6 +4,12 @@ import { getAgentByName } from 'agents';
 import { CodeGenState } from './core/state';
 import { generateId } from '../utils/idGenerator';
 import { StructuredLogger } from '../logger';
+import { InferenceContext } from './inferutils/config.types';
+import { SandboxSdkClient } from '../services/sandbox/sandboxSdkClient';
+import { selectTemplate } from './planning/templateSelector';
+import { getSandboxService } from '../services/sandbox/factory';
+import { TemplateDetails } from '../services/sandbox/sandboxTypes';
+import { TemplateSelection } from './schemas';
 
 export async function getAgentStub(env: Env, agentId: string, searchInOtherJurisdictions: boolean = false, logger: StructuredLogger) : Promise<DurableObjectStub<SmartCodeGeneratorAgent>> {
     if (searchInOtherJurisdictions) {
@@ -64,3 +70,49 @@ export async function cloneAgent(env: Env, agentId: string, logger: StructuredLo
     return {newAgentId, newAgent};
 }
 
+export async function getTemplateForQuery(
+    env: Env,
+    inferenceContext: InferenceContext,
+    query: string,
+    hostname: string,
+    logger: StructuredLogger,
+) : Promise<{templateDetails: TemplateDetails, selection: TemplateSelection}> {
+    // Fetch available templates
+    const templatesResponse = await SandboxSdkClient.listTemplates();
+    if (!templatesResponse || !templatesResponse.success) {
+        throw new Error('Failed to fetch templates from sandbox service');
+    }
+        
+    const [analyzeQueryResponse, sandboxClient] = await Promise.all([
+            selectTemplate({
+                env: env,
+                inferenceContext,
+                query,
+                availableTemplates: templatesResponse.templates,
+            }), 
+            getSandboxService(inferenceContext.agentId, hostname)
+        ]);
+        
+        logger.info('Selected template', { selectedTemplate: analyzeQueryResponse });
+            
+        // Find the selected template by name in the available templates
+        if (!analyzeQueryResponse.selectedTemplateName) {
+            logger.error('No suitable template found for code generation');
+            throw new Error('No suitable template found for code generation');
+        }
+            
+        const selectedTemplate = templatesResponse.templates.find(template => template.name === analyzeQueryResponse.selectedTemplateName);
+        if (!selectedTemplate) {
+            logger.error('Selected template not found');
+            throw new Error('Selected template not found');
+        }
+        // Now fetch all the files from the instance
+        const templateDetailsResponse = await sandboxClient.getTemplateDetails(selectedTemplate.name);
+        if (!templateDetailsResponse.success || !templateDetailsResponse.templateDetails) {
+            logger.error('Failed to fetch files', { templateDetailsResponse });
+            throw new Error('Failed to fetch files');
+        }
+            
+        const templateDetails = templateDetailsResponse.templateDetails;
+        return { templateDetails, selection: analyzeQueryResponse };
+}

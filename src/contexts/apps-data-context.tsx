@@ -103,7 +103,7 @@ export function AppsDataProvider({ children }: AppsDataProviderProps) {
         setState(prev => ({
           ...prev,
           loading: { ...prev.loading, allApps: false },
-          error: { ...prev.error, allApps: response.error || 'Failed to fetch apps' },
+          error: { ...prev.error, allApps: response.error?.message || 'Failed to fetch apps' },
         }));
       }
     } catch (err) {
@@ -151,7 +151,7 @@ export function AppsDataProvider({ children }: AppsDataProviderProps) {
         setState(prev => ({
           ...prev,
           loading: { ...prev.loading, favoriteApps: false },
-          error: { ...prev.error, favoriteApps: response.error || 'Failed to fetch favorite apps' },
+          error: { ...prev.error, favoriteApps: response.error?.message || 'Failed to fetch favorite apps' },
         }));
       }
     } catch (err) {

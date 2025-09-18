@@ -1,19 +1,18 @@
 import { WebSocket } from 'partysocket';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-	BlueprintType,
-	WebSocketMessage,
-	CodeFixEdits,
-    RateLimitErrorResponse
-} from '../api-types';
+import {
+    RateLimitExceededError,
+	type BlueprintType,
+	type WebSocketMessage,
+	type CodeFixEdits} from '@/api-types';
 import {
 	createRepairingJSONParser,
 	ndjsonStream,
-} from '../../../utils/ndjson-parser/ndjson-parser';
-import { getFileType } from '../../../utils/string';
-import { logger } from '../../../utils/logger';
+} from '@/utils/ndjson-parser/ndjson-parser';
+import { getFileType } from '@/utils/string';
+import { logger } from '@/utils/logger';
 import { getPreviewUrl } from '@/lib/utils';
-import { generateId } from '../../../utils/id-generator';
+import { generateId } from '@/utils/id-generator';
 import { apiClient } from '@/lib/api-client';
 import { appEvents } from '@/lib/app-events';
 import { toast } from 'sonner';
@@ -1004,8 +1003,8 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 			}
 
             case 'rate_limit_error' : {
-                const rateLimitError = message.details;
-                let displayMessage = message.error;
+                const rateLimitError = message.error;
+                let displayMessage = rateLimitError.message;
                 
                 // Add helpful suggestions for rate limiting
                 if (rateLimitError.suggestions && rateLimitError.suggestions.length > 0) {
@@ -1221,52 +1220,6 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 						agentMode,
 					});
 
-					if (!response.success) {
-						// Check if it's a rate limiting error by parsing the error message
-						let parsedError: any = null;
-						try {
-							if (response.error && typeof response.error === 'string') {
-								parsedError = JSON.parse(response.error);
-							}
-						} catch (e) {
-							// Not a JSON error, handle as regular error
-						}
-						
-						if (parsedError && parsedError.type === 'rate_limit_error') {
-							const rateLimitResponse = parsedError as RateLimitErrorResponse;
-							const rateLimitError = rateLimitResponse.details;
-							
-							let displayMessage = rateLimitResponse.error;
-							if (rateLimitError.suggestions && rateLimitError.suggestions.length > 0) {
-								displayMessage += `\n\n💡 Suggestions:\n${rateLimitError.suggestions.map(s => `• ${s}`).join('\n')}`;
-							}
-							
-							// Add rate limit error as a system message
-							setMessages(prev => [
-								...prev,
-								{
-									type: 'ai',
-									id: `rate_limit_${Date.now()}`,
-									message: `⏱️ ${displayMessage}`,
-								},
-							]);
-
-                            toast.error(displayMessage);
-							
-							onDebugMessage?.(
-								'error',
-								`Rate Limit: ${rateLimitError.limitType.replace('_', ' ')} limit exceeded`,
-								`Limit: ${rateLimitError.limit} per ${Math.floor((rateLimitError.period || 0) / 3600)}h\nRetry after: ${(rateLimitError.period || 0) / 3600}h\n\nSuggestions:\n${rateLimitError.suggestions?.join('\n') || 'None'}`,
-								'Rate Limiting',
-								rateLimitError.limitType,
-								rateLimitError
-							);
-							return;
-						}
-						
-						throw new Error(response.error);
-					}
-
 					const parser = createRepairingJSONParser();
 
 					const result: {
@@ -1358,23 +1311,10 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 					});
 
 					const response = await apiClient.connectToAgent(urlChatId);
-
-					if (!response.success) {
-						console.error('Failed to fetch existing chat:', { chatId: urlChatId, error: response.error });
-						if (response.statusCode === 404) {
-							sendMessage({
-								id: 'chat-not-found',
-								message: 'Chat session not found. Starting a new session...',
-								isThinking: false,
-							});
-							// Redirect to new chat
-							setTimeout(() => {
-								window.location.href = '/chat/new';
-							}, 1500);
-							return;
-						}
-						throw new Error(response.error || 'Failed to connect to agent');
-					}
+                    if (!response.success || !response.data) {
+                        console.error('Failed to fetch existing chat:', { chatId: urlChatId, error: response.error });
+                        throw new Error(response.error?.message || 'Failed to connect to agent');
+                    }
 					logger.debug('Existing agentId API result', response.data);
 
 					// Set the chatId for existing chat - this enables the chat input
@@ -1393,9 +1333,36 @@ Message: ${message.errors.map((e) => e.message).join('\n').trim()}`;
 				}
 			} catch (error) {
 				console.error('Error initializing code generation:', error);
-			}
-		}
+                if (error instanceof RateLimitExceededError) {
+                    const rateLimitError = error.details;
+                    let displayMessage = rateLimitError.message;
+                    if (rateLimitError.suggestions && rateLimitError.suggestions.length > 0) {
+                        displayMessage += `\n\n💡 Suggestions:\n${rateLimitError.suggestions.map(s => `• ${s}`).join('\n')}`;
+                    }
+                    
+                    // Add rate limit error as a system message
+                    setMessages(prev => [
+                        ...prev,
+                        {
+                            type: 'ai',
+                            id: `rate_limit_${Date.now()}`,
+                            message: `⏱️ ${displayMessage}`,
+                        },
+                    ]);
 
+                    toast.error(displayMessage);
+                    
+                    onDebugMessage?.(
+                        'error',
+                        `Rate Limit: ${rateLimitError.limitType.replace('_', ' ')} limit exceeded`,
+                        `Limit: ${rateLimitError.limit} per ${Math.floor((rateLimitError.period || 0) / 3600)}h\nRetry after: ${(rateLimitError.period || 0) / 3600}h\n\nSuggestions:\n${rateLimitError.suggestions?.join('\n') || 'None'}`,
+                        'Rate Limiting',
+                        rateLimitError.limitType,
+                        rateLimitError
+                    );
+			    }
+		    }
+        }
 		init();
 	}, []);
 

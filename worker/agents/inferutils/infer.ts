@@ -7,8 +7,7 @@ import { ChatCompletionTool, ReasoningEffort } from 'openai/resources.mjs';
 import { AgentActionKey, AIModels, InferenceContext, ModelConfig } from './config.types';
 import { AGENT_CONFIG } from './config';
 import { createLogger } from '../../logger';
-import { RateLimitExceededError } from '../../services/rate-limit/errors';
-import { SecurityError } from '../../types/security';
+import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 
 const logger = createLogger('InferenceUtils');
 

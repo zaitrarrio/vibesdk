@@ -1,8 +1,7 @@
 import { TemplateDetails } from '../../services/sandbox/sandboxTypes'; // Import the type
 import { STRATEGIES, PROMPT_UTILS, generalSystemPromptBuilder } from '../prompts';
 import { executeInference } from '../inferutils/infer';
-import { Blueprint, BlueprintSchema } from '../schemas';
-import { TemplateSelection } from './templateSelector';
+import { Blueprint, BlueprintSchema, TemplateSelection } from '../schemas';
 import { createLogger } from '../../logger';
 import { createSystemMessage, createUserMessage } from '../inferutils/common';
 import { InferenceContext } from '../inferutils/config.types';

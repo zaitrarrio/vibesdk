@@ -10,8 +10,7 @@ import { StructuredLogger } from "../../logger";
 import { getToolDefinitions } from "../tools/customTools";
 import { XmlStreamFormat, XmlParsingState, XmlStreamingCallbacks } from "../streaming-formats/xml-stream";
 import { IdGenerator } from "../utils/idGenerator";
-import { RateLimitExceededError } from "../../services/rate-limit/errors";
-import { SecurityError } from "../../types/security";
+import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 
 // Constants
 const CHUNK_SIZE = 64;

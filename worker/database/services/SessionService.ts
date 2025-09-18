@@ -4,7 +4,7 @@
  */
 
 import { AuthSession } from '../../types/auth-types';
-import { SecurityError, SecurityErrorType } from '../../types/security';
+import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 import * as schema from '../schema';
 import { eq, and, lt, gt, desc, ne } from 'drizzle-orm';
 import { createLogger } from '../../logger';

@@ -80,8 +80,6 @@ export default function Profile() {
         // Refresh user data in auth context
         await refreshUser();
         setIsEditing(false);
-      } else {
-        toast.error(response.error || response.message || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Profile update error:', error);

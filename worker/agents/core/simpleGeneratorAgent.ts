@@ -37,12 +37,10 @@ import { FileFetcher, fixProjectIssues } from '../../services/code-fixer';
 import { FastCodeFixerOperation } from '../operations/FastCodeFixer';
 import { getProtocolForHost } from '../../utils/urls';
 import { looksLikeCommand } from '../utils/common';
-import { SandboxSdkClient } from '../../services/sandbox/sandboxSdkClient';
-import { selectTemplate } from '../planning/templateSelector';
 import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
-import { createRateLimitErrorResponse, RateLimitExceededError } from '../../services/rate-limit/errors';
+import { RateLimitExceededError } from 'shared/types/errors';
 
 interface WebhookPayload {
     event: {
@@ -95,7 +93,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     );
 
     private previewUrlCache: string = '';
-    // protected broadcaster: WebSocketBroadcaster = new WebSocketBroadcaster(this);
     
     protected operations: Operations = {
         codeReview: new CodeReviewOperation(),
@@ -201,7 +198,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         const url = `${base}/api/screenshots/${encodeURIComponent(sessionId)}/${encodeURIComponent(fileName)}`;
         return url;
     }
-    // logger: StructuredLogger = createObjectLogger(this, 'CodeGeneratorAgent');
 
     initialState: CodeGenState = {
         blueprint: {} as Blueprint, 
@@ -228,6 +224,32 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         shouldBeGenerating: false
     };
 
+    async saveToDatabase() {
+        this.logger().info(`Blueprint generated successfully for agent ${this.state.sessionId}`);
+        // Save the app to database (authenticated users only)
+        const appService = new AppService(this.env);
+        await appService.createApp({
+            id: this.state.inferenceContext.agentId,
+            userId: this.state.inferenceContext.userId,
+            sessionToken: null,
+            title: this.state.blueprint.title || this.state.query.substring(0, 100),
+            description: this.state.blueprint.description || null,
+            originalPrompt: this.state.query,
+            finalPrompt: this.state.query,
+            framework: this.state.blueprint.frameworks?.[0],
+            visibility: 'private',
+            status: 'generating',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        this.logger().info(`App saved successfully to database for agent ${this.state.inferenceContext.agentId}`, { 
+            agentId: this.state.inferenceContext.agentId, 
+            userId: this.state.inferenceContext.userId,
+            visibility: 'private'
+        });
+        this.logger().info(`Agent initialized successfully for agent ${this.state.inferenceContext.agentId}`);
+    }
+
     /**
      * Initialize the code generator with project blueprint and template
      * Sets up services and begins deployment process
@@ -237,46 +259,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         ..._args: unknown[]
     ): Promise<CodeGenState> {
 
-        const { query, language, frameworks, hostname, inferenceContext } = initArgs;
-        // Fetch available templates
-        const templatesResponse = await SandboxSdkClient.listTemplates();
-        if (!templatesResponse || !templatesResponse.success) {
-            throw new Error('Failed to fetch templates from sandbox service');
-        }
-        
-        const [analyzeQueryResponse, sandboxClient] = await Promise.all([
-            selectTemplate({
-                env: this.env,
-                inferenceContext,
-                query,
-                availableTemplates: templatesResponse.templates,
-            }), 
-            getSandboxService(inferenceContext.agentId, hostname)
-        ]);
-        
-        this.logger().info('Selected template', { selectedTemplate: analyzeQueryResponse });
-            
-        // Find the selected template by name in the available templates
-        if (!analyzeQueryResponse.selectedTemplateName) {
-            this.logger().error('No suitable template found for code generation');
-            throw new Error('No suitable template found for code generation');
-        }
-            
-        const selectedTemplate = templatesResponse.templates.find(template => template.name === analyzeQueryResponse.selectedTemplateName);
-        if (!selectedTemplate) {
-            this.logger().error('Selected template not found');
-            throw new Error('Selected template not found');
-        }
-        // Now fetch all the files from the instance
-        const templateDetailsResponse = await sandboxClient.getTemplateDetails(selectedTemplate.name);
-        if (!templateDetailsResponse.success || !templateDetailsResponse.templateDetails) {
-            this.logger().error('Failed to fetch files', { templateDetailsResponse });
-            throw new Error('Failed to fetch files');
-        }
-            
-        const templateDetails = templateDetailsResponse.templateDetails;
-        initArgs.onTemplateGenerated(templateDetails);
-        
+        const { query, language, frameworks, hostname, inferenceContext, templateInfo } = initArgs;
         // Generate a blueprint
         this.logger().info('Generating blueprint', { query, queryLength: query.length });
         this.logger().info(`Using language: ${language}, frameworks: ${frameworks ? frameworks.join(", ") : "none"}`);
@@ -287,24 +270,25 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             query,
             language: language!,
             frameworks: frameworks!,
-            templateDetails,
-            templateMetaInfo: analyzeQueryResponse,
+            templateDetails: templateInfo.templateDetails,
+            templateMetaInfo: templateInfo.selection,
             stream: {
                 chunk_size: 256,
                 onChunk: (chunk) => {
+                    // initArgs.writer.write({chunk});
                     initArgs.onBlueprintChunk(chunk);
                 }
             }
         })
 
-        const packageJsonFile = templateDetails?.files.find(file => file.filePath === 'package.json');
+        const packageJsonFile = templateInfo.templateDetails?.files.find(file => file.filePath === 'package.json');
         const packageJson = packageJsonFile ? packageJsonFile.fileContents : '';
         
         this.setState({
             ...this.initialState,
             query,
             blueprint,
-            templateDetails,
+            templateDetails: templateInfo.templateDetails,
             sandboxInstanceId: undefined,
             generatedPhases: [],
             commandsHistory: [],
@@ -333,6 +317,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             });
         }
         this.logger().info(`Agent ${this.state.sessionId} initialized successfully`);
+        await this.saveToDatabase();
         return this.state;
     }
 
@@ -516,7 +501,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } catch (error) {
             this.logger().error("Error in state machine:", error);
             if (error instanceof RateLimitExceededError) {
-                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, createRateLimitErrorResponse(error));
+                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, { error });
             }
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.broadcast(WebSocketMessageResponses.ERROR, {
@@ -2332,7 +2317,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } catch (error) {
             this.logger().error('Error handling user input:', error);
             if (error instanceof RateLimitExceededError) {
-                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, createRateLimitErrorResponse(error));
+                this.broadcast(WebSocketMessageResponses.RATE_LIMIT_ERROR, error);
                 return;
             }
             this.broadcast(WebSocketMessageResponses.ERROR, {

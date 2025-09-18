@@ -108,7 +108,7 @@ export class RemoteSandboxServiceClient extends BaseSandboxService{
                 };
             }
 
-            this.logger.info('Response validated', { url });
+            // this.logger.info('Response validated', { url });
             return validation.data;
         } catch (error) {
             this.logger.error('Error making request to runner service', error, { url });

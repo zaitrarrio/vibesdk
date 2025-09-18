@@ -97,7 +97,7 @@ export abstract class BaseController {
     /**
      * Create a typed error response with proper type annotation
      */
-    static createErrorResponse<T = never>(message: string, statusCode: number = 500): ControllerResponse<ApiResponse<T>> {
+    static createErrorResponse<T = never>(message: string | Error, statusCode: number = 500): ControllerResponse<ApiResponse<T>> {
         const response = errorResponse(message, statusCode) as ControllerResponse<ApiResponse<T>>;
         return response;
     }
