@@ -3,8 +3,7 @@
  */
 
 import { RateLimitError } from "../services/rate-limit/errors";
-import { SecurityError, SecurityErrorType } from "../types/security";
-
+import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 /**
  * Standard response shape for all API endpoints
  */

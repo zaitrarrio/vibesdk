@@ -1,12 +1,11 @@
-import { SecurityError } from '../../types/security';
 import { RateLimitType, RateLimitStore, RateLimitSettings, DORateLimitConfig } from './config';
 import { createObjectLogger } from '../../logger';
 import { AuthUser } from '../../types/auth-types';
 import { extractTokenWithMetadata, extractRequestMetadata } from '../../utils/authUtils';
-import { RateLimitExceededError } from './errors';
 import { captureSecurityEvent } from '../../observability/sentry';
 import { getUserConfigurableSettings } from '../../config';
 import { KVRateLimitStore } from './KVRateLimitStore';
+import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 
 export class RateLimitService {
     static logger = createObjectLogger(this, 'RateLimitService');

@@ -40,7 +40,7 @@ import { looksLikeCommand } from '../utils/common';
 import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
-import { RateLimitExceededError } from '../../services/rate-limit/errors';
+import { RateLimitExceededError } from 'shared/types/errors';
 
 interface WebhookPayload {
     event: {

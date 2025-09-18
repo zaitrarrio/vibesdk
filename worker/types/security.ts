@@ -25,30 +25,3 @@ export interface OAuthState {
     createdAt: Date;
 }
 
-
-/**
- * Security error types for proper error handling
- */
-export enum SecurityErrorType {
-    UNAUTHORIZED = 'UNAUTHORIZED',
-    FORBIDDEN = 'FORBIDDEN',
-    INVALID_TOKEN = 'INVALID_TOKEN',
-    TOKEN_EXPIRED = 'TOKEN_EXPIRED',
-    RATE_LIMITED = 'RATE_LIMITED',
-    INVALID_INPUT = 'INVALID_INPUT',
-    CSRF_VIOLATION = 'CSRF_VIOLATION',
-}
-
-/**
- * Custom security error class
- */
-export class SecurityError extends Error {
-    constructor(
-        public type: SecurityErrorType,
-        message: string,
-        public statusCode: number = 401
-    ) {
-        super(message);
-        this.name = 'SecurityError';
-    }
-}

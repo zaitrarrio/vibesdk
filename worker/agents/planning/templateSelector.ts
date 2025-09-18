@@ -3,8 +3,7 @@ import { TemplateListResponse} from '../../services/sandbox/sandboxTypes';
 import { createLogger } from '../../logger';
 import { executeInference } from '../inferutils/infer';
 import { InferenceContext } from '../inferutils/config.types';
-import { RateLimitExceededError } from '../../services/rate-limit/errors';
-import { SecurityError } from '../../types/security';
+import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { TemplateSelection, TemplateSelectionSchema } from '../../agents/schemas';
 
 const logger = createLogger('TemplateSelector');

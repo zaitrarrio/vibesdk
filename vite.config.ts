@@ -1,7 +1,8 @@
-import { sentryVitePlugin } from '@sentry/vite-plugin';
+// import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import svgr from 'vite-plugin-svgr';
+import path from 'path';
 
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
@@ -41,10 +42,10 @@ export default defineConfig({
 		//     },
 		// })
 		tailwindcss(),
-		sentryVitePlugin({
-			org: 'cloudflare-0u',
-			project: 'javascript-react',
-		}),
+		// sentryVitePlugin({
+		// 	org: 'cloudflare-0u',
+		// 	project: 'javascript-react',
+		// }),
 	],
 
 	resolve: {
@@ -53,7 +54,9 @@ export default defineConfig({
 			// Add this line to fix the 'debug' package issue
 			debug: 'debug/src/browser',
 			// "@": path.resolve(__dirname, "./src"),
-			'@': new URL('./src', import.meta.url).pathname,
+			'@': path.resolve(__dirname, './src'),
+            'shared': path.resolve(__dirname, './shared'),
+            'worker': path.resolve(__dirname, './worker'),
 		},
 	},
 

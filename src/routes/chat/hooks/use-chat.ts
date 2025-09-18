@@ -1,11 +1,10 @@
 import { WebSocket } from 'partysocket';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    RateLimitExceededError,
 	type BlueprintType,
 	type WebSocketMessage,
-	type CodeFixEdits,
-    RateLimitExceededError
-} from '@/api-types';
+	type CodeFixEdits} from '@/api-types';
 import {
 	createRepairingJSONParser,
 	ndjsonStream,

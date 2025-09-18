@@ -21,8 +21,7 @@ import { SecretsService } from '../../database';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { AuthUser } from '../../types/auth-types';
 import { getGlobalConfigurableSettings } from '../../config';
-import { RateLimitExceededError } from '../../services/rate-limit/errors';
-import { SecurityError } from '../../types/security';
+import { SecurityError, RateLimitExceededError } from 'shared/types/errors';
 
 function optimizeInputs(messages: Message[]): Message[] {
 	return messages.map((message) => ({

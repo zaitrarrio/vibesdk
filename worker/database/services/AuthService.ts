@@ -15,7 +15,7 @@ import { BaseOAuthProvider } from '../../services/oauth/base';
 import { 
     SecurityError, 
     SecurityErrorType 
-} from '../../types/security';
+} from 'shared/types/errors';
 import { AuthResult, OAuthUserInfo } from '../../types/auth-types';
 import { generateId } from '../../utils/idGenerator';
 import {

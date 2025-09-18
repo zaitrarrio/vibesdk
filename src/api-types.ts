@@ -161,10 +161,9 @@ export type {
 export type { RateLimitError } from "worker/services/rate-limit/errors";
 export type { AgentPreviewResponse, CodeGenArgs } from 'worker/api/controllers/agent/types';
 export type { RateLimitErrorResponse } from 'worker/api/responses';
-export { RateLimitExceededError } from 'worker/services/rate-limit/errors';
-export { SecurityError, SecurityErrorType } from 'worker/types/security';
+export { RateLimitExceededError, SecurityError, SecurityErrorType } from 'shared/types/errors';
 
-export { AIModels } from 'worker/agents/inferutils/config.types';
+export type { AIModels } from 'worker/agents/inferutils/config.types';
 // Model selection types
 export type ModelSelectionMode = 'platform' | 'byok' | 'custom';
 

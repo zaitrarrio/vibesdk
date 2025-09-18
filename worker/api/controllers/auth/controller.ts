@@ -12,7 +12,7 @@ import {
     registerSchema, 
     oauthProviderSchema
 } from './authSchemas';
-import { SecurityError } from '../../../types/security';
+import { SecurityError } from 'shared/types/errors';
 import { 
     formatAuthResponse,
     mapUserResponse, 
