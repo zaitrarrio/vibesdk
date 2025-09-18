@@ -43,8 +43,6 @@ export enum SecurityErrorType {
  * Custom security error class
  */
 export class SecurityError extends Error {
-    public code: string;
-    
     constructor(
         public type: SecurityErrorType,
         message: string,
@@ -52,18 +50,5 @@ export class SecurityError extends Error {
     ) {
         super(message);
         this.name = 'SecurityError';
-        this.code = type;
     }
-}
-
-/**
- * Validated environment configuration
- */
-export interface ValidatedEnv {
-    db: D1Database;
-    codeGenObject: DurableObjectNamespace;
-    jwtSecret: string;
-    runnerService?: Fetcher;
-    environment: 'development' | 'staging' | 'production';
-    disableRateLimiting?: boolean;
 }
