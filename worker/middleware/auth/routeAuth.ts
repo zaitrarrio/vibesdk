@@ -11,6 +11,7 @@ import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { errorResponse } from '../../api/responses';
 import { Context } from 'hono';
 import { AppEnv } from '../../types/appenv';
+import { RateLimitExceededError } from '../../services/rate-limit/errors';
 
 const logger = createLogger('RouteAuth');
 
@@ -147,7 +148,15 @@ export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Respo
         user = await authMiddleware(c.req.raw, c.env);
         c.set('user', user);
 
-        await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
+        try {
+            await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
+        } catch (error) {
+            if (error instanceof RateLimitExceededError) {
+                return errorResponse(error, 429);
+            }
+            logger.error('Error enforcing auth rate limit', error);
+            return errorResponse('Internal server error', 500);
+        }
     }
     
     const params = c.req.param();

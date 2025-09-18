@@ -120,7 +120,7 @@ export function ConfigModal({
     try {
       setLoadingByok(true);
       const response = await apiClient.getByokProviders();
-      if (response.success) {
+      if (response.success && response.data) {
         setByokData(response.data);
       }
     } catch (error) {

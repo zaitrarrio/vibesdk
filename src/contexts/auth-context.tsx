@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchAuthProviders = useCallback(async () => {
     try {
       const response = await apiClient.getAuthProviders();
-      if (response.success) {
+      if (response.success && response.data) {
         setAuthProviders(response.data.providers);
         setHasOAuth(response.data.hasOAuth);
         setRequiresEmailAuth(response.data.requiresEmailAuth);

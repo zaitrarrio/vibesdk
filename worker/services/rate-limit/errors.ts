@@ -1,3 +1,4 @@
+import { SecurityError, SecurityErrorType } from "../../types/security";
 import { RateLimitType } from "./config";
 export interface RateLimitError {
 	message: string;
@@ -6,7 +7,7 @@ export interface RateLimitError {
 	period?: number; // seconds
 	suggestions?: string[];
 }
-export class RateLimitExceededError extends Error {
+export class RateLimitExceededError extends SecurityError {
     public details: RateLimitError;
     constructor(
         message: string,
@@ -15,7 +16,7 @@ export class RateLimitExceededError extends Error {
         public period?: number,
         public suggestions?: string[]
     ) {
-        super(message);
+        super(SecurityErrorType.RATE_LIMITED, message, 429);
         this.name = 'RateLimitExceededError';
         this.details = {
             message,
@@ -25,28 +26,14 @@ export class RateLimitExceededError extends Error {
             suggestions
         };
     }
-}
 
-export interface RateLimitErrorResponse {
-	error: string;
-	type: 'rate_limit_error';
-	details: RateLimitError;
-}
-
-export function createRateLimitErrorResponse(
-    error: RateLimitExceededError
-): RateLimitErrorResponse {
-	const suggestions: string[] = [];
-	
-	if (error.limitType === RateLimitType.LLM_CALLS) {
-		suggestions.push('You have reached maximum allowed LLM calls in an hour. Please wait and try again later.');
-	} else {
-		suggestions.push('Try again in an hour when the limit resets');
-	}
-
-	return {
-		error: error.message,
-		type: 'rate_limit_error',
-		details: error.details
-	};
+    static fromRateLimitError(error: RateLimitError): RateLimitExceededError {
+        return new RateLimitExceededError(
+            error.message,
+            error.limitType,
+            error.limit,
+            error.period,
+            error.suggestions
+        );
+    }
 }
