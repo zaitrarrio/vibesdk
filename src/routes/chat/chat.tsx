@@ -500,6 +500,7 @@ export default function Chat() {
 								<AIMessage
 									message={mainMessage.message}
 									isThinking={mainMessage.isThinking}
+									toolEvents={mainMessage.toolEvents}
 								/>
 							)}
 
@@ -725,6 +726,7 @@ export default function Chat() {
 											key={message.id}
 											message={message.message}
 											isThinking={message.isThinking}
+											toolEvents={message.toolEvents}
 										/>
 									);
 								}

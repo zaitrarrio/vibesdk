@@ -3,6 +3,8 @@ import clsx from 'clsx';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeExternalLinks from 'rehype-external-links';
+import { LoaderCircle, Check, AlertTriangle } from 'lucide-react';
+import type { ToolEvent } from '../utils/message-helpers';
 
 export function UserMessage({ message }: { message: string }) {
 	return (
@@ -12,7 +14,7 @@ export function UserMessage({ message }: { message: string }) {
 					<span className="text-xs">U</span>
 				</div>
 			</div>
-			<div className="flex flex-col gap-2">
+			<div className="flex flex-col gap-2 min-w-0">
 				<div className="font-medium text-text-50">You</div>
 				<Markdown className="text-text-primary/80">{message}</Markdown>
 			</div>
@@ -23,17 +25,42 @@ export function UserMessage({ message }: { message: string }) {
 export function AIMessage({
 	message,
 	isThinking,
+	toolEvents,
 }: {
 	message: string;
 	isThinking?: boolean;
+	toolEvents?: ToolEvent[];
 }) {
 	return (
 		<div className="flex gap-3">
 			<div className="align-text-top pl-1">
 				<AIAvatar className="size-6 text-orange-500" />
 			</div>
-			<div className="flex flex-col gap-2">
+			<div className="flex flex-col gap-2 min-w-0">
 				<div className="font-mono font-medium text-text-50">Orange</div>
+				{toolEvents && toolEvents.length > 0 && (
+					<div className="mb-1.5 flex flex-col gap-1">
+						{toolEvents.map((ev) => (
+							<div
+								key={`${ev.name}-${ev.timestamp}`}
+								className="flex items-center gap-1.5 text-xs text-text-tertiary"
+							>
+								{ev.status === 'start' && (
+									<LoaderCircle className="size-3 animate-spin" />
+								)}
+								{ev.status === 'success' && <Check className="size-3" />}
+								{ev.status === 'error' && <AlertTriangle className="size-3" />}
+								<span className="font-mono tracking-tight">
+									{ev.status === 'start' && 'Running'}
+									{ev.status === 'success' && 'Completed'}
+									{ev.status === 'error' && 'Error'}
+									{' '}
+									{ev.name}
+								</span>
+							</div>
+						))}
+					</div>
+				)}
 				<Markdown className={clsx('a-tag', isThinking ? 'animate-pulse' : '')}>
 					{message}
 				</Markdown>

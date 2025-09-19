@@ -296,6 +296,11 @@ type ConversationResponseMessage = {
 	enhancedRequest?: string;
 	pendingInputsCount?: number;
 	isStreaming?: boolean;
+	tool?: {
+		name: string;
+		status: 'start' | 'success' | 'error';
+		args?: Record<string, unknown>;
+	};
 };
 
 type DeterministicCodeFixStartedMessage = {

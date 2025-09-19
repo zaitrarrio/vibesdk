@@ -2,11 +2,18 @@ import { toast } from 'sonner';
 import { generateId } from '@/utils/id-generator';
 import type { RateLimitError } from '@/api-types';
 
+export type ToolEvent = {
+    name: string;
+    status: 'start' | 'success' | 'error';
+    timestamp: number;
+};
+
 export type ChatMessage = {
     type: 'user' | 'ai';
     id: string;
     message: string;
     isThinking?: boolean;
+    toolEvents?: ToolEvent[];
 };
 
 /**
@@ -138,4 +145,51 @@ export function handleStreamingMessage(
         // Create new streaming message
         return [...messages, createAIMessage(messageId, chunk, false)];
     }
+}
+
+/**
+ * Append or update a tool event inline within an AI message bubble
+ * - If a message with messageId doesn't exist yet, create a placeholder AI message with empty content
+ * - If a matching 'start' exists and a 'success' comes in for the same tool, update that entry in place
+ */
+export function appendToolEvent(
+    messages: ChatMessage[],
+    messageId: string,
+    tool: { name: string; status: 'start' | 'success' | 'error' }
+): ChatMessage[] {
+    const idx = messages.findIndex(m => m.id === messageId && m.type === 'ai');
+    const timestamp = Date.now();
+
+    // If message is not present, create a new placeholder AI message
+    if (idx === -1) {
+        const newMsg: ChatMessage = {
+            type: 'ai',
+            id: messageId,
+            message: '',
+            toolEvents: [{ name: tool.name, status: tool.status, timestamp }],
+        };
+        return [...messages, newMsg];
+    }
+
+    return messages.map((m, i) => {
+        if (i !== idx) return m;
+        const current = m.toolEvents ?? [];
+        if (tool.status === 'success') {
+            // Find last 'start' for this tool and flip it to success
+            for (let j = current.length - 1; j >= 0; j--) {
+                if (current[j].name === tool.name) {
+                    return {
+                        ...m,
+                        toolEvents: current.map((ev, k) =>
+                            k === j ? { ...ev, status: 'success', timestamp } : ev
+                        ),
+                    };
+                }
+            }
+            // If no prior start, just append success as a separate line
+            return { ...m, toolEvents: [...current, { name: tool.name, status: 'success', timestamp }] };
+        }
+        // Default: append event
+        return { ...m, toolEvents: [...current, { name: tool.name, status: tool.status, timestamp }] };
+    });
 }

@@ -14,7 +14,8 @@ import {
 import { 
     createAIMessage,
     handleRateLimitError,
-    handleStreamingMessage 
+    handleStreamingMessage,
+    appendToolEvent,
 } from './message-helpers';
 import { completeStages } from './project-stage-helpers';
 import { sendWebSocketMessage } from './websocket-helpers';
@@ -613,21 +614,38 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
             }
 
             case 'conversation_response': {
-                const messageId = message.conversationId || 'conversation_response';
-                
-                if (message.isStreaming) {
-                    setMessages((prev) => handleStreamingMessage(
-                        prev,
-                        messageId,
-                        message.message,
-                        false // isNewMessage - false because we're appending to existing
-                    ));
-                } else {
-                    sendMessage({
-                        id: messageId,
-                        message: message.message,
+                // Use concrete conversationId when available; otherwise use placeholder
+                let id = message.conversationId ?? 'conversation_response';
+
+                // If a concrete id arrives later, rename placeholder once
+                if (message.conversationId) {
+                    const convId = message.conversationId;
+                    setMessages(prev => {
+                        const genericIdx = prev.findIndex(m => m.type === 'ai' && m.id === 'conversation_response');
+                        if (genericIdx !== -1) {
+                            return prev.map((m, i) => i === genericIdx ? { ...m, id: convId } : m);
+                        }
+                        return prev;
                     });
+                    id = convId;
                 }
+
+                if (message.tool) {
+                    const tool = message.tool;
+                    setMessages(prev => appendToolEvent(prev, id, { name: tool.name, status: tool.status }));
+                    break;
+                }
+
+                if (message.isStreaming) {
+                    setMessages(prev => handleStreamingMessage(prev, id, message.message, false));
+                    break;
+                }
+
+                setMessages(prev => {
+                    const idx = prev.findIndex(m => m.type === 'ai' && m.id === id);
+                    if (idx !== -1) return prev.map((m, i) => i === idx ? { ...m, message: message.message } : m);
+                    return [...prev, createAIMessage(id, message.message)];
+                });
                 break;
             }
 
