@@ -6,10 +6,10 @@ import { MCPServerConfig } from './types';
 const logger = createLogger('MCPManager');
 
 const MCP_SERVERS: MCPServerConfig[] = [
-	{
-		name: 'cloudflare-docs',
-		sseUrl: 'https://docs.mcp.cloudflare.com/sse',
-	},
+	// {
+	// 	name: 'cloudflare-docs',
+	// 	sseUrl: 'https://docs.mcp.cloudflare.com/sse',
+	// },
 ];
 
 /**
@@ -40,8 +40,9 @@ export class MCPManager {
 						capabilities: {},
 					},
 				);
-
-				await client.connect(transport);
+                logger.info(`Connecting to MCP server ${serverConfig.name}, ${serverConfig.sseUrl}`);
+				await client.connect(transport, {timeout: 500, maxTotalTimeout: 500});
+                logger.info(`Connected to MCP server ${serverConfig.name}`);
 				this.clients.set(serverConfig.name, client);
 
 				const toolsResult = await client.listTools();

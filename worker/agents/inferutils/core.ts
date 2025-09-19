@@ -10,18 +10,17 @@ import {
 import { zodResponseFormat } from 'openai/helpers/zod.mjs';
 import {
     ChatCompletionMessageFunctionToolCall,
-	ChatCompletionTool,
 	type ReasoningEffort,
 } from 'openai/resources.mjs';
 import { Message, MessageContent, MessageRole } from './common';
-import { ToolCall } from '../tools/types';
-import { executeTool } from '../tools/customTools';
+import { ToolCallResult, ToolDefinition } from '../tools/types';
 import { AIModels, InferenceMetadata } from './config.types';
 import { SecretsService } from '../../database';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { AuthUser } from '../../types/auth-types';
 import { getGlobalConfigurableSettings } from '../../config';
 import { SecurityError, RateLimitExceededError } from 'shared/types/errors';
+import { executeToolWithDefinition } from '../tools/customTools';
 
 function optimizeInputs(messages: Message[]): Message[] {
 	return messages.map((message) => ({
@@ -200,7 +199,7 @@ type InferArgsBase = {
 		chunk_size: number;
 		onChunk: (chunk: string) => void;
 	};
-	tools?: ChatCompletionTool[];
+    tools?: ToolDefinition<any, any>[];
 	providerOverride?: 'cloudflare' | 'direct';
 	userApiKeys?: Record<string, string>;
 };
@@ -233,23 +232,28 @@ const claude_thinking_budget_tokens = {
 
 export type InferResponseObject<OutputSchema extends z.AnyZodObject> = {
 	object: z.infer<OutputSchema>;
-	toolCalls?: ToolCall[];
+	toolCalls?: ToolCallResult[];
 };
 
 export type InferResponseString = {
 	string: string;
-	toolCalls?: ToolCall[];
+	toolCalls?: ToolCallResult[];
 };
 
 /**
  * Execute all tool calls from OpenAI response
  */
-async function executeToolCalls(openAiToolCalls: ChatCompletionMessageFunctionToolCall[]): Promise<ToolCall[]> {
+async function executeToolCalls(openAiToolCalls: ChatCompletionMessageFunctionToolCall[], originalDefinitions: ToolDefinition[]): Promise<ToolCallResult[]> {
+    const toolDefinitions = new Map(originalDefinitions.map(td => [td.function.name, td]));
     return Promise.all(
         openAiToolCalls.map(async (tc) => {
             try {
                 const args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
-                const result = await executeTool(tc.function.name, args);
+                const td = toolDefinitions.get(tc.function.name);
+                if (!td) {
+                    throw new Error(`Tool ${tc.function.name} not found`);
+                }
+                const result = await executeToolWithDefinition(td, args);
                 console.log(`Tool execution result for ${tc.function.name}:`, result);
                 return {
                     id: tc.id,
@@ -406,6 +410,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 })
             }
         });
+        if (tools) {}
 		let toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
 
 		let content = '';
@@ -472,8 +477,11 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
             console.warn('No content received from OpenAI', JSON.stringify(response, null, 2));
             return { string: "", toolCalls: [] };
 		}
-
-        const executedToolCalls = await executeToolCalls(toolCalls);
+        let executedToolCalls: ToolCallResult[] = [];
+        if (tools) {
+            console.log(`Tool calls:`, JSON.stringify(toolCalls, null, 2), 'definition:', JSON.stringify(tools, null, 2));
+            executedToolCalls = await executeToolCalls(toolCalls, tools);
+        }
 
         if (executedToolCalls.length) {
             console.log(`Tool calls executed:`, JSON.stringify(executedToolCalls, null, 2));
@@ -482,7 +490,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 ...messages, 
                 { role: "assistant" as MessageRole, content: null, tool_calls: toolCalls },
                 ...executedToolCalls.map((result, _) => ({
-                    role: "tool" as MessageRole,
+                    role: "assistant" as MessageRole,
                     content: JSON.stringify(result.result),
                 }))
             ];

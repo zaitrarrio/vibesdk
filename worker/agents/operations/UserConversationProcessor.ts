@@ -7,10 +7,11 @@ import { WebSocketMessageData } from "../../api/websocketTypes";
 import { AgentOperation, OperationOptions } from "../operations/common";
 import { ConversationMessage } from "../inferutils/common";
 import { StructuredLogger } from "../../logger";
-import { getToolDefinitions } from "../tools/customTools";
 import { XmlStreamFormat, XmlParsingState, XmlStreamingCallbacks } from "../streaming-formats/xml-stream";
 import { IdGenerator } from "../utils/idGenerator";
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
+import { toolWebSearchDefinition } from "../tools/toolkit/web-search";
+import { toolWeatherDefinition } from "../tools/toolkit/weather";
 
 // Constants
 const CHUNK_SIZE = 64;
@@ -118,6 +119,8 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             
             // Generate unique conversation ID for this turn
             const aiConversationId = IdGenerator.generateConversationId();
+
+            logger.info("Generated conversation ID", { aiConversationId });
             
             // Initialize robust XML streaming parser
             const xmlParser = new XmlStreamFormat();
@@ -130,7 +133,12 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             let xmlState: XmlParsingState = xmlParser.initializeXmlState(xmlConfig);
             
             // Get available tools for the conversation
-            const tools = await getToolDefinitions();
+            const tools = [
+                toolWebSearchDefinition,
+                toolWeatherDefinition
+            ]
+
+            logger.info("Retrieved tools", { tools });
             
             // XML streaming callbacks
             const xmlCallbacks: XmlStreamingCallbacks = {
@@ -158,6 +166,11 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
                     logger.warn("XML parsing error in conversation response", { error });
                 }
             };
+
+            logger.info("Executing inference for user message", { 
+                messageLength: userMessage.length,
+                aiConversationId
+            });
             
             // Don't save the system prompts so that every time new initial prompts can be generated with latest project context
             const result = await executeInference({
@@ -194,8 +207,8 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
                     extractedUserResponse = result.string;
                 }
 
-                // Make sure to filter out any enhanced_user_request tags from the response
-                extractedUserResponse = extractedUserResponse.replace(/<enhanced_user_request>.*?<\/enhanced_user_request>/gs, '');
+                // Make sure to filter out any xml tags from the response
+                extractedUserResponse = extractedUserResponse.replace(/<.*?>.*?<\/.*?>/gs, '');
                 inputs.conversationResponseCallback(extractedUserResponse, aiConversationId, false);
             }
             
@@ -207,7 +220,7 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             }
 
             // Use the parsed values from streaming, fallback to original user message if parsing failed
-            const finalEnhancedRequest = extractedEnhancedRequest || userMessage;
+            const finalEnhancedRequest = extractedEnhancedRequest;// || userMessage;
             const finalUserResponse = extractedUserResponse || FALLBACK_USER_RESPONSE;
 
             const parsingErrors = xmlState.hasParsingErrors;
@@ -235,10 +248,10 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
                 messages: messages
             };
         } catch (error) {
+            logger.error("Error processing user message:", error);
             if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
                 throw error;
             }   
-            logger.error("Error processing user message:", error);
             
             // Fallback response
             return {
