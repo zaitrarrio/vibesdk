@@ -31,6 +31,7 @@ import { AgentModeDisplay } from '@/components/agent-mode-display';
 import { useGitHubExport } from '@/hooks/use-github-export';
 import { GitHubExportModal } from '@/components/github-export-modal';
 import { ModelConfigInfo } from './components/model-config-info';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 
 export default function Chat() {
 	const { chatId: urlChatId } = useParams();
@@ -184,6 +185,7 @@ export default function Chat() {
 
 	const editorRef = useRef<HTMLDivElement>(null);
 	const previewRef = useRef<HTMLIFrameElement>(null);
+	const messagesContainerRef = useRef<HTMLDivElement>(null);
 
 	const [newMessage, setNewMessage] = useState('');
 	const [showTooltip, setShowTooltip] = useState(false);
@@ -295,6 +297,18 @@ export default function Chat() {
 
 	const [mainMessage, ...otherMessages] = useMemo(() => messages, [messages]);
 
+	const { scrollToBottom } = useAutoScroll(messagesContainerRef, { behavior: 'smooth', watch: [messages] });
+
+	const prevMessagesLengthRef = useRef(0);
+
+	useEffect(() => {
+		// Force scroll when a new message is appended (length increase)
+		if (messages.length > prevMessagesLengthRef.current) {
+			requestAnimationFrame(() => scrollToBottom());
+		}
+		prevMessagesLengthRef.current = messages.length;
+	}, [messages.length, scrollToBottom]);
+
 	useEffect(() => {
 		if (previewUrl && !hasSeenPreview.current && isPhase1Complete) {
 			setView('preview');
@@ -404,8 +418,10 @@ export default function Chat() {
 			);
 			sendUserMessage(newMessage);
 			setNewMessage('');
+			// Ensure we scroll after sending our own message
+			requestAnimationFrame(() => scrollToBottom());
 		},
-		[newMessage, websocket, sendUserMessage, isChatDisabled],
+		[newMessage, websocket, sendUserMessage, isChatDisabled, scrollToBottom],
 	);
 
 	const [progress, total] = useMemo((): [number, number] => {
@@ -448,7 +464,7 @@ export default function Chat() {
 					layout="position"
 					className="flex-1 shrink-0 flex flex-col basis-0 max-w-lg relative z-10 h-full"
 				>
-					<div className="flex-1 overflow-y-auto min-h-0 chat-messages-scroll">
+					<div className="flex-1 overflow-y-auto min-h-0 chat-messages-scroll" ref={messagesContainerRef}>
 						<div className="pt-5 px-4 pb-4 text-sm flex flex-col gap-5">
 							{appLoading ? (
 								<div className="flex items-center gap-2 text-text-tertiary">
