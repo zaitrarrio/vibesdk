@@ -7,11 +7,11 @@ import { WebSocketMessageData } from "../../api/websocketTypes";
 import { AgentOperation, OperationOptions } from "../operations/common";
 import { ConversationMessage } from "../inferutils/common";
 import { StructuredLogger } from "../../logger";
-import { XmlStreamFormat, XmlParsingState, XmlStreamingCallbacks } from "../streaming-formats/xml-stream";
 import { IdGenerator } from "../utils/idGenerator";
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { toolWebSearchDefinition } from "../tools/toolkit/web-search";
 import { toolWeatherDefinition } from "../tools/toolkit/weather";
+import { ToolDefinition } from "../tools/types";
 
 // Constants
 const CHUNK_SIZE = 64;
@@ -38,70 +38,75 @@ const RelevantProjectUpdateWebsoketMessages = [
 ] as const;
 export type ProjectUpdateType = typeof RelevantProjectUpdateWebsoketMessages[number];
 
-const SYSTEM_PROMPT = `You are a Customer Success Representative at Cloudflare's AI development platform. Your role is to communicate with the user, and translate any user feedback into actionable, enhanced requests for the development team.
-You should respond with a langauge as if You are the one who would make the changes in the project; User need not know that you are just passing on the request to the development team.
+const SYSTEM_PROMPT = `You are an AI assistant for Cloudflare's development platform, helping users build and modify their applications. You have a conversational interface and can help users with their projects.
 
-## RESPONSE EXAMPLES:
+## YOUR CAPABILITIES:
+- You can answer questions about the project and its current state
+- You can search the web for information when needed
+- Most importantly, you can modify the application when users request changes or ask for new features
+- You can execute other tools provided to you to help users with their projects
 
-**Example 1 - Feature Request:**
-User: "I want to add a dark mode toggle"
-Response:
-<user_response>
-Great idea! I'll get this done. This will be implemented in the next development phase, which should take just a few minutes.
-</user_response>
-<enhanced_user_request>
-Implement a dark mode toggle that switches between light and dark themes across the entire application
-</enhanced_user_request>
+## HOW TO INTERACT:
 
-**Example 2 - Bug Report:**
-User: "The login button doesn't work on mobile"
-Response:
-<user_response>
-Thanks for reporting this issue. I've noted the mobile login problem and I will get this fixed in the next development phase.
-</user_response>
-<enhanced_user_request>
-Fix the login button functionality on mobile devices - ensure it's properly sized and responsive
-</enhanced_user_request>
+1. **For general questions or discussions**: Simply respond naturally and helpfully. Be friendly and informative.
 
-**Example 3 - General Question:**
-User: "How's the project coming along?"
-Response:
-<user_response>
-The project is progressing well! I am working through the phases systematically. Is there anything specific you'd like to see added or changed?
-</user_response>
+2. **When users want to modify their app**: Use the edit_app tool to queue the modification request. 
+   - First acknowledge what they want to change
+   - Then call the edit_app tool with a clear, actionable description
+   - The modification request should be specific but NOT include code-level implementation details
+   - After calling the tool, let them know the changes will be implemented in the next development phase
 
-## RULES:
-- Be friendly and encouraging
-- Always acknowledge user requests will be handled "in the next phase" and politely ask them to stay patient.
-- Transform vague requests into specific requirements BUT DON'T Specify code level or implementation details.
-- Don't provide implementation details or code and Don't talk about code level or implementation details. That will only confuse and frustrate the development team.
-- Use the XML format with user_response (always) and enhanced_user_request (only for changes) tags.
+3. **For information requests**: Use the appropriate tools (web_search, etc) when they would be helpful.
 
-## Original User Requirement:
+## RESPONSE STYLE:
+- Be conversational and natural - you're having a chat, not filling out forms
+- Be encouraging and positive about their project
+- When changes are requested, respond as if you're the one making the changes (say "I'll add that" not "the team will add that")
+- Always acknowledge that implementation will happen "in the next development phase" to set expectations
+
+## IMPORTANT GUIDELINES:
+- DO NOT generate or discuss code-level implementation details
+- DO NOT provide specific technical instructions or code snippets
+- DO translate vague user requests into clear, actionable requirements when using edit_app
+- DO be helpful in understanding what the user wants to achieve
+
+## Original Project Context:
 {{query}}
 
-## OUTPUT FORMAT:
-Always use this exact XML structure:
-
----------START---------
-<user_response>
-[Your friendly response to the user]
-</user_response>
-
-<enhanced_user_request>
-[Technical request for development team - ONLY if user wants changes]
-</enhanced_user_request>
----------END---------
-
-**Key Points:**
-- Always include <user_response>
-- Only include <enhanced_user_request> for actual change requests
-- For questions/comments, omit <enhanced_user_request>
-- Be specific in enhanced requests
-`;
+Remember: You're here to help users build great applications through natural conversation and the tools at your disposal.`;
 
 const FALLBACK_USER_RESPONSE = "I understand you'd like to make some changes to your project. Let me make sure this is incorporated in the next phase of development.";
 
+interface EditAppArgs {
+    modificationRequest: string;
+}
+
+interface EditAppResult {}
+
+export function buildEditAppTool(stateMutator: (modificationRequest: string) => void): ToolDefinition<EditAppArgs, EditAppResult> {
+    return {
+        type: 'function' as const,
+        function: {
+            name: 'edit_app',
+            description: 'Make modifications to the app',
+            parameters: {
+                type: 'object',
+                properties: {
+                    modificationRequest: {
+                        type: 'string',
+                        description: 'The changes needed to be made to the app. Please don\'t supply any code level or implementation details.'
+                    }
+                },
+                required: ['modificationRequest']
+            }
+        },
+        implementation: async (args: EditAppArgs) => {
+            console.log("Queueing app edit request", args);
+            stateMutator(args.modificationRequest);
+            return {};
+        }
+    };
+}
 export class UserConversationProcessor extends AgentOperation<UserConversationInputs, UserConversationOutputs> {
     async execute(inputs: UserConversationInputs, options: OperationOptions): Promise<UserConversationOutputs> {
         const { env, logger, context } = options;
@@ -121,55 +126,20 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             const aiConversationId = IdGenerator.generateConversationId();
 
             logger.info("Generated conversation ID", { aiConversationId });
-            
-            // Initialize robust XML streaming parser
-            const xmlParser = new XmlStreamFormat();
-            const xmlConfig = {
-                targetElements: ['user_response', 'enhanced_user_request'],
-                streamingElements: ['user_response'],
-                caseSensitive: false,
-                maxBufferSize: 10000
-            };
-            let xmlState: XmlParsingState = xmlParser.initializeXmlState(xmlConfig);
-            
             // Get available tools for the conversation
             const tools = [
                 toolWebSearchDefinition,
-                toolWeatherDefinition
+                toolWeatherDefinition,
+                buildEditAppTool((modificationRequest) => {
+                    logger.info("Received app edit request", { modificationRequest }); 
+                    extractedEnhancedRequest = modificationRequest;
+                })
             ]
-
-            logger.info("Retrieved tools", { tools });
-            
-            // XML streaming callbacks
-            const xmlCallbacks: XmlStreamingCallbacks = {
-                onElementContent: (tagName: string, content: string, isComplete: boolean) => {
-                    if (tagName.toLowerCase() === 'user_response') {
-                        extractedUserResponse += content;
-                        // Stream to frontend
-                        inputs.conversationResponseCallback(content, aiConversationId, true);
-                        logger.info("Streamed user_response content", { 
-                            length: content.length, 
-                            isComplete,
-                            totalLength: extractedUserResponse.length 
-                        });
-                    }
-                },
-                onElementComplete: (element) => {
-                    if (element.tagName.toLowerCase() === 'enhanced_user_request') {
-                        extractedEnhancedRequest = element.content.trim();
-                        logger.info("Extracted enhanced_user_request", { length: extractedEnhancedRequest.length });
-                    } else if (element.tagName.toLowerCase() === 'user_response') {
-                        logger.info("Completed user_response streaming", { totalLength: extractedUserResponse.length });
-                    }
-                },
-                onParsingError: (error) => {
-                    logger.warn("XML parsing error in conversation response", { error });
-                }
-            };
 
             logger.info("Executing inference for user message", { 
                 messageLength: userMessage.length,
-                aiConversationId
+                aiConversationId,
+                tools
             });
             
             // Don't save the system prompts so that every time new initial prompts can be generated with latest project context
@@ -181,63 +151,23 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
                 tools, // Enable tools for the conversational AI
                 stream: {
                     onChunk: (chunk) => {
-                        logger.info("Processing user message chunk", { 
-                            chunkLength: chunk.length,
-                            hasXmlState: !!xmlState
-                        });
-                        
-                        // Process chunk through XML parser
-                        xmlState = xmlParser.parseXmlStream(chunk, xmlState, xmlCallbacks);
+                        logger.info("Processing user message chunk", { chunkLength: chunk.length });
+                        inputs.conversationResponseCallback(chunk, aiConversationId, true);
+                        extractedUserResponse += chunk;
                     },
                     chunk_size: CHUNK_SIZE
                 }
             });
 
-            // Finalize XML parsing to extract any remaining content
-            const finalElements = xmlParser.finalizeXmlParsing(xmlState);
-            
-            // Extract final values if not already captured during streaming
-            if (!extractedUserResponse) {
-                const userResponseElements = finalElements.get('user_response');
-                if (userResponseElements && userResponseElements.length > 0) {
-                    extractedUserResponse = userResponseElements[0].content.trim();
-                }
-                if (!extractedUserResponse) {
-                    logger.warn("Failed to extract user response from XML", { xmlState }, "raw response", result.string);
-                    extractedUserResponse = result.string;
-                }
-
-                // Make sure to filter out any xml tags from the response
-                extractedUserResponse = extractedUserResponse.replace(/<.*?>.*?<\/.*?>/gs, '');
-                inputs.conversationResponseCallback(extractedUserResponse, aiConversationId, false);
-            }
-            
-            if (!extractedEnhancedRequest) {
-                const enhancedElements = finalElements.get('enhanced_user_request');
-                if (enhancedElements && enhancedElements.length > 0) {
-                    extractedEnhancedRequest = enhancedElements[0].content.trim();
-                }
-            }
-
-            // Use the parsed values from streaming, fallback to original user message if parsing failed
-            const finalEnhancedRequest = extractedEnhancedRequest;// || userMessage;
-            const finalUserResponse = extractedUserResponse || FALLBACK_USER_RESPONSE;
-
-            const parsingErrors = xmlState.hasParsingErrors;
-            const errorMessages = xmlState.errorMessages;
             
             logger.info("Successfully processed user message", {
-                finalEnhancedRequest,
-                finalUserResponse,
                 streamingSuccess: !!extractedUserResponse,
                 hasEnhancedRequest: !!extractedEnhancedRequest,
-                xmlParsingErrors: parsingErrors,
-                xmlErrorMessages: errorMessages
             });
 
             const conversationResponse: ConversationalResponseType = {
-                enhancedUserRequest: finalEnhancedRequest,
-                userResponse: finalUserResponse
+                enhancedUserRequest: extractedEnhancedRequest,
+                userResponse: extractedUserResponse
             };
 
             // Save the assistant's response to conversation history
