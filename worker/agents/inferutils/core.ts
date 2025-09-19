@@ -479,7 +479,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
 		}
         let executedToolCalls: ToolCallResult[] = [];
         if (tools) {
-            console.log(`Tool calls:`, JSON.stringify(toolCalls, null, 2), 'definition:', JSON.stringify(tools, null, 2));
+            // console.log(`Tool calls:`, JSON.stringify(toolCalls, null, 2), 'definition:', JSON.stringify(tools, null, 2));
             executedToolCalls = await executeToolCalls(toolCalls, tools);
         }
 
