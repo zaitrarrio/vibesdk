@@ -56,7 +56,7 @@ Template Usage Instructions:
 ${template.description.usage}
 
 <DO NOT TOUCH FILES>
-These files are forbidden to be modified by you. Do not touch them under any circumstances.
+These files are forbidden to be modified. Do not touch them under any circumstances.
 ${template.dontTouchFiles.join('\n')}
 </DO NOT TOUCH FILES>
 
@@ -810,7 +810,8 @@ export const STRATEGIES_UTILS = {
             - **Error Handling Grace:** Helpful, friendly error messages that guide users forward
             - **Loading Elegance:** Beautiful loading states that maintain user engagement
         * **Phase Granularity:** For *simple* applications, deliver a complete, stunning product in one phase. For *complex* applications, establish a visually excellent foundation that impresses immediately.
-        * **Deployable Milestone:** First phase should be immediately demoable with stunning visual appeal that makes stakeholders excited about the final product.`,
+        * **Deployable Milestone:** First phase should be immediately demoable with stunning visual appeal that makes stakeholders excited about the final product.
+        * **Override template home page**: Be sure to rewrite the home page of the app. Do not remove the existing homepage, rewrite on top of it.`,
     SUBSEQUENT_PHASE_GUIDELINES: `**Subsequent Phases: Feature Excellence & Visual Refinement**
         * **🌟 ITERATIVE VISUAL EXCELLENCE:** Each phase elevates the user experience:
             - **Visual Polish Iteration:** Continuously refine spacing, colors, and interactions
@@ -851,7 +852,8 @@ export const STRATEGIES_UTILS = {
     CODING_GUIDELINES: `**Make sure the product is **FUNCTIONAL** along with **POLISHED**
     **MAKE SURE TO NOT BREAK THE APPLICATION in SUBSEQUENT PHASES. Always keep fallbacks and failsafes in place for any backend interactions. Look out for simple syntax errors and dependencies you use!**
     **The client needs to be provided with a good demoable application after each phase. The initial first phase is the most impressionable phase! Make sure it deploys and renders well.**
-    **Make sure the primary page is rendered correctly and as expected after each phase**`,
+    **Make sure the primary (home) page is rendered correctly and as expected after each phase**
+    **Make sure to overwrite the home page file**`,
     CONSTRAINTS: `<PHASE GENERATION CONSTRAINTS>
         **Focus on building the frontend and all the views/pages in the initial 1-2 phases with core functionality and mostly mock data, then fleshing out the application**    
         **Before writing any components of your own, make sure to check the existing components and files in the template, try to use them if possible (for example preinstalled shadcn components)**
@@ -894,7 +896,8 @@ export const STRATEGIES = {
     **Rely on open source tools and free tier services only apart from whats configured in the environment. Refer to template usage instructions to know if specific cloudflare services are also available for use.**
     **Make sure to implement all the features and functionality requested by the user and more. The application should be fully complete by the end of the last phase. There should be no compromises**
     **This is a Cloudflare Workers & Durable Objects project. The environment is preconfigured. Absolutely DO NOT Propose changes to wrangler.toml or any other config files. These config files are hidden from you but they do exist.**
-    **The Homepage of the frontend is a dummy page. It should be replaced with the primary page of the application in the initial phase.**
+    **The Homepage of the frontend is a dummy page. It should be rewritten as the primary page of the application in the initial phase.**
+    **Refrain from editing any of the 'dont touch' files in the project, e.g - package.json, vite.config.ts, wrangler.jsonc, etc.**
 </PHASES GENERATION STRATEGY>`, 
 FRONTEND_FIRST_CODING: `<PHASES GENERATION STRATEGY>
     **STRATEGY: Scalable, Demoable Frontend and core application First / Iterative Feature Addition later**

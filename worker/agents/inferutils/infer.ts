@@ -3,11 +3,12 @@ import { createAssistantMessage, createUserMessage, Message } from './common';
 import z from 'zod';
 // import { CodeEnhancementOutput, CodeEnhancementOutputType } from '../codegen/phasewiseGenerator';
 import { SchemaFormat } from './schemaFormatters';
-import { ChatCompletionTool, ReasoningEffort } from 'openai/resources.mjs';
+import { ReasoningEffort } from 'openai/resources.mjs';
 import { AgentActionKey, AIModels, InferenceContext, ModelConfig } from './config.types';
 import { AGENT_CONFIG } from './config';
 import { createLogger } from '../../logger';
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
+import { ToolDefinition } from '../tools/types';
 
 const logger = createLogger('InferenceUtils');
 
@@ -30,7 +31,7 @@ interface InferenceParamsBase {
     modelName?: AIModels | string;
     retryLimit?: number;
     agentActionName: AgentActionKey;
-    tools?: ChatCompletionTool[];
+    tools?: ToolDefinition<any, any>[];
     stream?: {
         chunk_size: number;
         onChunk: (chunk: string) => void;
