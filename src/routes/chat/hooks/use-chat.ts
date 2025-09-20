@@ -105,6 +105,9 @@ export function useChat({
 	const [isGenerationPaused, setIsGenerationPaused] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 
+	// Phase progress visual indicator (used to apply subtle throb on chat)
+	const [isPhaseProgressActive, setIsPhaseProgressActive] = useState(false);
+
 	const [isThinking, setIsThinking] = useState(false);
 	
 	// Preview refresh state - triggers preview reload after deployment
@@ -172,6 +175,7 @@ export function useChat({
 			setDeploymentError,
 			setIsGenerationPaused,
 			setIsGenerating,
+			setIsPhaseProgressActive,
 			// Current state
 			isInitialStateRestored,
 			blueprint,
@@ -650,5 +654,7 @@ export function useChat({
 		shouldRefreshPreview,
 		// Preview deployment state
 		isPreviewDeploying,
+		// Phase progress visual indicator
+		isPhaseProgressActive,
 	};
 }

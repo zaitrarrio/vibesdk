@@ -410,7 +410,6 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 })
             }
         });
-        if (tools) {}
 		let toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
 
 		let content = '';

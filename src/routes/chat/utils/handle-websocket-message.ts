@@ -41,6 +41,7 @@ export interface HandleMessageDeps {
     setDeploymentError: React.Dispatch<React.SetStateAction<string | undefined>>;
     setIsGenerationPaused: React.Dispatch<React.SetStateAction<boolean>>;
     setIsGenerating: React.Dispatch<React.SetStateAction<boolean>>;
+    setIsPhaseProgressActive: React.Dispatch<React.SetStateAction<boolean>>;
     
     // Current state
     isInitialStateRestored: boolean;
@@ -96,6 +97,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
             setDeploymentError,
             setIsGenerationPaused,
             setIsGenerating,
+            setIsPhaseProgressActive,
             isInitialStateRestored,
             blueprint,
             query,
@@ -310,6 +312,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                     message: 'Code generation has been completed.',
                     isThinking: false,
                 });
+                setIsPhaseProgressActive(false);
                 break;
             }
 
@@ -397,6 +400,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     message: message.message,
                 });
                 setIsThinking(true);
+                setIsPhaseProgressActive(true);
                 break;
             }
 
@@ -406,6 +410,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     message: message.message,
                 });
                 setIsThinking(false);
+                setIsPhaseProgressActive(false);
                 break;
             }
 
@@ -460,8 +465,8 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     }
                     return updated;
                 });
-                
                 setIsPreviewDeploying(false);
+                setIsPhaseProgressActive(false);
                 break;
             }
 
@@ -482,6 +487,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
 
                 updateStage('code', { status: 'completed' });
                 setIsRedeployReady(true);
+                setIsPhaseProgressActive(false);
                 
                 if (message.phase) {
                     setPhaseTimeline(prev => {

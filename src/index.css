@@ -6,6 +6,29 @@
   src:  url('./assets/fonts/DepartureMono-Regular.woff') 
 }
 
+/* Subtle chat edge throb effect */
+@keyframes chat-edge-throb {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 rgba(246, 130, 31, 0.10),
+      inset 0 0 0 1px rgba(246, 130, 31, 0.16);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(255, 61, 0, 0.08),
+      inset 0 0 0 2px rgba(255, 61, 0, 0.22);
+  }
+}
+
+.chat-edge-throb {
+  animation: chat-edge-throb 1.6s ease-in-out infinite;
+  border-radius: 0.75rem; /* rounded-xl */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-edge-throb { animation: none; }
+}
+
 @custom-variant dark (&:is(.dark *));
 @plugin '@tailwindcss/typography';
 @theme inline {
