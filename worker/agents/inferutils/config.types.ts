@@ -58,6 +58,7 @@ export interface AgentConfig {
     realtimeCodeFixer: ModelConfig;
     fastCodeFixer: ModelConfig;
     conversationalResponse: ModelConfig;
+    sentinel: ModelConfig;
 }
 
 // Provider and reasoning effort types for validation

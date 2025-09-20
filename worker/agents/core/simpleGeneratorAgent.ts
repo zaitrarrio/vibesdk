@@ -7,7 +7,7 @@ import {
     FileOutputType,
     PhaseImplementationSchemaType,
 } from '../schemas';
-import { GitHubPushRequest, PreviewType, StaticAnalysisResponse, TemplateDetails } from '../../services/sandbox/sandboxTypes';
+import { GitHubPushRequest, PreviewType, RuntimeError, StaticAnalysisResponse, TemplateDetails } from '../../services/sandbox/sandboxTypes';
 import {  GitHubExportResult } from '../../services/github/types';
 import { CodeGenState, CurrentDevState, MAX_PHASES, FileState } from './state';
 import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs } from './types';
@@ -26,6 +26,7 @@ import { CodeReviewOperation } from '../operations/CodeReview';
 import { FileRegenerationOperation } from '../operations/FileRegeneration';
 import { PhaseGenerationOperation } from '../operations/PhaseGeneration';
 import { ScreenshotAnalysisOperation } from '../operations/ScreenshotAnalysis';
+import { SentinelOperation } from '../operations/Sentinel';
 // Database schema imports removed - using zero-storage OAuth flow
 import { BaseSandboxService } from '../../services/sandbox/BaseSandboxService';
 import { getSandboxService } from '../../services/sandbox/factory';
@@ -73,6 +74,7 @@ interface Operations {
     implementPhase: PhaseImplementationOperation;
     fastCodeFixer: FastCodeFixerOperation;
     processUserMessage: UserConversationProcessor;
+    sentinel: SentinelOperation;
 }
 
 /**
@@ -101,7 +103,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         analyzeScreenshot: new ScreenshotAnalysisOperation(),
         implementPhase: new PhaseImplementationOperation(),
         fastCodeFixer: new FastCodeFixerOperation(),
-        processUserMessage: new UserConversationProcessor()
+        processUserMessage: new UserConversationProcessor(),
+        sentinel: new SentinelOperation(),
     };
 
     isGenerating: boolean = false;
@@ -110,6 +113,11 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     private currentDeploymentPromise: Promise<PreviewType | null> | null = null;
     
     public _logger: StructuredLogger | undefined;
+
+    // Sentinel watcher controls
+    private sentinelInterval: ReturnType<typeof setInterval> | null = null;
+    private sentinelRunning: boolean = false;
+    private readonly SENTINEL_POLL_INTERVAL_MS = 5000;
 
     logger(): StructuredLogger {
         if (!this._logger) {
@@ -438,7 +446,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             this.logger().info("Code generation already in progress");
             return;
         }
+        // Mark generating first, then stop sentinel to avoid race
         this.isGenerating = true;
+        this.stopSentinelWatcher();
 
         this.broadcast(WebSocketMessageResponses.GENERATION_STARTED, {
             message: 'Starting code generation',
@@ -516,6 +526,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 }
             );
             this.isGenerating = false;
+            // Start sentinel monitoring after state machine ends
+            this.startSentinelWatcher();
             this.broadcast(WebSocketMessageResponses.GENERATION_COMPLETE, {
                 message: "Code generation and review process completed.",
                 instanceId: this.state.sandboxInstanceId,
@@ -1300,7 +1312,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         return this.ctx.getWebSockets();
     }
 
-    async fetchRuntimeErrors(clear: boolean = true) {
+    async fetchRuntimeErrors(clear: boolean = true) : Promise<RuntimeError[]> {
         if (!this.state.sandboxInstanceId || !this.fileManager) {
             this.logger().warn("No sandbox instance ID available to fetch errors from.");
             return [];
@@ -1342,6 +1354,90 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             this.logger().error("Exception fetching runtime errors:", error);
             return [];
         }
+    }
+
+    // ===============================
+    // Sentinel Watcher
+    // ===============================
+    private startSentinelWatcher(): void {
+        if (this.sentinelInterval) {
+            clearInterval(this.sentinelInterval);
+            this.sentinelInterval = null;
+        }
+        // Only start if we have a running instance and not generating
+        if (!this.state.sandboxInstanceId || this.isGenerating) return;
+        this.sentinelInterval = setInterval(() => {
+            // background tick
+            void this.runSentinelTick().catch(err => this.logger().error('Sentinel tick error:', err));
+        }, this.SENTINEL_POLL_INTERVAL_MS);
+        this.logger().info('Sentinel watcher started');
+    }
+
+    private stopSentinelWatcher(): void {
+        if (this.sentinelInterval) {
+            clearInterval(this.sentinelInterval);
+            this.sentinelInterval = null;
+            this.logger().info('Sentinel watcher stopped');
+        }
+    }
+
+    private async runSentinelTick(): Promise<void> {
+        if (this.sentinelRunning || this.isGenerating || !this.sentinelInterval) return;
+        this.sentinelRunning = true;
+        try {
+            const errors = await this.fetchRuntimeErrors(false);
+            if (!errors || errors.length === 0) return;
+            // proceed only for uncaught errors
+            const hasUncaught = errors.some(e => typeof e.message === 'string' && e.message.trim().startsWith('Uncaught'));
+            if (!hasUncaught) return;
+
+            const context = GenerationContext.from(this.state, this.logger());
+            const analysis = await this.operations.sentinel.execute(
+                { runtimeErrors: errors },
+                { env: this.env, agentId: this.state.sessionId, context, logger: this.logger(), inferenceContext: this.state.inferenceContext }
+            );
+
+            // decision
+            switch (analysis.decision) {
+                case 'none':
+                    await this.resetIssues();
+                    return;
+                case 'code_review': {
+                    // stop watcher
+                    this.stopSentinelWatcher();
+                    await this.resetIssues();
+                    await this.executeReviewCycle();
+                    // restart watcher
+                    this.startSentinelWatcher();
+                    return;
+                }
+                case 'phase_loop': {
+                    // queue stabilization request
+                    const actionable = analysis.errors
+                        .slice(0, 5)
+                        .map(e => `- ${e.summary}${e.filePath ? ` @ ${e.filePath}` : ''}`)
+                        .join('\n');
+                    const modificationRequest = `Stabilize app by fixing critical runtime errors detected in production preview.\n${actionable}`;
+                    this.rechargePhasesCounter(3);
+                    this.addPendingInput(modificationRequest);
+                    if (!this.isGenerating) {
+                        this.generateAllFiles().catch(e => this.logger().error('Error starting generation from sentinel:', e));
+                    }
+                    return;
+                }
+            }
+        } catch (error) {
+            this.logger().error('Sentinel execution error:', error);
+        } finally {
+            this.sentinelRunning = false;
+        }
+    }
+
+    private addPendingInput(request: string): void {
+        this.setState({
+            ...this.state,
+            pendingUserInputs: [...this.state.pendingUserInputs, request]
+        });
     }
 
     /**
@@ -2269,11 +2365,12 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 { 
                     userMessage, 
                     pastMessages: this.state.conversationMessages,
-                    conversationResponseCallback: (message: string, conversationId: string, isStreaming: boolean) => {
+                    conversationResponseCallback: (message: string, conversationId: string, isStreaming: boolean, tool?: { name: string; status: 'start' | 'success' | 'error'; args?: Record<string, unknown> }) => {
                         this.broadcast(WebSocketMessageResponses.CONVERSATION_RESPONSE, {
                             message,
                             conversationId,
                             isStreaming,
+                            tool,
                         });
                     }
                 }, 

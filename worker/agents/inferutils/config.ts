@@ -153,6 +153,13 @@ export const AGENT_CONFIG: AgentConfig = {
         temperature: 0.1,
         fallbackModel: AIModels.GEMINI_2_5_FLASH,
     },
+    sentinel: {
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        reasoning_effort: 'low',
+        max_tokens: 8000,
+        temperature: 0,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH,
+    },
 };
 
 

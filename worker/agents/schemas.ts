@@ -167,3 +167,18 @@ export const ConversationalResponseSchema = z.object({
 export type ConversationalResponseType = z.infer<typeof ConversationalResponseSchema>;
 
 
+// Sentinel Schemas (minimal)
+export const SentinelErrorSchema = z.object({
+    summary: z.string().describe('Concise error summary derived from raw output'),
+    filePath: z.string().optional().describe('Optional file path if present in the error'),
+});
+
+export const SentinelOutput = z.object({
+    decision: z.enum(['none', 'code_review', 'phase_loop']).describe('Overall decision based on prioritized errors'),
+    errors: z.array(SentinelErrorSchema).describe('Ordered list of deduplicated error summaries (highest priority first)'),
+});
+
+export type SentinelErrorAnalysisType = z.infer<typeof SentinelErrorSchema>;
+export type SentinelOutputType = z.infer<typeof SentinelOutput>;
+
+
