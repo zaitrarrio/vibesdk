@@ -25,7 +25,6 @@ import type { ModelConfigsData } from '@/api-types';
 import { Copy } from './components/copy';
 import { useFileContentStream } from './hooks/use-file-content-stream';
 import { logger } from '@/utils/logger';
-import clsx from 'clsx';
 import { useApp } from '@/hooks/use-app';
 import { AgentModeDisplay } from '@/components/agent-mode-display';
 import { useGitHubExport } from '@/hooks/use-github-export';
@@ -136,8 +135,9 @@ export default function Chat() {
 
 	// Debug panel state
 	const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
+	const deploymentControlsRef = useRef<HTMLDivElement>(null);
 
-	// Model config info state  
+	// Model config info state
 	const [modelConfigs, setModelConfigs] = useState<{
 		agents: Array<{ key: string; name: string; description: string; }>;
 		userConfigs: ModelConfigsData['configs'];
@@ -148,7 +148,7 @@ export default function Chat() {
 	// Handler for model config info requests
 	const handleRequestConfigs = useCallback(() => {
 		if (!websocket) return;
-		
+
 		setLoadingConfigs(true);
 		websocket.send(JSON.stringify({
 			type: 'get_model_configs'
@@ -172,7 +172,7 @@ export default function Chat() {
 		};
 
 		websocket.addEventListener('message', handleMessage);
-		
+
 		return () => {
 			websocket.removeEventListener('message', handleMessage);
 		};
@@ -208,7 +208,7 @@ export default function Chat() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const handleViewModeChange = useCallback((mode: 'preview' | 'editor' | 'terminal') => {
+	const handleViewModeChange = useCallback((mode: 'preview' | 'editor' | 'blueprint') => {
 		setView(mode);
 	}, []);
 
@@ -315,7 +315,7 @@ export default function Chat() {
 			setShowTooltip(true);
 			setTimeout(() => {
 				setShowTooltip(false);
-			}, 3000);
+			}, 3000); // Auto-hide tooltip after 3 seconds
 		}
 	}, [previewUrl, isPhase1Complete]);
 
@@ -425,11 +425,15 @@ export default function Chat() {
 	);
 
 	const [progress, total] = useMemo((): [number, number] => {
-		const total = typeof totalFiles === 'number' ? totalFiles : 1;
+		// Calculate phase progress instead of file progress
+		const completedPhases = phaseTimeline.filter(p => p.status === 'completed').length;
 
-		// Add blueprint progress into progress
-		return [Math.min(files.length - generatingCount, total), total];
-	}, [totalFiles, generatingCount, files.length]);
+		// Get predicted phase count from blueprint, fallback to current phase count
+		const predictedPhaseCount = blueprint?.implementationRoadmap?.length || 0;
+		const totalPhases = Math.max(predictedPhaseCount, phaseTimeline.length, 1);
+
+		return [completedPhases, totalPhases];
+	}, [phaseTimeline, blueprint?.implementationRoadmap]);
 
 	if (import.meta.env.DEV) {
 		logger.debug({
@@ -504,195 +508,31 @@ export default function Chat() {
 								/>
 							)}
 
-							<motion.div
-								layout="position"
-								className="pl-9 mb-2"
-							>
-								<div className="px-2 pr-3.5 py-3 flex-1 rounded-xl border border-black/12 bg-bg-4 dark:bg-bg-2">
-									{projectStages.map((stage, index) => {
-										const { id, status, title, metadata } =
-											stage;
-
-										return (
-											<div className="flex relative w-full gap-2 pb-2.5 last:pb-0">
-												<div className="translate-y-px z-20">
-													<AnimatePresence>
-														{status ===
-															'pending' && (
-															<motion.div
-																initial={{
-																	scale: 0.2,
-																	opacity: 0.4,
-																}}
-																animate={{
-																	scale: 1,
-																	opacity: 1,
-																}}
-																exit={{
-																	scale: 0.2,
-																	opacity: 0.4,
-																}}
-																className="size-5 flex items-center justify-center"
-															>
-																<div className="size-2 rounded-full bg-zinc-300" />
-															</motion.div>
-														)}
-
-														{status ===
-															'active' && (
-															<motion.div
-																initial={{
-																	scale: 0.2,
-																	opacity: 0.4,
-																}}
-																animate={{
-																	scale: 1,
-																	opacity: 1,
-																}}
-																exit={{
-																	scale: 0.2,
-																	opacity: 0.4,
-																}}
-																className="size-5 bg-bg-4 dark:bg-bg-2 flex items-center justify-center"
-															>
-																<LoaderCircle className="size-3 text-accent animate-spin" />
-															</motion.div>
-														)}
-
-														{status ===
-															'completed' && (
-															<motion.div
-																initial={{
-																	scale: 0.2,
-																	opacity: 0.4,
-																}}
-																animate={{
-																	scale: 1,
-																	opacity: 1,
-																}}
-																exit={{
-																	scale: 0.2,
-																	opacity: 0.4,
-																}}
-																className="size-5 flex items-center justify-center"
-															>
-																<div className="size-2 rounded-full bg-accent" />
-															</motion.div>
-														)}
-													</AnimatePresence>
-												</div>
-												<div className="flex flex-col gap-2 flex-1">
-													<div className="flex">
-														<span
-															className={clsx(
-																'font-medium',
-																status ===
-																	'pending'
-																	? 'text-text-tertiary'
-																	: 'text-text-secondary',
-															)}
-														>
-															{title}
-														</span>
-														{id === 'code' &&
-															status !==
-																'pending' && (
-																<motion.div
-																	initial={{
-																		x: -120,
-																	}}
-																	animate={{
-																		x: 0,
-																	}}
-																>
-																	<span className="text-zinc-300 mx-1">
-																		&bull;
-																	</span>
-																	<span className="text-text-tertiary">
-																		{
-																			progress
-																		}
-																		/{total}{' '}
-																		files
-																	</span>
-																</motion.div>
-															)}
-													</div>
-
-													{id === 'blueprint' &&
-														status !==
-															'pending' && (
-															<button
-																onClick={() => {
-																	setView(
-																		'blueprint',
-																	);
-																	hasSwitchedFile.current = true;
-																}}
-																className={`flex items-start ml-0.5 transition-colors font-mono ${
-																	view ===
-																	'blueprint'
-																		? 'text-brand underline decoration-dotted'
-																		: 'text-text-secondary/80 hover:bg-bg-2/50 hover:text-text-secondary'
-																}`}
-															>
-																<span className="text-xs text-left truncate">
-																	Blueprint.md
-																</span>
-															</button>
-														)}
-
-													{id === 'code' && (
-														<PhaseTimeline
-															phaseTimeline={
-																phaseTimeline
-															}
-															files={files}
-															view={view}
-															activeFile={
-																activeFile
-															}
-															onFileClick={
-																handleFileClick
-															}
-															isThinkingNext={
-																isThinking
-															}
-															isPreviewDeploying={
-																isPreviewDeploying
-															}
-														/>
-													)}
-
-													{metadata && (
-														<span className="font-mono text-xs text-zinc-500 tracking-tighter">
-															{metadata}
-														</span>
-													)}
-												</div>
-
-												{index !==
-													projectStages.length -
-														1 && (
-													<div
-														className={clsx(
-															'absolute left-[9.25px] w-px h-full top-2.5 z-10',
-															status ===
-																'completed'
-																? 'bg-accent'
-																: 'bg-text/5',
-														)}
-													/>
-												)}
-											</div>
-										);
-									})}
-								</div>
-							</motion.div>
+							<PhaseTimeline
+								projectStages={projectStages}
+								phaseTimeline={phaseTimeline}
+								files={files}
+								view={view}
+								activeFile={activeFile}
+								onFileClick={handleFileClick}
+								isThinkingNext={isThinking}
+								isPreviewDeploying={isPreviewDeploying}
+								progress={progress}
+								total={total}
+								parentScrollRef={messagesContainerRef}
+								onViewChange={(viewMode) => {
+									setView(viewMode);
+									hasSwitchedFile.current = true;
+								}}
+								chatId={chatId}
+								isDeploying={isDeploying}
+								handleDeployToCloudflare={handleDeployToCloudflare}
+							/>
 
 							{/* Deployment and Generation Controls */}
 							{chatId && (
 								<motion.div
+									ref={deploymentControlsRef}
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.3, delay: 0.2 }}
@@ -764,7 +604,7 @@ export default function Chat() {
 							<button
 								type="submit"
 								disabled={!newMessage.trim() || isChatDisabled}
-								className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md bg-brand/90 hover:bg-bg-2/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent text-text-on-brands disabled:text-text-primary transition-colors"
+								className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md bg-accent/90 hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent text-white disabled:text-text-primary transition-colors"
 							>
 								<ArrowRight className="size-4" />
 							</button>
@@ -790,7 +630,6 @@ export default function Chat() {
 												onChange={handleViewModeChange}
 												previewAvailable={!!previewUrl}
 												showTooltip={showTooltip}
-												terminalAvailable={true}
 											/>
 										</div>
 
@@ -836,22 +675,22 @@ export default function Chat() {
 											/>
 											<button
 												className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-200 text-xs font-medium shadow-sm ${
-													isGitHubExportReady 
-														? 'bg-gray-800 hover:bg-gray-900 text-white' 
+													isGitHubExportReady
+														? 'bg-gray-800 hover:bg-gray-900 text-white'
 														: 'bg-gray-600 text-gray-400 cursor-not-allowed'
 												}`}
 												onClick={isGitHubExportReady ? githubExport.openModal : undefined}
 												disabled={!isGitHubExportReady}
 												title={
-													isGitHubExportReady 
-														? "Export to GitHub" 
-														: !isPhase1Complete 
+													isGitHubExportReady
+														? "Export to GitHub"
+														: !isPhase1Complete
 															? "Complete Phase 1 to enable GitHub export"
 															: "Waiting for chat session to initialize..."
 												}
 												aria-label={
-													isGitHubExportReady 
-														? "Export to GitHub" 
+													isGitHubExportReady
+														? "Export to GitHub"
 														: !isPhase1Complete
 															? "GitHub export disabled - complete Phase 1 first"
 															: "GitHub export disabled - waiting for chat session"
@@ -1003,7 +842,6 @@ export default function Chat() {
 														!!previewUrl
 													}
 													showTooltip={showTooltip}
-													terminalAvailable={true}
 												/>
 											</div>
 
@@ -1036,8 +874,8 @@ export default function Chat() {
 												</button>
 												<button
 													className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-200 text-xs font-medium shadow-sm ${
-														isPhase1Complete 
-															? 'bg-gray-800 hover:bg-gray-900 text-white' 
+														isPhase1Complete
+															? 'bg-gray-800 hover:bg-gray-900 text-white'
 															: 'bg-gray-600 text-gray-400 cursor-not-allowed'
 													}`}
 													onClick={isPhase1Complete ? githubExport.openModal : undefined}
