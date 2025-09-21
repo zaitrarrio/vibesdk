@@ -167,7 +167,7 @@ export default function Chat() {
 					setLoadingConfigs(false);
 				}
 			} catch (error) {
-				console.error('Error parsing WebSocket message for model configs:', error);
+				logger.error('Error parsing WebSocket message for model configs:', error);
 			}
 		};
 

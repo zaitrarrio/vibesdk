@@ -222,14 +222,14 @@ export function useChat({
 			logger.debug(`🔌 ${isRetry ? 'Retrying' : 'Attempting'} WebSocket connection (attempt ${retryCount.current + 1}/${maxRetries + 1}):`, wsUrl);
 			
 			if (!wsUrl) {
-				console.error('❌ WebSocket URL is required');
+				logger.error('❌ WebSocket URL is required');
 				return;
 			}
 
 			connectionStatus.current = isRetry ? 'retrying' : 'connecting';
 
 			try {
-				console.log('🔗 Attempting WebSocket connection to:', wsUrl);
+				logger.debug('🔗 Attempting WebSocket connection to:', wsUrl);
 				const ws = new WebSocket(wsUrl);
 				setWebsocket(ws);
 
@@ -241,7 +241,7 @@ export function useChat({
 					// Only handle timeout for the latest attempt
 					if (myAttemptId !== connectAttemptIdRef.current) return;
 					if (ws.readyState === WebSocket.CONNECTING) {
-						console.warn('⏰ WebSocket connection timeout');
+						logger.warn('⏰ WebSocket connection timeout');
 						ws.close();
 						handleConnectionFailure(wsUrl, disableGenerate, 'Connection timeout');
 					}
@@ -276,7 +276,7 @@ export function useChat({
 
 					// Request file generation for new chats only
 					if (!disableGenerate && urlChatId === 'new') {
-						console.log('🔄 Starting code generation for new chat');
+						logger.debug('🔄 Starting code generation for new chat');
 						sendWebSocketMessage(ws, 'generate_all');
 					}
 					// For existing chats, auto-resume happens via cf_agent_state
@@ -287,7 +287,7 @@ export function useChat({
 						const message: WebSocketMessage = JSON.parse(event.data);
 						handleWebSocketMessage(ws, message);
 					} catch (parseError) {
-						console.error('❌ Error parsing WebSocket message:', parseError, event.data);
+						logger.error('❌ Error parsing WebSocket message:', parseError, event.data);
 					}
 				});
 
@@ -296,7 +296,7 @@ export function useChat({
 					// Only handle error for the latest attempt and when we should reconnect
 					if (myAttemptId !== connectAttemptIdRef.current) return;
 					if (!shouldReconnectRef.current) return;
-					console.error('❌ WebSocket error:', error);
+					logger.error('❌ WebSocket error:', error);
 					handleConnectionFailure(wsUrl, disableGenerate, 'WebSocket error');
 				});
 
@@ -318,7 +318,7 @@ export function useChat({
 					ws.close();
 				};
 			} catch (error) {
-				console.error('❌ Error establishing WebSocket connection:', error);
+				logger.error('❌ Error establishing WebSocket connection:', error);
 				handleConnectionFailure(wsUrl, disableGenerate, 'Connection setup failed');
 			}
 		},
@@ -331,7 +331,7 @@ export function useChat({
 			connectionStatus.current = 'failed';
 			
 			if (retryCount.current >= maxRetries) {
-				console.error(`💥 WebSocket connection failed permanently after ${maxRetries + 1} attempts`);
+				logger.error(`💥 WebSocket connection failed permanently after ${maxRetries + 1} attempts`);
 				sendMessage({
 					id: 'websocket_failed',
 					message: `🚨 Connection failed permanently after ${maxRetries + 1} attempts.\n\n❌ Reason: ${reason}\n\n🔄 Please refresh the page to try again.`,
@@ -353,7 +353,7 @@ export function useChat({
 			const maxDelay = 30000; // Cap at 30 seconds
 			const actualDelay = Math.min(retryDelay, maxDelay);
 
-			console.warn(`🔄 Retrying WebSocket connection in ${actualDelay / 1000}s (attempt ${retryCount.current + 1}/${maxRetries + 1})`);
+			logger.warn(`🔄 Retrying WebSocket connection in ${actualDelay / 1000}s (attempt ${retryCount.current + 1}/${maxRetries + 1})`);
 			
 			sendMessage({
 				id: 'websocket_retrying',
@@ -386,7 +386,7 @@ export function useChat({
 			try {
 				if (urlChatId === 'new') {
 					if (!userQuery) {
-						console.error('Query is required for new code generation');
+						logger.error('Query is required for new code generation');
 						return;
 					}
 
@@ -420,7 +420,7 @@ export function useChat({
 					});
 
 					for await (const obj of ndjsonStream(response.stream)) {
-                        console.log('Received chunk from server:', obj);
+                        logger.debug('Received chunk from server:', obj);
 						if (obj.chunk) {
 							if (!startedBlueprintStream) {
 								sendMessage({
@@ -440,7 +440,7 @@ export function useChat({
 								const partial = parser.finalize();
 								setBlueprint(partial);
 							} catch (e) {
-								console.error('Error parsing JSON:', e, obj.chunk);
+								logger.error('Error parsing JSON:', e, obj.chunk);
 							}
 						} 
 						if (obj.agentId) {
@@ -448,10 +448,10 @@ export function useChat({
 						}
 						if (obj.websocketUrl) {
 							result.websocketUrl = obj.websocketUrl;
-							console.log('📡 Received WebSocket URL from server:', result.websocketUrl)
+							logger.debug('📡 Received WebSocket URL from server:', result.websocketUrl)
 						}
 						if (obj.template) {
-                            console.log('Received template from server:', obj.template);
+                            logger.debug('Received template from server:', obj.template);
 							result.template = obj.template;
 							if (obj.template.files) {
 								loadBootstrapFiles(obj.template.files);
@@ -490,7 +490,7 @@ export function useChat({
 					// Fetch existing agent connection details
 					const response = await apiClient.connectToAgent(urlChatId);
 					if (!response.success || !response.data) {
-						console.error('Failed to fetch existing chat:', { chatId: urlChatId, error: response.error });
+						logger.error('Failed to fetch existing chat:', { chatId: urlChatId, error: response.error });
 						throw new Error(response.error?.message || 'Failed to connect to agent');
 					}
 
@@ -510,7 +510,7 @@ export function useChat({
 					});
 				}
 			} catch (error) {
-				console.error('Error initializing code generation:', error);
+				logger.error('Error initializing code generation:', error);
 				if (error instanceof RateLimitExceededError) {
 					const rateLimitMessage = handleRateLimitError(error.details, onDebugMessage);
 					setMessages(prev => [...prev, rateLimitMessage]);
@@ -569,12 +569,12 @@ export function useChat({
 		try {
 			// Send deployment command via WebSocket instead of HTTP request
 			if (sendWebSocketMessage(websocket, 'deploy', { instanceId })) {
-				console.log('🚀 Deployment WebSocket message sent:', instanceId);
+				logger.debug('🚀 Deployment WebSocket message sent:', instanceId);
 				
 				// Set 1-minute timeout for deployment
 				setTimeout(() => {
 					if (isDeploying) {
-						console.warn('⏰ Deployment timeout after 1 minute');
+						logger.warn('⏰ Deployment timeout after 1 minute');
 						
 						// Reset deployment state
 						setIsDeploying(false);
@@ -604,7 +604,7 @@ export function useChat({
 				throw new Error('WebSocket connection not available');
 			}
 		} catch (error) {
-			console.error('❌ Error sending deployment WebSocket message:', error);
+			logger.error('❌ Error sending deployment WebSocket message:', error);
 			
 			// Set deployment state immediately for UI feedback
 			setIsDeploying(true);

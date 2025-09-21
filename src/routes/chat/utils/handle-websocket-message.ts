@@ -130,10 +130,10 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
         switch (message.type) {
             case 'cf_agent_state': {
                 const { state } = message;
-                console.log('🔄 Agent state update received:', state);
+                logger.debug('🔄 Agent state update received:', state);
 
                 if (!isInitialStateRestored) {
-                    console.log('📥 Performing initial state restoration');
+                    logger.debug('📥 Performing initial state restoration');
                     
                     if (state.blueprint && !blueprint) {
                         setBlueprint(state.blueprint);
@@ -162,7 +162,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                     }
 
                     if (state.generatedPhases && state.generatedPhases.length > 0 && phaseTimeline.length === 0) {
-                        console.log('📋 Restoring phase timeline:', state.generatedPhases);
+                        logger.debug('📋 Restoring phase timeline:', state.generatedPhases);
                         const timeline = state.generatedPhases.map((phase: any, index: number) => ({
                             id: `phase-${index}`,
                             name: phase.name,
@@ -183,7 +183,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                     }
 
                     if (state.conversationMessages && state.conversationMessages.length > 0) {
-                        console.log('💬 Restoring conversation messages:', state.conversationMessages.length);
+                        logger.debug('💬 Restoring conversation messages:', state.conversationMessages.length);
                         const restoredMessages = state.conversationMessages
                             .map((msg: any) => {
                                 const role = String(msg.role || '').toLowerCase();
@@ -207,7 +207,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                             .filter(Boolean) as Array<{ type: 'user' | 'ai'; id: string; message: string; isThinking: boolean }>;
 
                         if (restoredMessages.length > 0) {
-                            console.log('💬 Replacing messages with restored conversation:', restoredMessages.length);
+                            logger.debug('💬 Replacing messages with restored conversation:', restoredMessages.length);
                             setMessages(restoredMessages);
                         }
                     }
@@ -227,16 +227,16 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
 
                     if (state.generatedFilesMap && Object.keys(state.generatedFilesMap).length > 0 && 
                         urlChatId !== 'new') {
-                        console.log('🚀 Requesting preview deployment for existing chat with files');
+                        logger.debug('🚀 Requesting preview deployment for existing chat with files');
                         sendWebSocketMessage(websocket, 'preview');
                     }
                 }
 
                 if (state.shouldBeGenerating) {
-                    console.log('🔄 shouldBeGenerating=true detected, auto-resuming generation');
+                    logger.debug('🔄 shouldBeGenerating=true detected, auto-resuming generation');
                     updateStage('code', { status: 'active' });
                     
-                    console.log('📡 Sending auto-resume generate_all message');
+                    logger.debug('📡 Sending auto-resume generate_all message');
                     sendWebSocketMessage(websocket, 'generate_all');
                 } else {
                     const codeStage = projectStages.find((stage: any) => stage.id === 'code');
@@ -246,14 +246,14 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                             updateStage('validate', { status: 'completed' });
 
                             if (!previewUrl) {
-                                console.log('🚀 Generated files exist but no preview URL - auto-deploying preview');
+                                logger.debug('🚀 Generated files exist but no preview URL - auto-deploying preview');
                                 sendWebSocketMessage(websocket, 'preview');
                             }
                         }
                     }
                 }
 
-                console.log('✅ Agent state update processed');
+                logger.debug('✅ Agent state update processed');
                 break;
             }
 
@@ -425,7 +425,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     setPhaseTimeline(prev => {
                         const existingPhase = prev.find(p => p.name === message.phase.name);
                         if (existingPhase) {
-                            console.log('Phase already exists in timeline:', message.phase.name);
+                            logger.debug('Phase already exists in timeline:', message.phase.name);
                             return prev;
                         }
                         
@@ -442,7 +442,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                             timestamp: Date.now()
                         };
                         
-                        console.log('Added new phase to timeline:', message.phase.name);
+                        logger.debug('Added new phase to timeline:', message.phase.name);
                         return [...prev, newPhase];
                     });
                 }
@@ -461,7 +461,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     if (updated.length > 0) {
                         const lastPhase = updated[updated.length - 1];
                         lastPhase.status = 'validating';
-                        console.log(`Phase validating: ${lastPhase.name}`);
+                        logger.debug(`Phase validating: ${lastPhase.name}`);
                     }
                     return updated;
                 });
@@ -496,15 +496,15 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                             const lastPhase = updated[updated.length - 1];
                             lastPhase.status = 'completed';
                             lastPhase.files = lastPhase.files.map(f => ({ ...f, status: 'completed' as const }));
-                            console.log(`Phase completed: ${lastPhase.name}`);
+                            logger.debug(`Phase completed: ${lastPhase.name}`);
                         }
                         return updated;
                     });
                 }
 
-                console.log('🔄 Scheduling preview refresh in 1 second after deployment completion');
+                logger.debug('🔄 Scheduling preview refresh in 1 second after deployment completion');
                 setTimeout(() => {
-                    console.log('🔄 Triggering preview refresh after deployment completion');
+                    logger.debug('🔄 Triggering preview refresh after deployment completion');
                     setShouldRefreshPreview(true);
                     
                     setTimeout(() => {
@@ -712,7 +712,7 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
             }
 
             default:
-                console.warn('Unhandled message:', message);
+                logger.warn('Unhandled message:', message);
         }
     };
 }
