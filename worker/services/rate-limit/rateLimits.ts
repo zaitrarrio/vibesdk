@@ -1,4 +1,4 @@
-import { RateLimitType, RateLimitStore, RateLimitSettings, DORateLimitConfig } from './config';
+import { RateLimitType, RateLimitStore, RateLimitSettings, DORateLimitConfig, KVRateLimitConfig } from './config';
 import { createObjectLogger } from '../../logger';
 import { AuthUser } from '../../types/auth-types';
 import { extractTokenWithMetadata, extractRequestMetadata } from '../../utils/authUtils';
@@ -96,21 +96,26 @@ export class RateLimitService {
     ) : Promise<boolean> {
         config = await this.applyUserConfigs(env, config, user, limitType);
         const rateLimitConfig = config[limitType];
+        let success = false;
         
         switch (rateLimitConfig.store) {
             case RateLimitStore.RATE_LIMITER: {
-                const { success } = await (env[rateLimitConfig.bindingName as keyof Env] as RateLimit).limit({ key });
-                return success;
+                const result = await (env[rateLimitConfig.bindingName as keyof Env] as RateLimit).limit({ key });
+                success = result.success;
+                break;
             }
             case RateLimitStore.KV: {
-                const { success } = await KVRateLimitStore.increment(env.VibecoderStore, key, rateLimitConfig);
-                return success;
+                const result = await KVRateLimitStore.increment(env.VibecoderStore, key, rateLimitConfig as KVRateLimitConfig);
+                success = result.success;
+                break;
             }
             case RateLimitStore.DURABLE_OBJECT:
-                return this.enforceDORateLimit(env, key, rateLimitConfig as DORateLimitConfig);
+                success = await this.enforceDORateLimit(env, key, rateLimitConfig as DORateLimitConfig);
+                break;
             default:
                 return false;
         }
+        return success;
     }
 
     static async enforceGlobalApiRateLimit(

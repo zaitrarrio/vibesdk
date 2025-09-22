@@ -1166,9 +1166,6 @@ class CloudflareDeploymentManager {
 			const userAppContainerIndex = config.containers.findIndex(
 				(container) => container.class_name === 'UserAppSandboxService',
 			);
-			const deployerContainerIndex = config.containers.findIndex(
-				(container) => container.class_name === 'DeployerService',
-			);
 
 			if (userAppContainerIndex === -1) {
 				console.warn(
@@ -1177,16 +1174,8 @@ class CloudflareDeploymentManager {
 				return;
 			}
 
-			if (deployerContainerIndex === -1) {
-				console.warn(
-					'⚠️  DeployerService container not found in wrangler.jsonc',
-				);
-				return;
-			}
-
 			// Determine the instance type configuration
 			let userAppInstanceType: any;
-			let deployerInstanceType: any;
 
 			if (sandboxInstanceType === 'enhanced') {
 				// Enhanced configuration as specified
@@ -1195,17 +1184,10 @@ class CloudflareDeploymentManager {
 					memory_mib: 4096,
 					disk_mb: 10240
 				};
-				// DeployerService keeps similar enhanced config but with less memory
-				deployerInstanceType = {
-					vcpu: 4,
-					memory_mib: 4096,
-					disk_mb: 5120
-				};
 				console.log('   Using enhanced instance type configuration');
 			} else {
 				// Use the string value directly
 				userAppInstanceType = sandboxInstanceType;
-				deployerInstanceType = sandboxInstanceType;
 				console.log(`   Using instance type string: ${sandboxInstanceType}`);
 			}
 
@@ -1219,21 +1201,11 @@ class CloudflareDeploymentManager {
 			);
 			updatedContent = applyEdits(updatedContent, userAppInstanceTypeEdits);
 
-			// Update DeployerService instance_type
-			const deployerInstanceTypeEdits = modify(
-				updatedContent,
-				['containers', deployerContainerIndex, 'instance_type'],
-				deployerInstanceType,
-				CloudflareDeploymentManager.JSONC_FORMAT_OPTIONS
-			);
-			updatedContent = applyEdits(updatedContent, deployerInstanceTypeEdits);
-
 			// Write back the updated configuration
 			this.writeWranglerConfig(updatedContent);
 
 			this.logSuccess(`Updated container instance types for SANDBOX_INSTANCE_TYPE: ${sandboxInstanceType}`, [
 				`UserAppSandboxService: ${JSON.stringify(userAppInstanceType)}`,
-				`DeployerService: ${JSON.stringify(deployerInstanceType)}`
 			]);
 
 		} catch (error) {

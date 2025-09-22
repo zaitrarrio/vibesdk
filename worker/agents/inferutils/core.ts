@@ -505,26 +505,33 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
         console.log(`Token optimization: Original messages size ~${JSON.stringify(messages).length} chars, optimized size ~${JSON.stringify(optimizedMessages).length} chars`);
 
         const toolsOpts = tools ? { tools, tool_choice: 'auto' as const } : {};
-        // Call OpenAI API with proper structured output format
-        const response = await client.chat.completions.create({
-            ...schemaObj,
-            ...extraBody,
-            ...toolsOpts,
-            model: modelName,
-            messages: optimizedMessages as OpenAI.ChatCompletionMessageParam[],
-            max_completion_tokens: maxTokens || 150000,
-            stream: stream ? true : false,
-            reasoning_effort,
-            temperature,
-        }, {
-            headers: {
-                "cf-aig-metadata": JSON.stringify({
-                    chatId: metadata.agentId,
-                    userId: metadata.userId,
-                    schemaName,
-                })
-            }
-        });
+        let response: OpenAI.ChatCompletion | OpenAI.ChatCompletionChunk | Stream<OpenAI.ChatCompletionChunk>;
+        try {
+            // Call OpenAI API with proper structured output format
+            response = await client.chat.completions.create({
+                ...schemaObj,
+                ...extraBody,
+                ...toolsOpts,
+                model: modelName,
+                messages: optimizedMessages as OpenAI.ChatCompletionMessageParam[],
+                max_completion_tokens: maxTokens || 150000,
+                stream: stream ? true : false,
+                reasoning_effort,
+                temperature,
+            }, {
+                headers: {
+                    "cf-aig-metadata": JSON.stringify({
+                        chatId: metadata.agentId,
+                        userId: metadata.userId,
+                        schemaName,
+                    })
+                }
+            });
+            console.log(`Inference response received`);
+        } catch (error) {
+            console.error(`Failed to get inference response from OpenAI: ${error}`);
+            throw error;
+        }
         let toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
 
         let content = '';
