@@ -22,48 +22,42 @@ export function findImportAtLocation(ast: t.File, line: number): ImportInfo | nu
     logger.debug(`Finding import at line ${line}`);
     let foundImport: ImportInfo | null = null;
     const allImports: Array<{ line: number; moduleSpecifier: string; defaultImport: string | undefined; namedImports: string[]; }> = [];
-    
-    traverseAST(ast, {
-        ImportDeclaration(path) {
-            const moduleSpecifier = t.isStringLiteral(path.node.source) ? path.node.source.value : '';
-            const defaultImport = path.node.specifiers.find(s => t.isImportDefaultSpecifier(s))?.local.name;
-            const namedImports = path.node.specifiers
+
+    // Prefer direct AST iteration to avoid traverse() scope-building in bundled runtimes
+    const body = ast.program?.body ?? [];
+    for (const node of body) {
+        if (t.isImportDeclaration(node)) {
+            const moduleSpecifier = t.isStringLiteral(node.source) ? node.source.value : '';
+            const defaultImport = node.specifiers.find(s => t.isImportDefaultSpecifier(s))?.local.name;
+            const namedImports = node.specifiers
                 .filter(s => t.isImportSpecifier(s))
-                .map(s => t.isImportSpecifier(s) && t.isIdentifier(s.imported) ? s.imported.name : '')
+                .map(s => (t.isImportSpecifier(s) && t.isIdentifier(s.imported)) ? s.imported.name : '')
                 .filter(Boolean);
-            
-            const importData = {
-                line: path.node.loc?.start.line || 0,
-                moduleSpecifier,
-                defaultImport,
-                namedImports
-            };
-            
-            allImports.push(importData);
-            
-            if (path.node.loc) {
-                const startLine = path.node.loc.start.line;
-                const endLine = path.node.loc.end.line;
-                
-                if (startLine <= line && endLine >= line) {
-                    foundImport = {
-                        specifier: moduleSpecifier,
-                        moduleSpecifier: moduleSpecifier,
-                        defaultImport,
-                        namedImports,
-                        filePath: '',
-                    };
-                }
+
+            const startLine = node.loc?.start.line ?? 0;
+            const endLine = node.loc?.end.line ?? startLine;
+
+            allImports.push({ line: startLine, moduleSpecifier, defaultImport, namedImports });
+
+            if (startLine <= line && endLine >= line) {
+                foundImport = {
+                    specifier: moduleSpecifier,
+                    moduleSpecifier,
+                    defaultImport,
+                    namedImports,
+                    filePath: '',
+                };
+                break;
             }
         }
-    });
-    
+    }
+
     if (foundImport) {
-        logger.debug(`Found import at line ${line}: ${foundImport}`);
+        logger.debug(`Found import at line ${line}: ${JSON.stringify(foundImport)}`);
     } else {
         logger.debug(`No import found at line ${line}. Available imports: ${allImports.map(i => `${i.moduleSpecifier}:${i.line}`).join(', ')}`);
     }
-    
+
     return foundImport;
 }
 
@@ -342,6 +336,13 @@ export async function getFileAST(
     try {
         const ast = parseCode(content);
         logger.info(`ImportUtils: Successfully parsed AST for ${filePath}`);
+        // Cache AST for future calls
+        const existing = files.get(filePath);
+        if (existing) {
+            existing.ast = ast;
+        } else {
+            files.set(filePath, { filePath, content, ast });
+        }
         return ast;
     } catch (error) {
         logger.warn(`ImportUtils: Failed to parse AST for ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -357,14 +358,12 @@ export async function getFileAST(
  * Update import path in AST by modifying the source value
  */
 export function updateImportPath(ast: t.File, oldPath: string, newPath: string): t.File {
-    traverseAST(ast, {
-        ImportDeclaration(path) {
-            if (t.isStringLiteral(path.node.source) && path.node.source.value === oldPath) {
-                path.node.source.value = newPath;
-            }
+    const body = ast.program?.body ?? [];
+    for (const node of body) {
+        if (t.isImportDeclaration(node) && t.isStringLiteral(node.source) && node.source.value === oldPath) {
+            node.source.value = newPath;
         }
-    });
-    
+    }
     return ast;
 }
 
@@ -387,12 +386,21 @@ export function fixImportExportMismatch(
 
                 // Fix default import issues
                 if (defaultImport && !exports.defaultExport) {
-                    const defaultName = defaultImport.local.name;
-                    if (exports.namedExports.includes(defaultName)) {
-                        // Remove default import, add as named import
+                    const localName = defaultImport.local.name; // local alias for default import
+                    // If a named export matches the local name, use it; otherwise fall back to first named export
+                    const targetNamed = exports.namedExports.includes(localName)
+                        ? localName
+                        : (exports.namedExports[0] || undefined);
+                    if (targetNamed) {
+                        // Remove default import, add as named import preserving local alias
                         path.node.specifiers = path.node.specifiers.filter(s => s !== defaultImport);
-                        path.node.specifiers.push(t.importSpecifier(t.identifier(defaultName), t.identifier(defaultName)));
-                        changes.push(`Changed default import to named import for "${defaultName}"`);
+                        path.node.specifiers.push(
+                            t.importSpecifier(
+                                t.identifier(localName),
+                                t.identifier(targetNamed)
+                            )
+                        );
+                        changes.push(`Changed default import to named import for "${localName}" (from "${targetNamed}")`);
                         fixed = true;
                     }
                 }
@@ -401,11 +409,14 @@ export function fixImportExportMismatch(
                 for (const namedImport of namedImports) {
                     if (t.isImportSpecifier(namedImport) && t.isIdentifier(namedImport.imported)) {
                         const namedImportName = namedImport.imported.name;
+                        const localAlias = t.isIdentifier(namedImport.local) ? namedImport.local.name : namedImportName;
                         if (!exports.namedExports.includes(namedImportName) && exports.defaultExport === namedImportName) {
-                            // Remove named import, add as default import
+                            // Remove named import, add as default import preserving alias
                             path.node.specifiers = path.node.specifiers.filter(s => s !== namedImport);
                             if (!defaultImport) {
-                                path.node.specifiers.unshift(t.importDefaultSpecifier(t.identifier(namedImportName)));
+                                path.node.specifiers.unshift(
+                                    t.importDefaultSpecifier(t.identifier(localAlias))
+                                );
                                 changes.push(`Changed named import to default import for "${namedImportName}"`);
                                 fixed = true;
                             }

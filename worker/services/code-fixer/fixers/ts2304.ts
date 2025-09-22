@@ -132,30 +132,81 @@ function isGlobalVariable(name: string): boolean {
 
 /**
  * Analyze usage context to infer the appropriate declaration type
+ * Enhanced with better pattern detection and multi-line context
  */
 function analyzeUsageContext(fileContent: string, name: string, line: number): string {
-    // Get the line where the error occurs
     const lines = fileContent.split('\n');
+    
+    // Get context: current line and surrounding lines
+    const startLine = Math.max(0, line - 3);
+    const endLine = Math.min(lines.length, line + 2);
+    const contextLines = lines.slice(startLine, endLine).join('\n');
     const errorLine = lines[line - 1] || '';
     
-    // Analyze patterns to infer type
-    if (errorLine.includes(`<${name}`)) {
-        return 'react_component';
-    }
-    if (errorLine.includes(`${name}(`)) {
-        return 'function';
-    }
-    if (errorLine.includes(`new ${name}(`)) {
+    // Enhanced pattern detection with priority order
+    
+    // 1. Class instantiation - check for 'new' keyword
+    // Look for: new Name( or new Name<T>( or new Name ()
+    const classPattern = new RegExp(`new\\s+${name}\\s*[<(]`, 'g');
+    if (classPattern.test(contextLines)) {
         return 'class';
     }
-    if (errorLine.includes(`${name}.`)) {
+    
+    // 2. React/JSX component - check for JSX usage
+    // Look for: <Name or <Name> or <Name/> or <Name prop=
+    const jsxPattern = new RegExp(`<${name}(?:\\s|>|\/>)`, 'g');
+    if (jsxPattern.test(contextLines)) {
+        return 'react_component';
+    }
+    
+    // 3. Function call - check for invocation
+    // Look for: Name( or Name.method( but not new Name(
+    const functionPattern = new RegExp(`(?<!new\\s)\\b${name}\\s*\\(`, 'g');
+    if (functionPattern.test(errorLine)) {
+        return 'function';
+    }
+    
+    // 4. Type usage - check for TypeScript type contexts
+    // Look for: : Name or extends Name or implements Name or Name<
+    const typePattern = new RegExp(`(?::|extends|implements)\\s+${name}\\b|\\b${name}\\s*<`, 'g');
+    if (typePattern.test(contextLines)) {
+        return 'type_or_interface';
+    }
+    
+    // 5. Object property/method access
+    // Look for: Name.property or Name.method() or Name?.property
+    const objectPattern = new RegExp(`\\b${name}\\s*\\.\\??\\.`, 'g');
+    if (objectPattern.test(errorLine)) {
         return 'object';
     }
-    if (errorLine.includes(`${name}[`)) {
+    
+    // 6. Array or object indexing
+    // Look for: Name[index] or Name['key']
+    const indexPattern = new RegExp(`\\b${name}\\s*\\[`, 'g');
+    if (indexPattern.test(errorLine)) {
         return 'array_or_object';
     }
-    if (errorLine.match(new RegExp(`\\b${name}\\s*=`))) {
+    
+    // 7. Assignment target - check if being assigned to
+    // Look for: Name = value or let/const/var Name
+    const assignmentPattern = new RegExp(`\\b${name}\\s*=(?!=)`, 'g');
+    const declarationPattern = new RegExp(`\\b(let|const|var)\\s+${name}\\b`, 'g');
+    if (assignmentPattern.test(errorLine) && !declarationPattern.test(errorLine)) {
         return 'variable';
+    }
+    
+    // 8. Enum or constant usage
+    // Look for: Name.CONSTANT or usage in switch cases
+    const enumPattern = new RegExp(`\\b${name}\\.[A-Z_][A-Z0-9_]*\\b`, 'g');
+    if (enumPattern.test(contextLines)) {
+        return 'enum_or_constants';
+    }
+    
+    // 9. Check if used as a value in expressions
+    // Look for usage in conditions, returns, etc.
+    const valuePattern = new RegExp(`(return|if|while|for|switch|case|throw).*\\b${name}\\b`, 'g');
+    if (valuePattern.test(errorLine)) {
+        return 'value';
     }
     
     return 'unknown';
@@ -163,23 +214,126 @@ function analyzeUsageContext(fileContent: string, name: string, line: number): s
 
 /**
  * Generate appropriate declaration based on usage context
+ * Enhanced with better TypeScript declarations and proper AST nodes
  */
 function generateDeclaration(name: string, context: string): string {
     switch (context) {
         case 'react_component':
-            return `const ${name}: React.FC<any> = () => <div>Placeholder ${name}</div>;`;
+            // Proper React component with props interface
+            return `
+interface ${name}Props {
+    // TODO: Define props
+    [key: string]: any;
+}
+
+const ${name}: React.FC<${name}Props> = (props) => {
+    return <div>Placeholder ${name} component</div>;
+};`;
+        
         case 'function':
-            return `const ${name} = (...args: any[]) => { /* TODO: Implement ${name} */ return null; };`;
+            // Function with proper typing and JSDoc
+            return `
+/**
+ * TODO: Implement ${name} function
+ * @param args - Function arguments
+ * @returns Function result
+ */
+function ${name}(...args: any[]): any {
+    // TODO: Implement ${name}
+    console.warn('${name} is not implemented');
+    return null;
+}`;
+        
         case 'class':
-            return `class ${name} { constructor(...args: any[]) { /* TODO: Implement ${name} */ } }`;
+            // Proper class with constructor and common methods
+            return `
+/**
+ * TODO: Implement ${name} class
+ */
+class ${name} {
+    constructor(...args: any[]) {
+        // TODO: Initialize ${name}
+        console.warn('${name} constructor called with:', args);
+    }
+    
+    // TODO: Add methods
+}`;
+        
+        case 'type_or_interface':
+            // TypeScript type or interface
+            return `
+/**
+ * TODO: Define ${name} type
+ */
+type ${name} = {
+    // TODO: Add type properties
+    [key: string]: any;
+};`;
+        
         case 'object':
-            return `const ${name}: Record<string, any> = { /* TODO: Implement ${name} */ };`;
+            // Object with common patterns
+            return `
+/**
+ * TODO: Implement ${name} object
+ */
+const ${name} = {
+    // TODO: Add properties and methods
+    // Example method:
+    someMethod: (...args: any[]) => {
+        console.warn('${name}.someMethod not implemented');
+        return null;
+    }
+} as const;`;
+        
         case 'array_or_object':
-            return `const ${name}: any[] | Record<string, any> = [];`;
+            // Array or indexable object
+            return `
+/**
+ * TODO: Initialize ${name} array/object
+ */
+const ${name}: any[] | Record<string, any> = [];
+// If this should be an object instead, use: const ${name}: Record<string, any> = {};`;
+        
+        case 'enum_or_constants':
+            // Enum-like object with constants
+            return `
+/**
+ * TODO: Define ${name} constants
+ */
+const ${name} = {
+    // TODO: Add constants
+    DEFAULT: 'default',
+    // Add more constants as needed
+} as const;
+
+export type ${name}Type = typeof ${name}[keyof typeof ${name}];`;
+        
         case 'variable':
-            return `let ${name}: any = null; // TODO: Set proper type and value`;
+            // Mutable variable
+            return `
+/**
+ * TODO: Initialize ${name} variable
+ */
+let ${name}: any = null;
+// TODO: Set proper type and initial value`;
+        
+        case 'value':
+            // Constant value
+            return `
+/**
+ * TODO: Define ${name} value
+ */
+const ${name} = null; // TODO: Set actual value`;
+        
         default:
-            return `const ${name}: any = null; // TODO: Implement ${name}`;
+            // Generic fallback with helpful comment
+            return `
+/**
+ * TODO: Implement ${name}
+ * Unable to determine the exact type from usage context.
+ * Please update the type and implementation based on actual requirements.
+ */
+const ${name}: any = null;`;
     }
 }
 
