@@ -4,7 +4,6 @@ import React from 'react';
 import App from './App';
 import Home from './routes/home';
 import Chat from './routes/chat/chat';
-import {PhaseTimelinePreview} from './routes/chat/phase-timeline-preview';
 import Profile from './routes/profile';
 import Settings from './routes/settings/index';
 import AppsPage from './routes/apps';
@@ -24,10 +23,6 @@ const routes = [
 			{
 				path: 'chat/:chatId',
 				Component: Chat,
-			},
-			{
-				path: 'phase-timeline-preview',
-				Component: PhaseTimelinePreview,
 			},
 			{
 				path: 'profile',
