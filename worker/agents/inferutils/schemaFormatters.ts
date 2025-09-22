@@ -61,7 +61,7 @@ export function formatSchemaAsMarkdown<T extends z.ZodRawShape>(schema: z.ZodObj
 // ---
 
 // `;
-    return formatZodSchemaAsMarkdownFields(schema, headingMarker);
+    return formatZodSchemaAsMarkdownFields(schema, headingMarker, undefined, false, 'template');
 }
 
 /**
@@ -82,26 +82,17 @@ export function formatSchemaAsMarkdown<T extends z.ZodRawShape>(schema: z.ZodObj
 
     if (debug) logger.debug("--- Starting Data Formatting to Markdown ---");
     
-    // Create default data structure from schema for any missing required fields
-    const defaults = getDefaultValue(schema);
-    
-    // Merge defaults with provided data (giving preference to provided values)
-    const merged = mergeDefaults(defaults, data, schema);
-    
-    // Try to validate, but continue even if validation fails
-    const validation = schema.safeParse(merged);
+    // Validate (for logging/diagnostics only). We intentionally avoid merging defaults
+    // so that serialization does not introduce placeholder/template scaffolding.
+    const validation = schema.safeParse(data);
     if (!validation.success) {
-        // Log the error but don't throw - we'll use the merged data even with validation issues
         logger.error("Input data failed Zod validation before formatting:", validation.error);
-        logger.error("Merged data:", merged);
-        
-        // Continue with the merged data despite validation failure
-        // This way we still output something useful even if not fully valid
-        return formatZodSchemaAsMarkdownFields(schema, headingMarker, merged, debug);
+        logger.error("Original data:", data);
     }
 
-    // If validation succeeds, use the validated data
-    return formatZodSchemaAsMarkdownFields(schema, headingMarker, validation.data, debug);
+    // Always serialize using the provided data object (no default merging),
+    // and render in strict data mode (no template placeholders).
+    return formatZodSchemaAsMarkdownFields(schema, headingMarker, data, debug, 'data');
 }
 
 /**
@@ -111,7 +102,8 @@ function formatZodSchemaAsMarkdownFields(
     schema: z.ZodObject<any>,
     headingPrefix: string,
     dataObject?: Record<string, any>,
-    debug: boolean = false
+    debug: boolean = false,
+    mode: 'template' | 'data' = dataObject ? 'data' : 'template'
 ): string {
     const shape = schema._def.shape();
     let result = '';
@@ -131,6 +123,7 @@ function formatZodSchemaAsMarkdownFields(
             let checkSchema = fieldSchema;
             while (checkSchema instanceof z.ZodOptional || checkSchema instanceof z.ZodNullable || checkSchema instanceof z.ZodDefault) {
                 if (checkSchema instanceof z.ZodOptional) isOptional = true;
+                if (checkSchema instanceof z.ZodNullable) isOptional = true;
                 // Consider Default as optional for skipping if value is exactly undefined
                 if (checkSchema instanceof z.ZodDefault && value === undefined) isOptional = true;
                 checkSchema = checkSchema._def.innerType;
@@ -141,62 +134,9 @@ function formatZodSchemaAsMarkdownFields(
                 continue; // Skip this field entirely
             }
         }
-        result += formatZodTypeAsMarkdown(key, fieldSchema, headingPrefix, value);
+        result += formatZodTypeAsMarkdown(key, fieldSchema, headingPrefix, value, mode);
     }
     return result;
-}
-
-// Merge default values into input data, ensuring required fields have fallback values
-function mergeDefaults(defaultData: any, inputData: any, schema?: z.ZodTypeAny): any {
-    // No input data case - return defaults
-    if (inputData === undefined || inputData === null) {
-        return defaultData;
-    }
-    
-    // Handle arrays
-    if (Array.isArray(defaultData)) {
-        if (Array.isArray(inputData)) {
-            return inputData.map((item, i) => {
-                // For array elements, use schema's item type if available
-                const itemSchema = schema instanceof z.ZodArray ? schema._def.type : undefined;
-                return i < defaultData.length 
-                    ? mergeDefaults(defaultData[i], item, itemSchema) 
-                    : item; // For extra items beyond default length
-            });
-        }
-        return defaultData;
-    } 
-    
-    // Handle objects
-    else if (defaultData !== null && typeof defaultData === 'object') {
-        const result: Record<string, unknown> = {...(defaultData as Record<string, unknown>)}; // Start with all defaults
-        
-        // If we have input data and it's an object, merge its properties
-        if (inputData && typeof inputData === 'object') {
-            // Add all input properties, potentially overriding defaults
-            for (const key of Object.keys(inputData)) {
-                const inputValue = inputData[key];
-                
-                // If key exists in defaultData, do recursive merge
-                if (key in defaultData) {
-                    // If we have a schema, get the field's schema for deeper merging
-                    const fieldSchema = schema instanceof z.ZodObject 
-                        ? schema.shape[key] as z.ZodTypeAny 
-                        : undefined;
-                    
-                    result[key] = mergeDefaults(defaultData[key], inputValue, fieldSchema);
-                } else {
-                    // If key doesn't exist in defaults, just use the input value
-                    result[key] = inputValue;
-                }
-            }
-        }
-        
-        return result;
-    }
-    
-    // For primitives, prefer input value if available
-    return inputData !== undefined ? inputData : defaultData;
 }
 
 function getMarkdownPlaceholderValue(key: string, field: z.ZodTypeAny, headingPrefix: string): string {
@@ -273,7 +213,7 @@ function formatZodTypeAsMarkdown(
     field: z.ZodTypeAny, 
     headingPrefix = '##',
     value?: unknown,
-
+    mode: 'template' | 'data' = 'template',
 ): string {
     let optionalMarker = '';
     let baseField = field;
@@ -288,31 +228,56 @@ function formatZodTypeAsMarkdown(
         baseField = baseField._def.innerType;
     }
     // Add the marker directly to the heading text if optional
-    if (isOptional) {
-        // *** CHANGE: New optional marker format ***
+    if (isOptional && mode === 'template') {
+        // Show optional marker only in template mode
         optionalMarker = ' (Optional section)';
     }
 
-    // *** CHANGE: Format description string with prefix ***
-    const description = (!value && field.description) ? `\n\n*Description: ${field.description}*` : '';
+    // Determine if the field actually has a value (type-aware)
+    let hasValue: boolean;
+    if (value === undefined || value === null) {
+        hasValue = false;
+    } else if (baseField instanceof z.ZodString) {
+        hasValue = String(value).trim().length > 0;
+    } else if (baseField instanceof z.ZodArray) {
+        hasValue = Array.isArray(value) && value.length > 0;
+    } else {
+        // Numbers, booleans, enums, objects, etc. are considered present if not null/undefined
+        hasValue = true;
+    }
+
+    // Only include schema field descriptions when generating templates
+    const description = (mode === 'template' && !hasValue && field.description) ? `\n\n*Description: ${field.description}*` : '';
 
     // Generate heading
     const heading = `${headingPrefix} ${key}${optionalMarker}`; // Optional marker added here
 
-    if (!value) {
-        // If no value is provided, use the default value from the schema
-        // logger.debug(`[Format Data Path: ...${key}] No value provided. Using default value from schema.`);
-        value = getMarkdownPlaceholderValue(key, field, headingPrefix);
-        return `${heading}${description}\n\n${value}\n`
+    if (!hasValue) {
+        // Template mode -> emit helpful placeholders. Data mode -> avoid scaffolding
+        if (mode === 'template') {
+            const placeholder = getMarkdownPlaceholderValue(key, field, headingPrefix);
+            return `${heading}${description}\n\n${placeholder}\n`;
+        }
+        // DATA MODE
+        // - For arrays/objects with no content, skip the entire section
+        if (baseField instanceof z.ZodArray || baseField instanceof z.ZodObject) {
+            return '';
+        }
+        // - For primitives, emit an empty code fence to represent "no value" without placeholders
+        return `${heading}\n\n\`\`\`\n\n\`\`\`\n\n`;
     } else if (baseField instanceof z.ZodObject) {
         if (typeof value === 'object') {
             // logger.debug(`[Format Data Path: ...${key}] Formatting object with ${Object.keys(value).length} keys.`);
             // Ensure value is not null before recursing
-            return `${heading}${description}\n\n${formatZodSchemaAsMarkdownFields(baseField, headingPrefix + '#', value)}\n`;
+            return `${heading}${description}\n\n${formatZodSchemaAsMarkdownFields(baseField, headingPrefix + '#', value as Record<string, any>, false, mode)}\n`;
         } else {
             // Handle cases where data is missing or not an object for a required object schema
-            logger.warn(`[Format Data Path: ...${key}] Expected object but got ${typeof value}. Rendering empty section.`);
-            return `${heading}${description}\n\n\`\`\`\n[Missing or invalid object data]\n\`\`\`\n\n`;
+            if (mode === 'template') {
+                logger.warn(`[Format Data Path: ...${key}] Expected object but got ${typeof value}. Rendering empty section.`);
+                return `${heading}${description}\n\n\`\`\`\n[Missing or invalid object data]\n\`\`\`\n\n`;
+            }
+            // Data mode: skip invalid object sections
+            return '';
         }
     }
     // --- Array Formatting ---
@@ -333,10 +298,12 @@ function formatZodTypeAsMarkdown(
                 if (itemSchema instanceof z.ZodObject) {
                     if (item && typeof item === 'object') {
                         // console.debug(`[Format Data Path: ...${key}[${index}]] Formatting object item with ${Object.keys(item).length} keys.`);
-                        itemsMarkdown += `${itemHeading}\n\n${formatZodSchemaAsMarkdownFields(itemSchema, itemHeadingPrefix + '#', item )}\n`;
+                        itemsMarkdown += `${itemHeading}\n\n${formatZodSchemaAsMarkdownFields(itemSchema, itemHeadingPrefix + '#', item as Record<string, any>, false, mode)}\n`;
                     } else {
-                        logger.warn(`[Format Data Path: ...${key}[${index}]] Expected object item but got ${typeof item}. Rendering empty item.`);
-                        itemsMarkdown += `${itemHeading}\n\n\`\`\`\n[Missing or invalid object item data]\n\`\`\`\n\n`;
+                        if (mode === 'template') {
+                            logger.warn(`[Format Data Path: ...${key}[${index}]] Expected object item but got ${typeof item}. Rendering empty item.`);
+                            itemsMarkdown += `${itemHeading}\n\n\`\`\`\n[Missing or invalid object item data]\n\`\`\`\n\n`;
+                        }
                     }
                 } else {
                     // Handle arrays of primitives (e.g., strings, numbers)
@@ -351,16 +318,17 @@ function formatZodTypeAsMarkdown(
                 }
             });
         } else {
-            // Render placeholder for empty array? Or omit items section? Let's omit.
-            itemsMarkdown = '\n\n[No items provided for this list]\n\n'; // Placeholder if array is empty
+            // Template mode may include a helpful note; Data mode omits empty arrays entirely
+            if (mode === 'template') {
+                itemsMarkdown = '\n\n[No items provided for this list]\n\n';
+            } else {
+                return '';
+            }
         }
         return `${heading}${description}\n${itemsMarkdown}\n`; // Add extra newline after array section
     } else {
         // Handle null specifically for nullable fields
-        const valueStr = (value === null && field instanceof z.ZodNullable)
-            ? '[null]' // Explicitly show null for nullable fields
-            : String(value ?? ''); // Default to empty string for undefined or other types
-
+        const valueStr = String(value ?? '');
         return `${heading}${description}\n\n\`\`\`\n${valueStr}\n\`\`\`\n\n`;
     }
 }
