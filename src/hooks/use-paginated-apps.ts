@@ -175,47 +175,60 @@ export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginated
     }));
   }, []);
 
-  const resetPaginationAndRefetch = useCallback(async () => {
-    hasInitialized.current = true;
-    await fetchApps(false, 1);
-  }, [fetchApps]);
-
   const setSearchQuery = useCallback((query: string) => {
     setFilterState(prev => ({ ...prev, searchQuery: query }));
   }, []);
 
   const handleSearchSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    refetch();
-  }, [refetch]);
+    // Force immediate search by setting debounced value and triggering fetch
+    setDebouncedSearchQuery(filterState.searchQuery);
+  }, [filterState.searchQuery]);
 
-  const handleSortChange = useCallback(async (newSort: string) => {
+  const handleSortChange = useCallback((newSort: string) => {
     const sort = newSort as AppSortOption;
     setFilterState(prev => ({ ...prev, sortBy: sort }));
-    await resetPaginationAndRefetch();
-  }, [resetPaginationAndRefetch]);
+  }, []);
 
-  const handlePeriodChange = useCallback(async (newPeriod: TimePeriod) => {
+  const handlePeriodChange = useCallback((newPeriod: TimePeriod) => {
     setFilterState(prev => ({ ...prev, period: newPeriod }));
-    await resetPaginationAndRefetch();
-  }, [resetPaginationAndRefetch]);
+  }, []);
 
-  const handleFrameworkChange = useCallback(async (framework: string) => {
+  const handleFrameworkChange = useCallback((framework: string) => {
     setFilterState(prev => ({ ...prev, filterFramework: framework }));
-    await resetPaginationAndRefetch();
-  }, [resetPaginationAndRefetch]);
+  }, []);
 
-  const handleVisibilityChange = useCallback(async (visibility: string) => {
+  const handleVisibilityChange = useCallback((visibility: string) => {
     setFilterState(prev => ({ ...prev, filterVisibility: visibility }));
-    await resetPaginationAndRefetch();
-  }, [resetPaginationAndRefetch]);
+  }, []);
 
+  // Initial fetch on mount
   useEffect(() => {
     if (options.autoFetch !== false && !hasInitialized.current) {
       hasInitialized.current = true;
       fetchApps(false, 1);
     }
   }, [fetchApps, options.autoFetch]);
+
+  // Trigger refetch when filters change (sort, period, framework, visibility)
+  useEffect(() => {
+    if (hasInitialized.current) {
+      fetchApps(false, 1);
+    }
+  }, [
+    filterState.sortBy,
+    filterState.period,
+    filterState.filterFramework,
+    filterState.filterVisibility,
+    fetchApps
+  ]);
+
+  // Trigger refetch when debounced search query changes
+  useEffect(() => {
+    if (hasInitialized.current) {
+      fetchApps(false, 1);
+    }
+  }, [debouncedSearchQuery, fetchApps]);
 
   useEffect(() => {
     const unsubscribe = appEvents.on('app-deleted', (event) => {
