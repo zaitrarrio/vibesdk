@@ -1,7 +1,7 @@
 import { type ChatCompletionMessageToolCall } from 'openai/resources'
 
 // Define allowed message roles for type safety
-export type MessageRole = 'system' | 'user' | 'assistant' | 'function';
+export type MessageRole = 'system' | 'user' | 'assistant' | 'function' | 'tool';
 
 // Define content types for multi-modal support
 export type TextContent = {

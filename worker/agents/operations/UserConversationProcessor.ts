@@ -60,7 +60,7 @@ const SYSTEM_PROMPT = `You are an AI assistant for Cloudflare's development plat
    - Then call the edit_app tool with a clear, actionable description
    - The modification request should be specific but NOT include code-level implementation details
    - After calling the tool, let them know the changes will be implemented in the next development phase
-   - edit_app would simply relay the request to a super intelligent AI that would generate the code changes. This is a cheap operation and dont refrain from using it.
+   - edit_app would simply relay the request to a super intelligent AI that would generate the code changes. This is a cheap operation. Please use it often.
 
 3. **For information requests**: Use the appropriate tools (web_search, etc) when they would be helpful.
 
@@ -75,6 +75,10 @@ const SYSTEM_PROMPT = `You are an AI assistant for Cloudflare's development plat
 - DO NOT provide specific technical instructions or code snippets
 - DO translate vague user requests into clear, actionable requirements when using edit_app
 - DO be helpful in understanding what the user wants to achieve
+- Always remember to make sure and use \`edit_app\` tool to queue any modification requests! Not doing so will NOT queue up the changes.
+- You would know if you have correctly queued the request via the \`edit_app\` tool if you get the response of kind \`Modification request queued successfully...\`. If you don't get this response, then you have not queued the request correctly.
+
+You can also execute multiple tools in a sequence, for example, to search the web for a image, and then sending the image url to the edit_app tool to queue up the changes.
 
 ## Original Project Context:
 {{query}}
@@ -100,7 +104,7 @@ export function buildEditAppTool(stateMutator: (modificationRequest: string) => 
                 properties: {
                     modificationRequest: {
                         type: 'string',
-                        description: 'The changes needed to be made to the app. Please don\'t supply any code level or implementation details.'
+                        description: 'The changes needed to be made to the app. Please don\'t supply any code level or implementation details. Provide detailed requirements and description of the changes you want to make.'
                     }
                 },
                 required: ['modificationRequest']
@@ -109,7 +113,7 @@ export function buildEditAppTool(stateMutator: (modificationRequest: string) => 
         implementation: async (args: EditAppArgs) => {
             console.log("Queueing app edit request", args);
             stateMutator(args.modificationRequest);
-            return {};
+            return {content: "Modification request queued successfully, will be implemented in the next phase of development."};
         }
     };
 }
@@ -136,13 +140,13 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             const attachLifecycle = <TArgs, TResult>(td: ToolDefinition<TArgs, TResult>): ToolDefinition<TArgs, TResult> => ({
                 ...td,
                 onStart: (args: TArgs) => inputs.conversationResponseCallback(
-                    `🛠️ Executing tool ${td.function.name}...`,
+                    '',
                     aiConversationId,
                     false,
                     { name: td.function.name, status: 'start', args: args as Record<string, unknown> }
                 ),
                 onComplete: (args: TArgs, _result: TResult) => inputs.conversationResponseCallback(
-                    `✅ Tool ${td.function.name} completed`,
+                    '',
                     aiConversationId,
                     false,
                     { name: td.function.name, status: 'success', args: args as Record<string, unknown> }

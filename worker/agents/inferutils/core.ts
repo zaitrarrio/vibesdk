@@ -487,11 +487,13 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
             // Generate a new response with the tool calls executed
             const newMessages = [
                 ...messages, 
-                { role: "assistant" as MessageRole, content: null, tool_calls: toolCalls },
+                { role: "assistant" as MessageRole, content, tool_calls: toolCalls },
                 ...executedToolCalls.map((result, _) => ({
-                    role: "assistant" as MessageRole,
+                    role: "tool" as MessageRole,
                     content: JSON.stringify(result.result),
-                }))
+                    name: result.name,
+                    tool_call_id: result.id,
+                })),
             ];
             
             if (schema && schemaName) {

@@ -768,7 +768,11 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         });
         
         const result = await this.operations.generateNextPhase.execute(
-            {issues, userSuggestions},
+            {
+                issues,
+                userSuggestions,
+                isUserSuggestedPhase: userSuggestions && userSuggestions.length > 0 && this.state.mvpGenerated  // If mvpGenerated is true, then it is a purely user suggested phase
+            },
             {
                 env: this.env,
                 agentId: this.state.sessionId,
@@ -1492,19 +1496,25 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             this.broadcast(WebSocketMessageResponses.DETERMINISTIC_CODE_FIX_COMPLETED, {
                 message: `Fixed ${typeCheckIssues.length} TypeScript issues using deterministic code fixer`,
-                issues: typeCheckIssues
+                issues: typeCheckIssues,
+                fixResult
             });
 
             if (fixResult) {
-                // If there are unfixable issues but of type TS2307, Extract the module that wasnt found and maybe try installing it
+                // If there are unfixable issues but of type TS2307, extract external module names and install them
                 if (fixResult.unfixableIssues.length > 0) {
                     const modulesNotFound = fixResult.unfixableIssues.filter(issue => issue.issueCode === 'TS2307');
-                    // Reason would be of type `External package \"xyz\" should be handled by package manager`, extract via regex
-                    const moduleNames = modulesNotFound.map(issue => issue.reason.match(/External package "(.+)"/)?.[1]);
-                    
-                    // Execute command
-                    await this.executeCommands(moduleNames.filter(moduleName => moduleName !== undefined).map(moduleName => `bun install ${moduleName}`));
-                    this.logger().info(`Deterministic code fixer installed missing modules: ${moduleNames.join(', ')}`);
+                    // Reason is of the form: External package "xyz" should be handled by package manager
+                    const moduleNamesRaw = modulesNotFound.map(issue => issue.reason.match(/External package ["'](.+?)["']/)?.[1]);
+                    const moduleNames = moduleNamesRaw.filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
+
+                    if (moduleNames.length > 0) {
+                        const installCommands = moduleNames.map(moduleName => `bun install ${moduleName}`);
+                        await this.executeCommands(installCommands);
+                        this.logger().info(`Deterministic code fixer installed missing modules: ${moduleNames.join(', ')}`);
+                    } else {
+                        this.logger().info(`Deterministic code fixer detected no external modules to install from unfixable TS2307 issues`);
+                    }
                 }
                 if (fixResult.modifiedFiles.length > 0) {
                         this.logger().info("Applying deterministic fixes to files, Fixes: ", JSON.stringify(fixResult, null, 2));
@@ -2269,11 +2279,17 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 { 
                     userMessage, 
                     pastMessages: this.state.conversationMessages,
-                    conversationResponseCallback: (message: string, conversationId: string, isStreaming: boolean) => {
+                    conversationResponseCallback: (
+                        message: string,
+                        conversationId: string,
+                        isStreaming: boolean,
+                        tool?: { name: string; status: 'start' | 'success' | 'error'; args?: Record<string, unknown> }
+                    ) => {
                         this.broadcast(WebSocketMessageResponses.CONVERSATION_RESPONSE, {
                             message,
                             conversationId,
                             isStreaming,
+                            tool,
                         });
                     }
                 }, 
