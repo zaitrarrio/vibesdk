@@ -23,7 +23,7 @@ export class StatsController extends BaseController {
 
             return StatsController.createSuccessResponse(responseData);
         } catch (error) {
-            StatsController.logger.error('Error fetching user stats:', error);
+            this.logger.error('Error fetching user stats:', error);
             return StatsController.createErrorResponse<UserStatsData>('Failed to fetch user statistics', 500);
         }
     }
@@ -42,7 +42,7 @@ export class StatsController extends BaseController {
 
             return StatsController.createSuccessResponse(responseData);
         } catch (error) {
-            StatsController.logger.error('Error fetching user activity:', error);
+            this.logger.error('Error fetching user activity:', error);
             return StatsController.createErrorResponse<UserActivityData>('Failed to fetch user activity', 500);
         }
     }

@@ -93,7 +93,7 @@ export class ScreenshotsController extends BaseController {
 				headers,
 			}) as unknown as ControllerResponse<ApiResponse<never>>;
 		        } catch (error) {
-            ScreenshotsController.logger.error('Error serving screenshot', { error });
+            this.logger.error('Error serving screenshot', { error });
             return ScreenshotsController.createErrorResponse('Internal server error', 500);
         }
     }

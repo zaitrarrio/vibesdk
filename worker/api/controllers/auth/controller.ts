@@ -160,7 +160,7 @@ export class AuthController extends BaseController {
 					const sessionService = new SessionService(env);
 					await sessionService.revokeSessionId(sessionId);
 				} catch (error) {
-					AuthController.logger.debug(
+					this.logger.debug(
 						'Failed to properly logout session',
 						error,
 					);
@@ -179,7 +179,7 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            AuthController.logger.error('Logout failed', error);
+            this.logger.error('Logout failed', error);
             
             const response = AuthController.createSuccessResponse({ 
                 success: true, 
@@ -299,7 +299,7 @@ export class AuthController extends BaseController {
             
             return Response.redirect(authUrl, 302);
         } catch (error) {
-            AuthController.logger.error('OAuth initiation failed', error);
+            this.logger.error('OAuth initiation failed', error);
             
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
@@ -322,7 +322,7 @@ export class AuthController extends BaseController {
             const error = routeContext.queryParams.get('error');
             
             if (error) {
-                AuthController.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
+                this.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
                 const baseUrl = new URL(request.url).origin;
                 return Response.redirect(`${baseUrl}/?error=oauth_failed`, 302);
             }
@@ -359,7 +359,7 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            AuthController.logger.error('OAuth callback failed', error);
+            this.logger.error('OAuth callback failed', error);
             const baseUrl = new URL(request.url).origin;
             return Response.redirect(`${baseUrl}/?error=auth_failed`, 302);
         }
@@ -509,7 +509,7 @@ export class AuthController extends BaseController {
                 keyPreview
             });
 
-            AuthController.logger.info('API key created', { userId: user.id, name: sanitizedName });
+            this.logger.info('API key created', { userId: user.id, name: sanitizedName });
 
             return AuthController.createSuccessResponse({
                 key, // Return the actual key only once
@@ -538,7 +538,7 @@ export class AuthController extends BaseController {
             const apiKeyService = new ApiKeyService(env);
             await apiKeyService.revokeApiKey(keyId, user.id);
 
-            AuthController.logger.info('API key revoked', { userId: user.id, keyId });
+            this.logger.info('API key revoked', { userId: user.id, keyId });
 
             return AuthController.createSuccessResponse({
                 message: 'API key revoked successfully'

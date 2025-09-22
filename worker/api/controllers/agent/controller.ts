@@ -31,7 +31,7 @@ export class CodingAgentController extends BaseController {
      */
     static async startCodeGeneration(request: Request, env: Env, _: ExecutionContext, context: RouteContext): Promise<Response> {
         try {
-            CodingAgentController.logger.info('Starting code generation process');
+            this.logger.info('Starting code generation process');
 
             const url = new URL(request.url);
             const hostname = url.hostname === 'localhost' ? `localhost:${url.port}`: url.hostname;
@@ -66,7 +66,7 @@ export class CodingAgentController extends BaseController {
                 if (error instanceof Error) {
                     return CodingAgentController.createErrorResponse(error, 429);
                 } else {
-                    CodingAgentController.logger.error('Unknown error in enforceAppCreationRateLimit', error);
+                    this.logger.error('Unknown error in enforceAppCreationRateLimit', error);
                     return CodingAgentController.createErrorResponse(JSON.stringify(error), 429);
                 }
             }
@@ -77,7 +77,7 @@ export class CodingAgentController extends BaseController {
             // Fetch all user model configs, api keys and agent instance at once
             const [userConfigsRecord, agentInstance] = await Promise.all([
                 modelConfigService.getUserModelConfigs(user.id),
-                getAgentStub(env, agentId, false, CodingAgentController.logger)
+                getAgentStub(env, agentId, false, this.logger)
             ]);
                                 
             // Convert Record to Map and extract only ModelConfig properties
@@ -102,11 +102,11 @@ export class CodingAgentController extends BaseController {
                 enableRealtimeCodeFix: true, // For now disabled from the model configs itself
             }
                                 
-            CodingAgentController.logger.info(`Initialized inference context for user ${user.id}`, {
+            this.logger.info(`Initialized inference context for user ${user.id}`, {
                 modelConfigsCount: Object.keys(userModelConfigs).length,
             });
 
-            const templateInfo = await getTemplateForQuery(env, inferenceContext, query, hostname, CodingAgentController.logger);
+            const templateInfo = await getTemplateForQuery(env, inferenceContext, query, hostname, this.logger);
 
             const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
             const httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
@@ -136,10 +136,10 @@ export class CodingAgentController extends BaseController {
             agentPromise.then(async (_state: CodeGenState) => {
                 writer.write("terminate");
                 writer.close();
-                CodingAgentController.logger.info(`Agent ${agentId} terminated successfully`);
+                this.logger.info(`Agent ${agentId} terminated successfully`);
             });
 
-            CodingAgentController.logger.info(`Agent ${agentId} init launched successfully`);
+            this.logger.info(`Agent ${agentId} init launched successfully`);
             
             return new Response(readable, {
                 status: 200,
@@ -154,7 +154,7 @@ export class CodingAgentController extends BaseController {
                 }
             });
         } catch (error) {
-            CodingAgentController.logger.error('Error starting code generation', error);
+            this.logger.error('Error starting code generation', error);
             return CodingAgentController.handleError(error, 'start code generation');
         }
     }
@@ -191,14 +191,14 @@ export class CodingAgentController extends BaseController {
                 return CodingAgentController.createErrorResponse('Missing user', 401);
             }
 
-            CodingAgentController.logger.info(`WebSocket connection request for chat: ${chatId}`);
+            this.logger.info(`WebSocket connection request for chat: ${chatId}`);
             
             // Log request details for debugging
             const headers: Record<string, string> = {};
             request.headers.forEach((value, key) => {
                 headers[key] = value;
             });
-            CodingAgentController.logger.info('WebSocket request details', {
+            this.logger.info('WebSocket request details', {
                 headers,
                 url: request.url,
                 chatId
@@ -206,14 +206,14 @@ export class CodingAgentController extends BaseController {
 
             try {
                 // Get the agent instance to handle the WebSocket connection
-                const agentInstance = await getAgentStub(env, chatId, true, CodingAgentController.logger);
+                const agentInstance = await getAgentStub(env, chatId, true, this.logger);
                 
-                CodingAgentController.logger.info(`Successfully got agent instance for chat: ${chatId}`);
+                this.logger.info(`Successfully got agent instance for chat: ${chatId}`);
 
                 // Let the agent handle the WebSocket connection directly
                 return agentInstance.fetch(request);
             } catch (error) {
-                CodingAgentController.logger.error(`Failed to get agent instance with ID ${chatId}:`, error);
+                this.logger.error(`Failed to get agent instance with ID ${chatId}:`, error);
                 // Return an appropriate WebSocket error response
                 // We need to emulate a WebSocket response even for errors
                 const { 0: client, 1: server } = new WebSocketPair();
@@ -232,7 +232,7 @@ export class CodingAgentController extends BaseController {
                 });
             }
         } catch (error) {
-            CodingAgentController.logger.error('Error handling WebSocket connection', error);
+            this.logger.error('Error handling WebSocket connection', error);
             return CodingAgentController.handleError(error, 'handle WebSocket connection');
         }
     }
@@ -253,15 +253,15 @@ export class CodingAgentController extends BaseController {
                 return CodingAgentController.createErrorResponse<AgentConnectionData>('Missing agent ID parameter', 400);
             }
 
-            CodingAgentController.logger.info(`Connecting to existing agent: ${agentId}`);
+            this.logger.info(`Connecting to existing agent: ${agentId}`);
 
             try {
                 // Verify the agent instance exists
-                const agentInstance = await getAgentStub(env, agentId, true, CodingAgentController.logger);
+                const agentInstance = await getAgentStub(env, agentId, true, this.logger);
                 if (!agentInstance || !(await agentInstance.isInitialized())) {
                     return CodingAgentController.createErrorResponse<AgentConnectionData>('Agent instance not found or not initialized', 404);
                 }
-                CodingAgentController.logger.info(`Successfully connected to existing agent: ${agentId}`);
+                this.logger.info(`Successfully connected to existing agent: ${agentId}`);
 
                 // Construct WebSocket URL
                 const url = new URL(request.url);
@@ -274,11 +274,11 @@ export class CodingAgentController extends BaseController {
 
                 return CodingAgentController.createSuccessResponse(responseData);
             } catch (error) {
-                CodingAgentController.logger.error(`Failed to connect to agent ${agentId}:`, error);
+                this.logger.error(`Failed to connect to agent ${agentId}:`, error);
                 return CodingAgentController.createErrorResponse<AgentConnectionData>(`Agent instance not found or unavailable: ${error instanceof Error ? error.message : String(error)}`, 404);
             }
         } catch (error) {
-            CodingAgentController.logger.error('Error connecting to existing agent', error);
+            this.logger.error('Error connecting to existing agent', error);
             return CodingAgentController.handleError(error, 'connect to existing agent') as ControllerResponse<ApiResponse<AgentConnectionData>>;
         }
     }
@@ -295,29 +295,29 @@ export class CodingAgentController extends BaseController {
                 return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Missing agent ID parameter', 400);
             }
 
-            CodingAgentController.logger.info(`Deploying preview for agent: ${agentId}`);
+            this.logger.info(`Deploying preview for agent: ${agentId}`);
 
             try {
                 // Get the agent instance
-                const agentInstance = await getAgentStub(env, agentId, true, CodingAgentController.logger);
+                const agentInstance = await getAgentStub(env, agentId, true, this.logger);
                 
                 // Deploy the preview
                 const preview = await agentInstance.deployToSandbox();
                 if (!preview) {
                     return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Failed to deploy preview', 500);
                 }
-                CodingAgentController.logger.info('Preview deployed successfully', {
+                this.logger.info('Preview deployed successfully', {
                     agentId,
                     previewUrl: preview.previewURL
                 });
 
                 return CodingAgentController.createSuccessResponse(preview);
             } catch (error) {
-                CodingAgentController.logger.error('Failed to deploy preview', { agentId, error });
+                this.logger.error('Failed to deploy preview', { agentId, error });
                 return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Failed to deploy preview', 500);
             }
         } catch (error) {
-            CodingAgentController.logger.error('Error deploying preview', error);
+            this.logger.error('Error deploying preview', error);
             const appError = CodingAgentController.handleError(error, 'deploy preview') as ControllerResponse<ApiResponse<AgentPreviewResponse>>;
             return appError;
         }

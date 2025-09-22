@@ -33,7 +33,7 @@ export class AppController extends BaseController {
 
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error fetching user apps:', error);
+            this.logger.error('Error fetching user apps:', error);
             return AppController.createErrorResponse<AppsListData>('Failed to fetch apps', 500);
         }
     }
@@ -52,7 +52,7 @@ export class AppController extends BaseController {
 
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error fetching recent apps:', error);
+            this.logger.error('Error fetching recent apps:', error);
             return AppController.createErrorResponse<AppsListData>('Failed to fetch recent apps', 500);
         }
     }
@@ -71,7 +71,7 @@ export class AppController extends BaseController {
 
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error fetching favorite apps:', error);
+            this.logger.error('Error fetching favorite apps:', error);
             return AppController.createErrorResponse<AppsListData>('Failed to fetch favorite apps', 500);
         }
     }
@@ -100,7 +100,7 @@ export class AppController extends BaseController {
                 
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error toggling favorite:', error);
+            this.logger.error('Error toggling favorite:', error);
             return AppController.createErrorResponse<FavoriteToggleData>('Failed to toggle favorite', 500);
         }
     }
@@ -248,7 +248,7 @@ export class AppController extends BaseController {
             const responseData: SingleAppData = { app };
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error fetching app:', error);
+            this.logger.error('Error fetching app:', error);
             return AppController.createErrorResponse<SingleAppData>('Failed to fetch app', 500);
         }
     }
@@ -295,7 +295,7 @@ export class AppController extends BaseController {
             };
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error updating app visibility:', error);
+            this.logger.error('Error updating app visibility:', error);
             return AppController.createErrorResponse<UpdateAppVisibilityData>('Failed to update app visibility', 500);
         }
     }
@@ -325,7 +325,7 @@ export class AppController extends BaseController {
             };
             return AppController.createSuccessResponse(responseData);
         } catch (error) {
-            AppController.logger.error('Error deleting app:', error);
+            this.logger.error('Error deleting app:', error);
             return AppController.createErrorResponse<AppDeleteData>('Failed to delete app', 500);
         }
     }

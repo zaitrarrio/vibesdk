@@ -72,7 +72,7 @@ export class ModelConfigController extends BaseController {
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            ModelConfigController.logger.error('Error getting model configurations:', error);
+            this.logger.error('Error getting model configurations:', error);
             return ModelConfigController.createErrorResponse<ModelConfigsData>('Failed to get model configurations', 500);
         }
     }
@@ -104,7 +104,7 @@ export class ModelConfigController extends BaseController {
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            ModelConfigController.logger.error('Error getting model configuration:', error);
+            this.logger.error('Error getting model configuration:', error);
             return ModelConfigController.createErrorResponse<ModelConfigData>('Failed to get model configuration', 500);
         }
     }
@@ -206,7 +206,7 @@ export class ModelConfigController extends BaseController {
             if (error instanceof z.ZodError) {
                 return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Validation failed: ' + JSON.stringify(error.errors), 400);
             }
-            ModelConfigController.logger.error('Error updating model configuration:', error);
+            this.logger.error('Error updating model configuration:', error);
             return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Failed to update model configuration', 500);
         }
     }
@@ -239,7 +239,7 @@ export class ModelConfigController extends BaseController {
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            ModelConfigController.logger.error('Error deleting model configuration:', error);
+            this.logger.error('Error deleting model configuration:', error);
             return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Failed to delete model configuration', 500);
         }
     }
@@ -308,7 +308,7 @@ export class ModelConfigController extends BaseController {
             if (error instanceof z.ZodError) {
                 return ModelConfigController.createErrorResponse<ModelConfigTestData>('Validation failed: ' + JSON.stringify(error.errors), 400);
             }
-            ModelConfigController.logger.error('Error testing model configuration:', error);
+            this.logger.error('Error testing model configuration:', error);
             return ModelConfigController.createErrorResponse<ModelConfigTestData>('Failed to test model configuration', 500);
         }
     }
@@ -331,7 +331,7 @@ export class ModelConfigController extends BaseController {
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            ModelConfigController.logger.error('Error resetting all model configurations:', error);
+            this.logger.error('Error resetting all model configurations:', error);
             return ModelConfigController.createErrorResponse<ModelConfigResetData>('Failed to reset model configurations', 500);
         }
     }
@@ -352,7 +352,7 @@ export class ModelConfigController extends BaseController {
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            ModelConfigController.logger.error('Error getting default configurations:', error);
+            this.logger.error('Error getting default configurations:', error);
             return ModelConfigController.createErrorResponse<ModelConfigDefaultsData>('Failed to get default configurations', 500);
         }
     }
@@ -382,7 +382,7 @@ export class ModelConfigController extends BaseController {
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            ModelConfigController.logger.error('Error getting BYOK providers:', error);
+            this.logger.error('Error getting BYOK providers:', error);
             return ModelConfigController.createErrorResponse<ByokProvidersData>('Failed to get BYOK providers', 500);
         }
     }

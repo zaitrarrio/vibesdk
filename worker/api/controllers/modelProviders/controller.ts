@@ -61,7 +61,7 @@ export class ModelProvidersController extends BaseController {
                 providers: providers.filter(p => p.isActive)
             });
         } catch (error) {
-            ModelProvidersController.logger.error('Error getting providers:', error);
+            this.logger.error('Error getting providers:', error);
             return ModelProvidersController.createErrorResponse<ModelProvidersListData>('Failed to get providers', 500);
         }
     }
@@ -91,7 +91,7 @@ export class ModelProvidersController extends BaseController {
                 provider
             });
         } catch (error) {
-            ModelProvidersController.logger.error('Error getting provider:', error);
+            this.logger.error('Error getting provider:', error);
             return ModelProvidersController.createErrorResponse<ModelProviderData>('Failed to get provider', 500);
         }
     }
@@ -218,7 +218,7 @@ export class ModelProvidersController extends BaseController {
                 provider: updatedProvider
             });
         } catch (error) {
-            ModelProvidersController.logger.error('Error updating provider:', error);
+            this.logger.error('Error updating provider:', error);
             return ModelProvidersController.createErrorResponse<ModelProviderUpdateData>('Failed to update provider', 500);
         }
     }
@@ -257,7 +257,7 @@ export class ModelProvidersController extends BaseController {
                 providerId
             });
         } catch (error) {
-            ModelProvidersController.logger.error('Error deleting provider:', error);
+            this.logger.error('Error deleting provider:', error);
             return ModelProvidersController.createErrorResponse<ModelProviderDeleteData>('Failed to delete provider', 500);
         }
     }
@@ -341,7 +341,7 @@ export class ModelProvidersController extends BaseController {
                 );
             }
         } catch (error) {
-            ModelProvidersController.logger.error('Error testing provider:', error);
+            this.logger.error('Error testing provider:', error);
             return ModelProvidersController.createErrorResponse<ModelProviderTestData>('Failed to test provider', 500);
         }
     }

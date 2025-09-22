@@ -31,7 +31,7 @@ export class SecretsController extends BaseController {
             const responseData: SecretsData = { secrets };
             return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            SecretsController.logger.error('Error getting all user secrets:', error);
+            this.logger.error('Error getting all user secrets:', error);
             return SecretsController.createErrorResponse<SecretsData>('Failed to get all user secrets', 500);
         }
     }
@@ -118,7 +118,7 @@ export class SecretsController extends BaseController {
 
             return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            SecretsController.logger.error('Error storing secret:', error);
+            this.logger.error('Error storing secret:', error);
             return SecretsController.createErrorResponse<SecretStoreData>('Failed to store secret', 500);
         }
     }
@@ -146,7 +146,7 @@ export class SecretsController extends BaseController {
 
             return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            SecretsController.logger.error('Error deleting secret:', error);
+            this.logger.error('Error deleting secret:', error);
             return SecretsController.createErrorResponse<SecretDeleteData>('Failed to delete secret', 500);
         }
     }
@@ -175,7 +175,7 @@ export class SecretsController extends BaseController {
 
             return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            SecretsController.logger.error('Error toggling secret status:', error);
+            this.logger.error('Error toggling secret status:', error);
             return SecretsController.createErrorResponse<SecretStoreData>('Failed to toggle secret status', 500);
         }
     }
@@ -198,7 +198,7 @@ export class SecretsController extends BaseController {
             const responseData: SecretTemplatesData = { templates };
             return SecretsController.createSuccessResponse(responseData);
         } catch (error) {
-            SecretsController.logger.error('Error getting secret templates:', error);
+            this.logger.error('Error getting secret templates:', error);
             return SecretsController.createErrorResponse<SecretTemplatesData>('Failed to get secret templates', 500);
         }
     }
