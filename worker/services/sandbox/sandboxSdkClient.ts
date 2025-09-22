@@ -26,7 +26,7 @@ import {
     GetLogsResponse,
     ListInstancesResponse,
     SaveInstanceResponse,
-    ResumeInstanceResponse,
+    // ResumeInstanceResponse,
 } from './sandboxTypes';
 
 import { createObjectLogger } from '../../logger';
@@ -2411,128 +2411,6 @@ export class SandboxSdkClient extends BaseSandboxService {
             return {
                 success: false,
                 error: `Failed to save instance: ${error instanceof Error ? error.message : 'Unknown error'}`
-            };
-        }
-    }
-
-    async resumeInstance(instanceId: string, forceRestart?: boolean): Promise<ResumeInstanceResponse> {
-        try {
-            this.logger.info(`Resuming instance ${instanceId}`, { forceRestart });
-            
-            const sandbox = this.getSandbox();
-            let needsDownload = false;
-            let needsStart = false;
-
-            // Check if instance exists locally  
-            let metadata = await this.getInstanceMetadata(instanceId);
-            
-            if (!metadata) {
-                this.logger.info('Instance not found locally, downloading from R2', { instanceId });
-                needsDownload = true;
-                needsStart = true;
-            } else {
-                // Instance exists, check process status
-                if (!metadata.processId || forceRestart) {
-                    this.logger.info('Instance requires restart', { instanceId, reason: forceRestart ? 'forced' : 'no process' });
-                    needsStart = true;
-                } else {
-                    // Check if process is still running
-                    try {
-                        const process = await sandbox.getProcess(metadata.processId);
-                        if (!process || process.status !== 'running') {
-                            this.logger.info('Instance process not running', { instanceId, processId: metadata.processId });
-                            needsStart = true;
-                        } else {
-                            this.logger.info('Instance already running', { instanceId, processId: metadata.processId });
-                            return {
-                                success: true,
-                                message: `Instance ${instanceId} is already running`,
-                                resumed: false,
-                                previewURL: metadata.previewURL,
-                                processId: metadata.processId
-                            };
-                        }
-                    } catch (error) {
-                        this.logger.warn(`Failed to check process ${metadata.processId}, will restart`, error);
-                        needsStart = true;
-                    }
-                }
-            }
-
-            let downloadTime = 0;
-            let setupTime = 0;
-
-            // Download from R2 if needed using existing ensureTemplateExists function
-            if (needsDownload) {
-                const downloadStart = Date.now();
-                
-                this.logger.info('Downloading instance from R2', { instanceId });
-                
-                // Use the existing ensureTemplateExists function which handles zip download and extraction
-                await this.ensureTemplateExists(instanceId, "instances", true);
-
-                downloadTime = Date.now() - downloadStart;
-                this.logger.info('Instance downloaded and extracted', { instanceId, downloadTimeMs: downloadTime });
-
-                // Re-read metadata after extraction
-                const extractedMetadata = await this.getInstanceMetadata(instanceId);
-                if (extractedMetadata) {
-                    metadata = extractedMetadata;
-                }
-            }
-
-            // Start process if needed
-            if (needsStart) {
-                const setupStart = Date.now();
-
-                // Install dependencies and start dev server (reuse existing logic)
-                const setupResult = await this.setupInstance(instanceId, metadata?.projectName || instanceId);
-                
-                if (!setupResult) {
-                    throw new Error('Failed to setup instance');
-                }
-
-                // Update metadata with new process info
-                const updatedMetadata = {
-                    ...metadata,
-                    templateName: metadata?.templateName || 'unknown',
-                    projectName: metadata?.projectName || instanceId,
-                    startTime: new Date().toISOString(),
-                    previewURL: setupResult.previewURL,
-                    processId: setupResult.processId,
-                    tunnelURL: setupResult.tunnelURL,
-                    allocatedPort: setupResult.allocatedPort
-                };
-
-                await this.storeInstanceMetadata(instanceId, updatedMetadata);
-
-                setupTime = Date.now() - setupStart;
-                this.logger.info('Instance started', { instanceId, setupTimeMs: setupTime });
-
-                return {
-                    success: true,
-                    message: `Successfully resumed instance ${instanceId}`,
-                    resumed: true,
-                    previewURL: setupResult.previewURL,
-                    tunnelURL: setupResult.tunnelURL,
-                    processId: setupResult.processId
-                };
-            }
-
-            return {
-                success: true,
-                message: `Instance ${instanceId} was already running`,
-                resumed: false,
-                previewURL: metadata?.previewURL,
-                processId: metadata?.processId
-            };
-
-        } catch (error) {
-            this.logger.error('resumeInstance', error, { instanceId, forceRestart });
-            return {
-                success: false,
-                resumed: false,
-                error: `Failed to resume instance: ${error instanceof Error ? error.message : 'Unknown error'}`
             };
         }
     }

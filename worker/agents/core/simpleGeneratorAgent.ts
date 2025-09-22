@@ -41,6 +41,7 @@ import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
 import { RateLimitExceededError } from 'shared/types/errors';
+import { generateId } from 'worker/utils/idGenerator';
 
 interface WebhookPayload {
     event: {
@@ -1597,8 +1598,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // Create new deployment
         const templateName = this.state.templateDetails?.name || 'scratch';
         // Generate a short unique suffix (6 chars from session ID)
-        const uniqueSuffix = this.state.sessionId.slice(-6).toLowerCase();
-        const projectName = `${this.state.blueprint?.projectName || templateName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueSuffix}`;
+        const uniqueSuffix = generateId();
+        const projectName = `${this.state.blueprint?.projectName || templateName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueSuffix}`.toLowerCase();
         
         // Generate webhook URL for this agent instance
         const webhookUrl = this.generateWebhookUrl();

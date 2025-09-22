@@ -28,7 +28,7 @@ import {
     GetLogsResponse,
     ListInstancesResponse,
     SaveInstanceResponse,
-    ResumeInstanceResponse,
+    // ResumeInstanceResponse,
     GitHubPushRequest,
     GitHubPushResponse,
     GitHubExportRequest,
@@ -241,10 +241,10 @@ import {
      */
     abstract saveInstance(instanceId: string): Promise<SaveInstanceResponse>;
 
-    /**
-     * Resume instance from local files or R2 bucket if needed
-     */
-    abstract resumeInstance(instanceId: string, forceRestart?: boolean): Promise<ResumeInstanceResponse>;
+    // /**
+    //  * Resume instance from local files or R2 bucket if needed
+    //  */
+    // abstract resumeInstance(instanceId: string, forceRestart?: boolean): Promise<ResumeInstanceResponse>;
   
     // ==========================================
     // Sandbox-specific
