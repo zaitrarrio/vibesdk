@@ -585,11 +585,23 @@ export default function Chat() {
 						className="shrink-0 p-4 pb-5 bg-transparent"
 					>
 						<div className="relative">
-							<input
-								type="text"
+							<textarea
 								value={newMessage}
 								onChange={(e) => {
 									setNewMessage(e.target.value);
+									const ta = e.currentTarget;
+									ta.style.height = 'auto';
+									ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+								}}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') {
+										if (!e.shiftKey) {
+											// Submit on Enter without Shift
+											e.preventDefault();
+											onNewMessage(e as any);
+										}
+										// Shift+Enter will create a new line (default textarea behavior)
+									}
 								}}
 								disabled={isChatDisabled}
 								placeholder={
@@ -599,12 +611,25 @@ export default function Chat() {
 											? 'Chat with AI while generating...'
 											: 'Ask a follow up...'
 								}
-								className="w-full bg-bg-2 border border-text-primary/10 rounded-xl px-3 pr-10 py-2 text-sm outline-none focus:border-white/20 drop-shadow-2xl text-text-primary placeholder:!text-text-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
+								rows={1}
+								className="w-full bg-bg-2 border border-text-primary/10 rounded-xl px-3 pr-10 py-2 text-sm outline-none focus:border-white/20 drop-shadow-2xl text-text-primary placeholder:!text-text-primary/50 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto no-scrollbar min-h-[36px] max-h-[120px]"
+								style={{
+									// Auto-resize based on content
+									height: 'auto',
+									minHeight: '36px'
+								}}
+								ref={(textarea) => {
+									if (textarea) {
+										// Auto-resize textarea based on content
+										textarea.style.height = 'auto';
+										textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+									}
+								}}
 							/>
 							<button
 								type="submit"
 								disabled={!newMessage.trim() || isChatDisabled}
-								className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md bg-accent/90 hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent text-white disabled:text-text-primary transition-colors"
+								className="absolute right-2 bottom-2 p-1.5 rounded-md bg-accent/90 hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent text-white disabled:text-text-primary transition-colors"
 							>
 								<ArrowRight className="size-4" />
 							</button>
