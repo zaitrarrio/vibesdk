@@ -161,6 +161,54 @@ export class StructuredLogger {
 	}
 
 	/**
+	 * Safe JSON stringify that handles circular references
+	 */
+	private safeStringify(obj: unknown): string {
+		const seen = new WeakSet();
+		
+		return JSON.stringify(obj, (_key, value) => {
+			// Handle undefined, functions, symbols
+			if (value === undefined || typeof value === 'function' || typeof value === 'symbol') {
+				return undefined;
+			}
+			
+			// Handle BigInt
+			if (typeof value === 'bigint') {
+				return value.toString();
+			}
+			
+			// Handle circular references
+			if (typeof value === 'object' && value !== null) {
+				if (seen.has(value)) {
+					return '[Circular]';
+				}
+				seen.add(value);
+				
+				// Handle Error objects specially to preserve stack traces
+				if (value instanceof Error) {
+					return {
+						name: value.name,
+						message: value.message,
+						stack: value.stack,
+						// Include any additional properties
+						...Object.getOwnPropertyNames(value).reduce((acc, prop) => {
+							if (!['name', 'message', 'stack'].includes(prop)) {
+								const descriptor = Object.getOwnPropertyDescriptor(value, prop);
+								if (descriptor && descriptor.enumerable) {
+									acc[prop] = (value as any)[prop];
+								}
+							}
+							return acc;
+						}, {} as Record<string, unknown>)
+					};
+				}
+			}
+			
+			return value;
+		});
+	}
+
+	/**
 	 * Output log entry using console methods
 	 */
 	private output(level: LogLevel, logEntry: LogEntry): void {
@@ -196,9 +244,10 @@ export class StructuredLogger {
 		} else {
 			// Structured JSON output for production (optimal for Cloudflare Workers Logs)
 			try {
-				console[consoleMethod](JSON.stringify(logEntry));
+				const jsonStr = this.safeStringify(logEntry);
+				console[consoleMethod](jsonStr);
 			} catch (e) {
-				// Fallback if stringify fails due to unexpected structures
+				// Fallback if even safe stringify fails
 				console[consoleMethod](
 					JSON.stringify({
 						level: logEntry.level,
