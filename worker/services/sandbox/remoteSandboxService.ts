@@ -14,8 +14,6 @@ import {
     DeploymentResult,
     GetLogsResponse,
     ListInstancesResponse,
-    SaveInstanceResponse,
-    ResumeInstanceResponse,
     TemplateDetailsResponseSchema,
     BootstrapResponseSchema,
     BootstrapRequest,
@@ -249,21 +247,6 @@ export class RemoteSandboxServiceClient extends BaseSandboxService{
      */
     async getLogs(instanceId: string): Promise<GetLogsResponse> {
         return this.makeRequest(`/instances/${instanceId}/logs`, 'GET');
-    }
-
-    /**
-     * Save instance to R2 bucket as compressed archive
-     */
-    async saveInstance(instanceId: string): Promise<SaveInstanceResponse> {
-        return this.makeRequest(`/instances/${instanceId}/save`, 'POST');
-    }
-
-    /**
-     * Resume instance from local files or R2 bucket if needed
-     */
-    async resumeInstance(instanceId: string, forceRestart?: boolean): Promise<ResumeInstanceResponse> {
-        const requestBody = { forceRestart: forceRestart || false };
-        return this.makeRequest(`/instances/${instanceId}/resume`, 'POST', undefined, requestBody);
     }
 
     // temp, debug
