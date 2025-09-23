@@ -1,5 +1,4 @@
 import { env } from 'cloudflare:workers'
-import sanitizeHtml from 'sanitize-html';
 import { ToolDefinition } from '../types';
 
 interface SerpApiResponse {
@@ -132,19 +131,41 @@ async function performWebSearch(
 }
 
 const extractTextFromHtml = (html: string): string => {
-    // Use sanitize-html to safely strip all HTML tags and scripts
-    // Configuration for text-only extraction
-    const cleanText = sanitizeHtml(html, {
-        allowedTags: [], // Remove all tags
-        allowedAttributes: {}, // Remove all attributes
-        textFilter: (text) => {
-            // Clean up whitespace in the text content
-            return text.replace(/\s+/g, ' ').trim();
-        }
-    });
+    // Multi-pass approach to handle nested/malformed tags
+    let sanitized = html;
+    let previousLength: number;
     
-    // Final cleanup of any remaining whitespace
-    return cleanText.replace(/\s+/g, ' ').trim();
+    // Keep removing script/style/noscript tags until no more are found
+    do {
+        previousLength = sanitized.length;
+        sanitized = sanitized.replace(
+            /<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi,
+            ''
+        );
+    } while (sanitized.length < previousLength);
+    
+    // Keep removing all HTML tags until no more are found
+    do {
+        previousLength = sanitized.length;
+        sanitized = sanitized.replace(/<[^>]*>/g, ' ');
+    } while (sanitized.length !== previousLength);
+    
+    // Decode HTML entities to prevent encoded script injection
+    sanitized = sanitized
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => 
+            String.fromCharCode(parseInt(hex, 16))
+        )
+        .replace(/&#(\d+);/g, (_, dec) => 
+            String.fromCharCode(parseInt(dec, 10))
+        );
+    
+    // Final cleanup of whitespace
+    return sanitized.replace(/\s+/g, ' ').trim();
 };
 
 async function fetchWebContent(url: string): Promise<string> {
