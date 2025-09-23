@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers'
+import sanitizeHtml from 'sanitize-html';
 import { ToolDefinition } from '../types';
 
 interface SerpApiResponse {
@@ -130,12 +131,21 @@ async function performWebSearch(
     }
 }
 
-const extractTextFromHtml = (html: string): string =>
-    html
-        .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '')
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+const extractTextFromHtml = (html: string): string => {
+    // Use sanitize-html to safely strip all HTML tags and scripts
+    // Configuration for text-only extraction
+    const cleanText = sanitizeHtml(html, {
+        allowedTags: [], // Remove all tags
+        allowedAttributes: {}, // Remove all attributes
+        textFilter: (text) => {
+            // Clean up whitespace in the text content
+            return text.replace(/\s+/g, ' ').trim();
+        }
+    });
+    
+    // Final cleanup of any remaining whitespace
+    return cleanText.replace(/\s+/g, ' ').trim();
+};
 
 async function fetchWebContent(url: string): Promise<string> {
     try {
