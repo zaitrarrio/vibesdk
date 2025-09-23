@@ -298,8 +298,8 @@ function generateGenericExport(name: string, isDefault: boolean, shouldUseJSX: b
     ]);
 
     if (isDefault) {
-        // For default export, we need to export the identifier after declaring it
-        return t.exportDefaultDeclaration(t.identifier(name));
+        // Export the generated expression directly as default to avoid undeclared identifier
+        return t.exportDefaultDeclaration(value);
     } else {
         return t.exportNamedDeclaration(declaration);
     }

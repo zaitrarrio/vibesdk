@@ -63,6 +63,8 @@ export interface CodeFixResult {
     unfixableIssues: UnfixableIssue[];
     /** Files that were modified with fixes applied */
     modifiedFiles: FileObject[];
+    /** New files that were created (e.g., stubs) */
+    newFiles?: FileObject[];
 }
 
 // ============================================================================

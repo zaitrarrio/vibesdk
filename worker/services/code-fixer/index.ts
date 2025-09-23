@@ -11,8 +11,7 @@ import {
     FixerContext, 
     FileMap, 
     ProjectFile,
-    FixerRegistry,
-    FixResult
+    FixerRegistry
 } from './types';
 import { isScriptFile } from './utils/ast';
 import { canModifyFile } from './utils/modules';
@@ -25,13 +24,14 @@ import { fixMissingExportedMember } from './fixers/ts2305';
 import { fixImportExportTypeMismatch } from './fixers/ts2614';
 import { fixIncorrectNamedImport } from './fixers/ts2724';
 
+
 // ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 
 /**
  * Fix TypeScript compilation issues across the entire project
- * This is the main stateless functional API
+ * Properly accumulates multiple fixes to the same file
  * 
  * @param allFiles - Initial files to work with
  * @param issues - TypeScript compilation issues to fix
@@ -61,16 +61,20 @@ export async function fixProjectIssues(
         // Separate fixable and unfixable issues
         const { fixableIssues, unfixableIssues } = separateIssues(issues, fixerRegistry);
         
-        // Group fixable issues by fixer
-        const issuesByFixer = groupIssuesByFixer(fixableIssues, fixerRegistry);
+        // Sort issues for optimal fix order
+        const sortedIssues = sortFixOrder(fixableIssues);
         
-        // Apply all fixes
-        const results = await applyFixes(context, issuesByFixer, fixerRegistry);
+        // Apply fixes sequentially, updating context after each
+        const results = await applyFixesSequentially(
+            context, 
+            sortedIssues, 
+            fixerRegistry
+        );
         
-        // Merge and deduplicate results, including pre-separated unfixable issues
-        const mergedResult = mergeFixResults(results, unfixableIssues);
+        // Add pre-separated unfixable issues
+        const finalResult = addUnfixableIssues(results, unfixableIssues);
         
-        return mergedResult;
+        return finalResult;
         
     } catch (error) {
         // If there's a global error, mark all issues as unfixable
@@ -160,69 +164,149 @@ function separateIssues(
     return { fixableIssues, unfixableIssues };
 }
 
-/**
- * Group fixable issues by fixer based on ruleId - simple direct lookup
- */
-function groupIssuesByFixer(
-    issues: CodeIssue[], 
-    fixerRegistry: FixerRegistry
-): Map<string, CodeIssue[]> {
-    const issuesByFixer = new Map<string, CodeIssue[]>();
-    
-    for (const issue of issues) {
-        // Direct lookup: all issues here should have fixers (pre-filtered)
-        if (issue.ruleId && fixerRegistry.has(issue.ruleId)) {
-            const fixerIssues = issuesByFixer.get(issue.ruleId) || [];
-            fixerIssues.push(issue);
-            issuesByFixer.set(issue.ruleId, fixerIssues);
-        }
-    }
-    
-    return issuesByFixer;
-}
 
 // ============================================================================
 // FIX APPLICATION
 // ============================================================================
 
 /**
- * Apply all fixes using the appropriate fixers
+ * Sort issues for optimal fix order
  */
-async function applyFixes(
-    context: FixerContext,
-    issuesByFixer: Map<string, CodeIssue[]>,
-    fixerRegistry: FixerRegistry
-): Promise<FixResult[]> {
-    const results: FixResult[] = [];
+function sortFixOrder(issues: CodeIssue[]): CodeIssue[] {
+    // Priority order:
+    // 1. TS2307 - Module not found (creates files)
+    // 2. TS2305 - Missing exports (adds to existing files)
+    // 3. TS2613/TS2614 - Import/export mismatches
+    // 4. TS2724 - Incorrect named imports
+    // 5. TS2304 - Undefined names (adds declarations)
     
-    for (const [fixerType, issues] of issuesByFixer) {
+    const priorityMap: Record<string, number> = {
+        'TS2307': 1,
+        'TS2305': 2,
+        'TS2613': 3,
+        'TS2614': 3,
+        'TS2724': 4,
+        'TS2304': 5,
+    };
+    
+    return issues.sort((a, b) => {
+        const aPriority = priorityMap[a.ruleId || ''] || 99;
+        const bPriority = priorityMap[b.ruleId || ''] || 99;
+        
+        if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+        }
+        
+        // Within same priority, sort by file then line
+        if (a.filePath !== b.filePath) {
+            return a.filePath.localeCompare(b.filePath);
+        }
+        
+        return a.line - b.line;
+    });
+}
+
+/**
+ * Apply fixes sequentially, updating context after each fix
+ */
+async function applyFixesSequentially(
+    context: FixerContext,
+    sortedIssues: CodeIssue[],
+    fixerRegistry: FixerRegistry
+): Promise<CodeFixResult> {
+    const fixedIssues: any[] = [];
+    const unfixableIssues: any[] = [];
+    const modifiedFiles = new Map<string, FileObject>();
+    const newFiles = new Map<string, FileObject>();
+    
+    // Group issues by fixer type to batch them
+    const issuesByFixer = new Map<string, CodeIssue[]>();
+    for (const issue of sortedIssues) {
+        const type = issue.ruleId || 'UNKNOWN';
+        const issues = issuesByFixer.get(type) || [];
+        issues.push(issue);
+        issuesByFixer.set(type, issues);
+    }
+    
+    // Apply each fixer in priority order
+    const fixerTypes = Array.from(issuesByFixer.keys()).sort((a, b) => {
+        const priorityMap: Record<string, number> = {
+            'TS2307': 1,
+            'TS2305': 2,
+            'TS2613': 3,
+            'TS2614': 3,
+            'TS2724': 4,
+            'TS2304': 5,
+        };
+        return (priorityMap[a] || 99) - (priorityMap[b] || 99);
+    });
+    
+    for (const fixerType of fixerTypes) {
+        const issues = issuesByFixer.get(fixerType) || [];
         const fixer = fixerRegistry.get(fixerType);
+        
         if (!fixer) {
+            unfixableIssues.push(...issues.map(issue => ({
+                issueCode: issue.ruleId || 'UNKNOWN',
+                filePath: issue.filePath,
+                line: issue.line,
+                column: issue.column,
+                originalMessage: issue.message,
+                reason: 'No fixer available'
+            })));
             continue;
         }
         
         try {
+            // Apply fixer
             const result = await fixer(context, issues);
-            results.push(result);
+            
+            // Collect results
+            fixedIssues.push(...result.fixedIssues);
+            unfixableIssues.push(...result.unfixableIssues);
+            
+            // Update files - these override previous versions
+            for (const file of result.modifiedFiles) {
+                if (canModifyFile(file.filePath)) {
+                    modifiedFiles.set(file.filePath, file);
+                    // Update context for next fixer
+                    context.files.set(file.filePath, {
+                        filePath: file.filePath,
+                        content: file.fileContents,
+                        ast: undefined
+                    });
+                }
+            }
+            
+            for (const file of result.newFiles || []) {
+                if (canModifyFile(file.filePath)) {
+                    newFiles.set(file.filePath, file);
+                    // Add to context for next fixer
+                    context.files.set(file.filePath, {
+                        filePath: file.filePath,
+                        content: file.fileContents,
+                        ast: undefined
+                    });
+                }
+            }
         } catch (error) {
-            // Handle fixer errors
-            results.push({
-                fixedIssues: [],
-                unfixableIssues: issues.map(issue => ({
-                    issueCode: issue.ruleId || 'UNKNOWN',
-                    filePath: issue.filePath,
-                    line: issue.line,
-                    column: issue.column,
-                    originalMessage: issue.message,
-                    reason: `Fixer ${fixerType} failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-                })),
-                modifiedFiles: [],
-                newFiles: []
-            });
+            unfixableIssues.push(...issues.map(issue => ({
+                issueCode: issue.ruleId || 'UNKNOWN',
+                filePath: issue.filePath,
+                line: issue.line,
+                column: issue.column,
+                originalMessage: issue.message,
+                reason: `Fixer failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            })));
         }
     }
     
-    return results;
+    return {
+        fixedIssues,
+        unfixableIssues,
+        modifiedFiles: Array.from(modifiedFiles.values()),
+        newFiles: Array.from(newFiles.values())
+    };
 }
 
 // ============================================================================
@@ -230,19 +314,16 @@ async function applyFixes(
 // ============================================================================
 
 /**
- * Merge results from all fixers and deduplicate files
+ * Add pre-separated unfixable issues to results
  */
-function mergeFixResults(results: FixResult[], preSeparatedUnfixableIssues: CodeIssue[]): CodeFixResult {
-    const fixedIssues = results.flatMap(r => r.fixedIssues);
-    const fixerUnfixableIssues = results.flatMap(r => r.unfixableIssues);
-    const allModifiedFiles = results.flatMap(r => r.modifiedFiles);
-    const allNewFiles = results.flatMap(r => r.newFiles);
-    
-    // Convert pre-separated unfixable issues to proper format with validation
+function addUnfixableIssues(
+    results: CodeFixResult,
+    preSeparatedUnfixableIssues: CodeIssue[]
+): CodeFixResult {
+    // Convert pre-separated unfixable issues to proper format
     const noFixerAvailableIssues = preSeparatedUnfixableIssues.map(issue => {
         let reason = 'No fixer available for this issue type';
         
-        // Add additional context for safety
         if (!canModifyFile(issue.filePath)) {
             reason += ' (file outside project boundaries)';
         }
@@ -257,32 +338,9 @@ function mergeFixResults(results: FixResult[], preSeparatedUnfixableIssues: Code
         };
     });
     
-    // Combine all unfixable issues
-    const unfixableIssues = [...fixerUnfixableIssues, ...noFixerAvailableIssues];
-    
-    // Deduplicate files by path (last one wins) with safety validation
-    const filesByPath = new Map<string, FileObject>();
-    
-    // Add modified files (with validation)
-    for (const file of allModifiedFiles) {
-        if (canModifyFile(file.filePath)) {
-            filesByPath.set(file.filePath, file);
-        }
-    }
-    
-    // Add new files (with validation)
-    for (const file of allNewFiles) {
-        if (canModifyFile(file.filePath)) {
-            filesByPath.set(file.filePath, file);
-        }
-    }
-    
-    const modifiedFiles = Array.from(filesByPath.values());
-    
     return {
-        fixedIssues,
-        unfixableIssues,
-        modifiedFiles
+        ...results,
+        unfixableIssues: [...results.unfixableIssues, ...noFixerAvailableIssues]
     };
 }
 
@@ -295,6 +353,7 @@ export type {
     CodeFixResult,
     FixedIssue,
     UnfixableIssue,
+    FileObject,
     FileFetcher,
     FixerContext,
     FileMap,

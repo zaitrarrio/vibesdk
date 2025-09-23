@@ -6,7 +6,7 @@
 import { CodeIssue } from '../../sandbox/sandboxTypes';
 import { FixerContext, FixResult, FixedIssue, ImportInfo } from '../types';
 import * as t from '@babel/types';
-import { generateCode, traverseAST } from '../utils/ast';
+import { generateCode } from '../utils/ast';
 import { findImportAtLocation, getFileAST } from '../utils/imports';
 import { findModuleFile, makeRelativeImport, resolveImportToFilePath } from '../utils/paths';
 import { generateStubFileContent } from '../utils/stubs';
@@ -170,14 +170,12 @@ export async function fixModuleNotFound(
  * Helper function to modify import statements
  */
 function updateImportPath(ast: t.File, importInfo: ImportInfo, newPath: string): t.File {
-    traverseAST(ast, {
-        ImportDeclaration(path) {
-            if (t.isStringLiteral(path.node.source) && path.node.source.value === importInfo.specifier) {
-                path.node.source.value = newPath;
-            }
+    const body = ast.program?.body ?? [];
+    for (const node of body) {
+        if (t.isImportDeclaration(node) && t.isStringLiteral(node.source) && node.source.value === importInfo.specifier) {
+            node.source.value = newPath;
         }
-    });
-    
+    }
     return ast;
 }
 

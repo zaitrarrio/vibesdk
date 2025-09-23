@@ -94,11 +94,28 @@ export function parseCode(code: string, options?: ParseOptions): t.File {
 export function traverseAST(ast: t.Node, visitor: Visitor): void {
     try {
         logger.debug(`Starting AST traversal`);
-        traverse(ast, visitor);
+        // First try with full scope building
+        (traverse as unknown as (node: t.Node, opts: Visitor) => void)(ast, visitor);
         logger.debug(`AST traversal completed successfully`);
     } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const shouldRetryNoScope = message.includes("reading 'get'") || message.includes('Scope') || message.includes('setScope');
+        if (shouldRetryNoScope) {
+            logger.warn(`AST traversal failed with scope error, retrying with noScope: true`);
+            try {
+                (traverse as unknown as (node: t.Node, opts: Visitor & { noScope?: boolean }) => void)(
+                    ast,
+                    { ...(visitor as object), noScope: true } as Visitor & { noScope?: boolean }
+                );
+                logger.debug(`AST traversal with noScope completed successfully`);
+                return;
+            } catch (e2) {
+                logger.error(`AST traversal (noScope) failed`, e2);
+                throw new Error(`Failed to traverse AST: ${e2 instanceof Error ? e2.message : 'Unknown error'}`);
+            }
+        }
         logger.error(`AST traversal failed`, error);
-        throw new Error(`Failed to traverse AST: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to traverse AST: ${message}`);
     }
 }
 

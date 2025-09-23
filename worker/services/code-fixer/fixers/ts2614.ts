@@ -167,19 +167,53 @@ export async function fixImportExportTypeMismatch(
 }
 
 interface MismatchAnalysis {
-    type: 'named-to-default' | 'default-to-named' | 'partial-match';
+    type: 'named-to-default' | 'default-to-named' | 'partial-match' | 'complex-partial' | 'default-to-named-typo';
     description: string;
     targetName?: string;
     sourceNames?: string[];
+    additionalData?: {
+        defaultConversions?: string[];
+        typoCorrections?: Array<{ invalid: string; correct: string } | null>;
+    };
 }
 
 /**
- * Analyze the type of import/export mismatch
+ * Calculate Levenshtein distance between two strings
+ * Used for detecting typos in import names
  */
-function analyzeMismatch(
-    importInfo: { defaultImport?: string; namedImports: string[]; moduleSpecifier: string }, 
-    targetExports: { defaultExport?: string; namedExports: string[] }
-): MismatchAnalysis | null {
+function levenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+        matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+        matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+        for (let j = 1; j <= str1.length; j++) {
+            if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // substitution
+                    matrix[i][j - 1] + 1,     // insertion
+                    matrix[i - 1][j] + 1      // deletion
+                );
+            }
+        }
+    }
+    
+    return matrix[str2.length][str1.length];
+}
+
+/**
+ * Analyze import/export mismatch and determine fix strategy
+ * Enhanced to handle complex partial matches
+ */
+function analyzeMismatch(importInfo: { defaultImport?: string; namedImports: string[] }, targetExports: { defaultExport?: string; namedExports: string[] }): MismatchAnalysis | null {
     
     // Case 1: Trying to import something as named when it's actually default export
     if (importInfo.namedImports.length > 0 && !importInfo.defaultImport && targetExports.defaultExport) {
@@ -215,30 +249,73 @@ function analyzeMismatch(
         }
     }
     
-    // Case 3: Mixed scenario - some imports might be correct, others not
-    if (importInfo.namedImports.length > 0 && targetExports.namedExports.length > 0) {
-        const validImports = importInfo.namedImports.filter(name => 
+    // Case 3: Mixed imports - some correct, some need conversion
+    if (importInfo.namedImports.length > 0) {
+        const validNamedImports = importInfo.namedImports.filter(name => 
             targetExports.namedExports.includes(name)
         );
-        const invalidImports = importInfo.namedImports.filter(name => 
+        const invalidNamedImports = importInfo.namedImports.filter(name => 
             !targetExports.namedExports.includes(name)
         );
         
-        if (invalidImports.length > 0 && targetExports.defaultExport) {
-            // Some named imports are invalid but there's a default export
-            const matchingInvalidImport = invalidImports.find(name =>
+        // Check if any invalid named imports match the default export
+        const needsDefaultConversion = invalidNamedImports.filter(name =>
+            targetExports.defaultExport && (
                 name === targetExports.defaultExport || 
                 name.toLowerCase() === targetExports.defaultExport?.toLowerCase()
-            );
-            
-            if (matchingInvalidImport) {
-                return {
-                    type: 'partial-match',
-                    description: `Converted invalid named import '${matchingInvalidImport}' to default import while preserving valid named imports`,
-                    targetName: matchingInvalidImport,
-                    sourceNames: validImports
-                };
-            }
+            )
+        );
+        
+        // Check if any invalid named imports have similar names in exports (typos)
+        const possibleTypos = invalidNamedImports.map(invalidName => {
+            const similar = targetExports.namedExports.find(exportName => {
+                const distance = levenshteinDistance(invalidName.toLowerCase(), exportName.toLowerCase());
+                return distance <= 2; // Allow up to 2 character differences
+            });
+            return similar ? { invalid: invalidName, correct: similar } : null;
+        }).filter(Boolean);
+        
+        if (needsDefaultConversion.length > 0 || validNamedImports.length > 0 || possibleTypos.length > 0) {
+            return {
+                type: 'complex-partial',
+                description: `Complex import fix: ${needsDefaultConversion.length} to default, ${validNamedImports.length} valid named, ${possibleTypos.length} typo fixes`,
+                targetName: needsDefaultConversion[0], // Primary default conversion
+                sourceNames: validNamedImports,
+                additionalData: {
+                    defaultConversions: needsDefaultConversion,
+                    typoCorrections: possibleTypos
+                }
+            };
+        }
+    }
+    
+    // Case 4: Check if default import matches a named export (opposite of case 1)
+    if (importInfo.defaultImport && targetExports.namedExports.length > 0) {
+        const matchingNamedExport = targetExports.namedExports.find(name =>
+            name === importInfo.defaultImport ||
+            name.toLowerCase() === importInfo.defaultImport?.toLowerCase()
+        );
+        
+        if (matchingNamedExport) {
+            return {
+                type: 'default-to-named',
+                description: `Changed import from default '${importInfo.defaultImport}' to named import '${matchingNamedExport}'`,
+                targetName: matchingNamedExport
+            };
+        }
+        
+        // Check if default import name is close to any named export (typo)
+        const similarNamed = targetExports.namedExports.find(name => {
+            const distance = levenshteinDistance(importInfo.defaultImport!.toLowerCase(), name.toLowerCase());
+            return distance <= 2;
+        });
+        
+        if (similarNamed) {
+            return {
+                type: 'default-to-named-typo',
+                description: `Changed default import '${importInfo.defaultImport}' to named import '${similarNamed}' (possible typo)`,
+                targetName: similarNamed
+            };
         }
     }
     
@@ -262,8 +339,15 @@ function fixImportStatement(
                     case 'named-to-default':
                         // Convert named import to default import
                         if (mismatchAnalysis.targetName) {
+                            // Find the original specifier to preserve local alias if any
+                            const orig = path.node.specifiers.find(s => 
+                                t.isImportSpecifier(s) && 
+                                t.isIdentifier(s.imported) && 
+                                s.imported.name === mismatchAnalysis.targetName
+                            ) as t.ImportSpecifier | undefined;
+                            const localName = orig && t.isIdentifier(orig.local) ? orig.local.name : mismatchAnalysis.targetName;
                             path.node.specifiers = [
-                                t.importDefaultSpecifier(t.identifier(mismatchAnalysis.targetName))
+                                t.importDefaultSpecifier(t.identifier(localName))
                             ];
                         }
                         break;
@@ -281,21 +365,97 @@ function fixImportStatement(
                         break;
                         
                     case 'partial-match':
-                        // Convert invalid named import to default while keeping valid named imports
-                        if (mismatchAnalysis.targetName && mismatchAnalysis.sourceNames) {
+                    case 'complex-partial':
+                        // Handle complex partial matches with multiple conversions
+                        if (mismatchAnalysis.additionalData) {
                             const newSpecifiers: (t.ImportDefaultSpecifier | t.ImportSpecifier)[] = [];
+                            const specifiers = path.node.specifiers;
                             
-                            // Add default import for the converted name
-                            newSpecifiers.push(t.importDefaultSpecifier(t.identifier(mismatchAnalysis.targetName)));
+                            // Add default import for names that need conversion to default
+                            const defaultConversions = mismatchAnalysis.additionalData.defaultConversions || [];
+                            if (defaultConversions.length > 0) {
+                                const firstDefault = defaultConversions[0];
+                                const defaultSpec = specifiers.find(s => 
+                                    t.isImportSpecifier(s) && 
+                                    t.isIdentifier(s.imported) && 
+                                    s.imported.name === firstDefault
+                                ) as t.ImportSpecifier | undefined;
+                                const defaultLocal = defaultSpec && t.isIdentifier(defaultSpec.local) ? defaultSpec.local.name : firstDefault;
+                                newSpecifiers.push(t.importDefaultSpecifier(t.identifier(defaultLocal)));
+                            }
                             
                             // Keep valid named imports
+                            if (mismatchAnalysis.sourceNames) {
+                                for (const validName of mismatchAnalysis.sourceNames) {
+                                    const orig = specifiers.find(s => 
+                                        t.isImportSpecifier(s) && 
+                                        t.isIdentifier(s.imported) && 
+                                        s.imported.name === validName
+                                    ) as t.ImportSpecifier | undefined;
+                                    const local = orig && t.isIdentifier(orig.local) ? orig.local.name : validName;
+                                    newSpecifiers.push(
+                                        t.importSpecifier(t.identifier(local), t.identifier(validName))
+                                    );
+                                }
+                            }
+                            
+                            // Fix typos in named imports
+                            const typoCorrections = mismatchAnalysis.additionalData.typoCorrections || [];
+                            for (const correction of typoCorrections) {
+                                if (correction) {
+                                    const orig = specifiers.find(s => 
+                                        t.isImportSpecifier(s) && 
+                                        t.isIdentifier(s.imported) && 
+                                        s.imported.name === correction.invalid
+                                    ) as t.ImportSpecifier | undefined;
+                                    const local = orig && t.isIdentifier(orig.local) ? orig.local.name : correction.correct;
+                                    newSpecifiers.push(
+                                        t.importSpecifier(t.identifier(local), t.identifier(correction.correct))
+                                    );
+                                }
+                            }
+                            
+                            path.node.specifiers = newSpecifiers;
+                        } else if (mismatchAnalysis.targetName && mismatchAnalysis.sourceNames) {
+                            // Fallback to simple partial match handling
+                            const newSpecifiers: (t.ImportDefaultSpecifier | t.ImportSpecifier)[] = [];
+                            const specifiers = path.node.specifiers;
+
+                            // Add default import for the converted name
+                            const invalidSpec = specifiers.find(s => 
+                                t.isImportSpecifier(s) && 
+                                t.isIdentifier(s.imported) && 
+                                s.imported.name === mismatchAnalysis.targetName
+                            ) as t.ImportSpecifier | undefined;
+                            const defaultLocal = invalidSpec && t.isIdentifier(invalidSpec.local) ? invalidSpec.local.name : mismatchAnalysis.targetName;
+                            newSpecifiers.push(t.importDefaultSpecifier(t.identifier(defaultLocal)));
+
+                            // Keep valid named imports
                             for (const validName of mismatchAnalysis.sourceNames) {
+                                const orig = specifiers.find(s => 
+                                    t.isImportSpecifier(s) && 
+                                    t.isIdentifier(s.imported) && 
+                                    s.imported.name === validName
+                                ) as t.ImportSpecifier | undefined;
+                                const local = orig && t.isIdentifier(orig.local) ? orig.local.name : validName;
                                 newSpecifiers.push(
-                                    t.importSpecifier(t.identifier(validName), t.identifier(validName))
+                                    t.importSpecifier(t.identifier(local), t.identifier(validName))
                                 );
                             }
                             
                             path.node.specifiers = newSpecifiers;
+                        }
+                        break;
+                    
+                    case 'default-to-named-typo':
+                        // Convert default import to named import with typo correction
+                        if (mismatchAnalysis.targetName && importInfo.defaultImport) {
+                            path.node.specifiers = [
+                                t.importSpecifier(
+                                    t.identifier(importInfo.defaultImport),
+                                    t.identifier(mismatchAnalysis.targetName)
+                                )
+                            ];
                         }
                         break;
                 }
