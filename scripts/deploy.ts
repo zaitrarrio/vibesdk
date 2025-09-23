@@ -65,6 +65,7 @@ interface WranglerConfig {
 		CLOUDFLARE_AI_GATEWAY?: string;
 		MAX_SANDBOX_INSTANCES?: string;
 		CUSTOM_DOMAIN?: string;
+		CUSTOM_PREVIEW_DOMAIN?: string;
 		SANDBOX_INSTANCE_TYPE?: string;
 		DISPATCH_NAMESPACE?: string;
 		[key: string]: string | undefined;
@@ -173,6 +174,7 @@ class CloudflareDeploymentManager {
 		// Log key extracted values
 		const databaseName = this.config.d1_databases?.[0]?.database_name;
 		const customDomain = this.config.vars?.CUSTOM_DOMAIN;
+		const customPreviewDomain = this.config.vars?.CUSTOM_PREVIEW_DOMAIN;
 		const maxInstances = this.config.vars?.MAX_SANDBOX_INSTANCES;
 		const templatesRepo = this.config.vars?.TEMPLATES_REPOSITORY;
 		const aiGateway = this.config.vars?.CLOUDFLARE_AI_GATEWAY;
@@ -181,6 +183,7 @@ class CloudflareDeploymentManager {
 		console.log('📊 Configuration Summary:');
 		console.log(`   Database Name: ${databaseName || 'Not configured'}`);
 		console.log(`   Custom Domain: ${customDomain || 'Not configured'}`);
+		console.log(`   Custom Preview Domain: ${customPreviewDomain || 'Not configured'}`);
 		console.log(
 			`   Max Sandbox Instances: ${maxInstances || 'Not configured'}`,
 		);
@@ -933,6 +936,8 @@ class CloudflareDeploymentManager {
 
 	private async updateCustomDomainRoutes(): Promise<void> {
 		const customDomain = this.config.vars?.CUSTOM_DOMAIN || process.env.CUSTOM_DOMAIN;
+		// Check for CUSTOM_PREVIEW_DOMAIN (env var takes priority)
+		const customPreviewDomain = process.env.CUSTOM_PREVIEW_DOMAIN || this.config.vars?.CUSTOM_PREVIEW_DOMAIN;
 
 		try {
 			const { content, config } = this.readWranglerConfig();
@@ -960,8 +965,33 @@ class CloudflareDeploymentManager {
 				`🔧 Updating wrangler.jsonc routes with custom domain: ${customDomain}`,
 			);
 
-			// Safely detect zone information
+			// Check if we have a custom preview domain for wildcard routes
+			if (customPreviewDomain && customPreviewDomain !== '') {
+				console.log(
+					`🔧 Using CUSTOM_PREVIEW_DOMAIN for wildcard routes: ${customPreviewDomain}`,
+				);
+			}
+
+			// Safely detect zone information for main domain
 			const { zoneName, zoneId, success: zoneDetectionSuccess } = await this.safeDetectZoneForDomain(customDomain, originalCustomDomain);
+
+			// If we have a custom preview domain, detect its zone information for wildcard routes
+			let previewZoneName: string | null = null;
+			let previewZoneId: string | null = null;
+			let previewZoneDetectionSuccess = false;
+
+			if (customPreviewDomain && customPreviewDomain !== '') {
+				const previewZoneInfo = await this.safeDetectZoneForDomain(customPreviewDomain, customPreviewDomain);
+				previewZoneName = previewZoneInfo.zoneName;
+				previewZoneId = previewZoneInfo.zoneId;
+				previewZoneDetectionSuccess = previewZoneInfo.success;
+
+				if (previewZoneDetectionSuccess) {
+					console.log(`📋 Preview domain zone detected:`);
+					console.log(`   Preview Zone Name: ${previewZoneName}`);
+					console.log(`   Preview Zone ID: ${previewZoneId}`);
+				}
+			}
 
 			// Define the expected routes based on zone detection success
 			let expectedRoutes: Array<{
@@ -971,19 +1001,31 @@ class CloudflareDeploymentManager {
 				zone_name?: string;
 			}>;
 
-			if (zoneDetectionSuccess && zoneId && zoneName) {
+			// Determine which domain and zone to use for wildcard pattern
+			const wildcardDomain = (customPreviewDomain && customPreviewDomain !== '') ? customPreviewDomain : customDomain;
+			const wildcardZoneId = (customPreviewDomain && previewZoneDetectionSuccess && previewZoneId) 
+				? previewZoneId 
+				: (zoneDetectionSuccess && zoneId ? zoneId : undefined);
+			const wildcardZoneName = (customPreviewDomain && previewZoneDetectionSuccess && previewZoneName)
+				? previewZoneName
+				: (zoneDetectionSuccess && zoneName ? zoneName : undefined);
+
+			if (wildcardZoneId) {
 				// Custom domain with zone information for wildcard pattern
 				console.log(`📋 Creating routes with zone information:`);
-				console.log(`   Zone Name: ${zoneName}`);
-				console.log(`   Zone ID: ${zoneId}`);
+				console.log(`   Main Domain: ${customDomain}`);
+				console.log(`   Wildcard Domain: ${wildcardDomain}`);
+				if (wildcardZoneId) {
+					console.log(`   Wildcard Zone ID: ${wildcardZoneId}`);
+				}
 
 				expectedRoutes = [
 					{ pattern: customDomain, custom_domain: true },
 					{ 
-						pattern: `*${customDomain}/*`, 
+						pattern: `*${wildcardDomain}/*`, 
 						custom_domain: false,
-						zone_id: zoneId,
-						// zone_name: zoneName
+						zone_id: wildcardZoneId,
+						// zone_name: wildcardZoneName
 					},
 				];
 			} else {
