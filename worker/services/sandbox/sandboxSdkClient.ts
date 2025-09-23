@@ -152,10 +152,6 @@ export class SandboxSdkClient extends BaseSandboxService {
         return this.sandbox;
     }
 
-    private getRuntimeErrorFile(instanceId: string): string {
-        return `${instanceId}-runtime_errors.json`;
-    }
-
     private getInstanceMetadataFile(instanceId: string): string {
         return `${instanceId}-metadata.json`;
     }
@@ -163,33 +159,6 @@ export class SandboxSdkClient extends BaseSandboxService {
     private async executeCommand(instanceId: string, command: string, timeout?: number): Promise<ExecuteResponse> {
         return await this.getSandbox().exec(`cd ${instanceId} && ${command}`, { timeout });
         // return await this.getSandbox().exec(command, { cwd: instanceId, timeout });
-    }
-
-    private async storeRuntimeError(instanceId: string, error: RuntimeError): Promise<void> {
-        try {
-            const errorFile = this.getRuntimeErrorFile(instanceId);
-            const sandbox = this.getSandbox();
-            
-            // Read existing errors
-            let errors: RuntimeError[] = [];
-            try {
-                const existingFile = await sandbox.readFile(errorFile);
-                errors = JSON.parse(existingFile.content) as RuntimeError[];
-            } catch {
-                // No existing errors file
-            }
-            
-            errors.push(error);
-            
-            // Keep only last 100 errors
-            if (errors.length > 100) {
-                errors = errors.slice(-100);
-            }
-            
-            await sandbox.writeFile(errorFile, JSON.stringify(errors));
-        } catch (writeError) {
-            this.logger.warn('Failed to store runtime error', writeError);
-        }
     }
 
     private async getInstanceMetadata(instanceId: string): Promise<InstanceMetadata> {
@@ -920,7 +889,7 @@ export class SandboxSdkClient extends BaseSandboxService {
 
     async createInstance(templateName: string, projectName: string, webhookUrl?: string, localEnvVars?: Record<string, string>): Promise<BootstrapResponse> {
         try {
-            const instanceId = `${projectName}-${generateId()}`;
+            const instanceId = `i-${generateId()}`;
             this.logger.info('Creating sandbox instance', { instanceId, templateName, projectName });
             
             let results: {previewURL: string, tunnelURL: string, processId: string, allocatedPort: number} | undefined;
@@ -990,17 +959,12 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             const startTime = new Date(metadata.startTime);
             const uptime = Math.floor((Date.now() - startTime.getTime()) / 1000);
-            // Get file tree
-            const fileTree = await this.buildFileTree(instanceId);
 
             // Get runtime errors
-            let runtimeErrors: RuntimeError[] = [];
-            try {
-                const errorsFile = await this.getSandbox().readFile(this.getRuntimeErrorFile(instanceId));
-                runtimeErrors = JSON.parse(errorsFile.content) as RuntimeError[];
-            } catch {
-                // No errors stored
-            }
+            const [fileTree, runtimeErrors] = await Promise.all([
+                this.buildFileTree(instanceId),
+                this.getInstanceErrors(instanceId)
+            ]);
 
             const instanceDetails: InstanceDetails = {
                 runId: instanceId,
@@ -1010,7 +974,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 directory: instanceId,
                 serviceDirectory: instanceId,
                 fileTree,
-                runtimeErrors,
+                runtimeErrors: runtimeErrors.errors,
                 previewURL: metadata.previewURL,
                 processId: metadata.processId,
                 tunnelURL: metadata.tunnelURL,
@@ -1037,6 +1001,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 return {
                     success: false,
                     pending: false,
+                    isHealthy: false,
                     error: `Instance ${instanceId} not found`
                 };
             }
@@ -1060,6 +1025,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             return {
                 success: true,
                 pending: false,
+                isHealthy,
                 message: isHealthy ? 'Instance is running normally' : 'Instance may have issues',
                 previewURL: metadata.previewURL,
                 tunnelURL: metadata.tunnelURL,
@@ -1070,6 +1036,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             return {
                 success: false,
                 pending: false,
+                isHealthy: false,
                 error: `Failed to get instance status: ${error instanceof Error ? error.message : 'Unknown error'}`
             };
         }
@@ -1363,7 +1330,6 @@ export class SandboxSdkClient extends BaseSandboxService {
                         exitCode: result.exitCode
                     });
                     
-                    // Track errors if command failed
                     if (result.exitCode !== 0) {
                         const error: RuntimeError = {
                             timestamp: new Date(),
@@ -1373,12 +1339,12 @@ export class SandboxSdkClient extends BaseSandboxService {
                             source: 'command_execution',
                             rawOutput: `Command: ${command}\nExit code: ${result.exitCode}\nSTDOUT: ${result.stdout}\nSTDERR: ${result.stderr}`
                         };
-                        await this.storeRuntimeError(instanceId, error);
+                        this.logger.error('Command execution failed', { command, error });
                     }
                     
                     this.logger.info('Command executed', { command, exitCode: result.exitCode });
                 } catch (error) {
-                    this.logger.error('Command execution failed', { command, error });
+                    this.logger.error('Command execution failed with error', { command, error });
                     results.push({
                         command,
                         success: false,
@@ -1500,20 +1466,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     }
                 }
             } catch (enhancedError) {
-                this.logger.warn('Enhanced error clearing unavailable, falling back to legacy', enhancedError);
-            }
-
-            // Fallback to legacy error system
-            const sandbox = this.getSandbox();
-            try {
-                const errorsFile = await sandbox.readFile(this.getRuntimeErrorFile(instanceId));
-                const errors = JSON.parse(errorsFile.content) as RuntimeError[];
-                clearedCount = errors.length;
-                
-                // Clear errors by writing empty array
-                await sandbox.writeFile(this.getRuntimeErrorFile(instanceId), JSON.stringify([]));
-            } catch {
-                // No errors to clear
+                this.logger.warn('Error clearing unavailable, falling back to legacy', enhancedError);
             }
 
             this.logger.info(`Cleared ${clearedCount} errors for instance ${instanceId}`);

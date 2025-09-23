@@ -156,6 +156,7 @@ export const BootstrapStatusResponseSchema = z.object({
     previewURL: z.string().optional(),
     tunnelURL: z.string().optional(),
     processId: z.string().optional(),
+    isHealthy: z.boolean(),
     error: z.string().optional(),
 })
 export type BootstrapStatusResponse = z.infer<typeof BootstrapStatusResponseSchema>

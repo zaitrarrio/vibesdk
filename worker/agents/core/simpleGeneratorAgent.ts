@@ -1603,21 +1603,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         
         // Generate webhook URL for this agent instance
         const webhookUrl = this.generateWebhookUrl();
-
-        // TODO: REMOVE BEFORE PRODUCTION, SECURITY THREAT! Only for testing and demo
-        let baseUrl: string = this.env.CLOUDFLARE_AI_GATEWAY_URL;
-        try {
-            baseUrl = await this.env.AI.gateway(this.env.CLOUDFLARE_AI_GATEWAY).getUrl()
-        } catch (error) {
-            this.logger().error(`Error getting AI gateway URL: ${error}`);
-            // throw error;
-        }
-        const localEnvVars = {
-            CF_AI_BASE_URL: `${baseUrl}/compat`,
-            // CF_AI_API_KEY: this.env.CLOUDFLARE_AI_GATEWAY_TOKEN,
-        }
         
-        const createResponse = await this.getSandboxServiceClient().createInstance(templateName, `v1-${projectName}`, webhookUrl, localEnvVars);
+        const createResponse = await this.getSandboxServiceClient().createInstance(templateName, `v1-${projectName}`, webhookUrl);
         if (!createResponse || !createResponse.success || !createResponse.runId) {
             throw new Error(`Failed to create sandbox instance: ${createResponse?.error || 'Unknown error'}`);
         }
@@ -1656,7 +1643,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // Check if the instance is running
         if (sandboxInstanceId) {
             const status = await this.getSandboxServiceClient().getInstanceStatus(sandboxInstanceId);
-            if (!status || !status.success) {
+            if (!status || !status.success || !status.isHealthy) {
                 this.logger().error(`DEPLOYMENT CHECK FAILED: Failed to get status for instance ${sandboxInstanceId}, redeploying...`);
                 sandboxInstanceId = undefined;
             } else {
@@ -1715,7 +1702,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             if (filesToWrite.length > 0) {
                 const writeResponse = await this.getSandboxServiceClient().writeFiles(sandboxInstanceId, filesToWrite, commitMessage);
                 if (!writeResponse || !writeResponse.success) {
-                    this.logger().warn(`File writing failed. Error: ${writeResponse?.error}`);
+                    this.logger().error(`File writing failed. Error: ${writeResponse?.error}`);
+                    throw new Error(`File writing failed. Error: ${writeResponse?.error}`);
                 }
             }
 
