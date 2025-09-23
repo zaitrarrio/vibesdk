@@ -35,7 +35,6 @@ import {
     buildDeploymentConfig, 
     parseWranglerConfig, 
     deployToDispatch, 
-    deployWorker
 } from '../deployer/deploy';
 import { 
     createAssetManifest 
@@ -1820,13 +1819,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     config.assets
                 );
             } else {
-                await deployWorker(
-                    deployConfig,
-                    fileContents,
-                    undefined,
-                    config.migrations,
-                    config.assets
-                );
+                throw new Error('DISPATCH_NAMESPACE not found in environment variables, cannot deploy without dispatch namespace');
             }
             
             // Step 8: Determine deployment URL
