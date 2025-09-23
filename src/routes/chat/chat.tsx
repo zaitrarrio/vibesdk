@@ -598,7 +598,7 @@ export default function Chat() {
 										if (!e.shiftKey) {
 											// Submit on Enter without Shift
 											e.preventDefault();
-											onNewMessage(e as any);
+											onNewMessage(e);
 										}
 										// Shift+Enter will create a new line (default textarea behavior)
 									}
