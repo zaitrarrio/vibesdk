@@ -145,13 +145,14 @@ export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Respo
     
     // Only perform auth if we need it or don't have user yet
     if (!user && (requirement.level === 'authenticated' || requirement.level === 'owner-only')) {
-        user = await authMiddleware(c.req.raw, c.env);
+        const userSession = await authMiddleware(c.req.raw, c.env);
+        if (!userSession) {
+            return errorResponse('Authentication required', 401);
+        }
+        user = userSession.user;
         c.set('user', user);
-		if (user) {
-			Sentry.setUser({ id: user.id, email: user.email });
-		} else {
-			logger.warn('No user found');
-		}
+		c.set('sessionId', userSession.sessionId);
+		Sentry.setUser({ id: user.id, email: user.email });
 
         try {
             await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);

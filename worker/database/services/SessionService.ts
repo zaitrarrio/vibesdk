@@ -29,7 +29,7 @@ interface SessionConfig {
  * Session Service for D1-based session management
  */
 export class SessionService extends BaseService {
-    private readonly config: SessionConfig = {
+    static readonly config: SessionConfig = {
         maxSessions: 5,
         sessionTTL: 3 * 24 * 60 * 60,
         cleanupInterval: 60 * 60, // 1 hour
@@ -118,7 +118,7 @@ export class SessionService extends BaseService {
             
             // Create session
             const now = new Date();
-            const expiresAt = new Date(Date.now() + this.config.sessionTTL * 1000);
+            const expiresAt = new Date(Date.now() + SessionService.config.sessionTTL * 1000);
             
             await this.db.db.insert(schema.sessions).values({
                 id: sessionId,
@@ -290,8 +290,8 @@ export class SessionService extends BaseService {
                 .all();
             
             // Keep only the most recent sessions
-            if (sessions.length > this.config.maxSessions) {
-                const sessionsToDelete = sessions.slice(this.config.maxSessions);
+            if (sessions.length > SessionService.config.maxSessions) {
+                const sessionsToDelete = sessions.slice(SessionService.config.maxSessions);
                 
                 for (const session of sessionsToDelete) {
                     await this.db.db
@@ -372,7 +372,7 @@ export class SessionService extends BaseService {
             let riskLevel: 'low' | 'medium' | 'high' = 'low';
             const recommendations: string[] = [];
             
-            if (activeSessionCount > this.config.maxConcurrentDevices) {
+            if (activeSessionCount > SessionService.config.maxConcurrentDevices) {
                 riskLevel = 'medium';
                 recommendations.push('Consider revoking old sessions - you have many active sessions');
             }

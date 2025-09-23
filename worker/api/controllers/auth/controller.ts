@@ -70,12 +70,12 @@ export class AuthController extends BaseController {
             const result = await authService.register(validatedData, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, undefined, result.expiresIn)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                accessTokenExpiry: result.expiresIn
+                accessTokenExpiry: SessionService.config.sessionTTL
             });
             
             // Rotate CSRF token on successful registration if configured
@@ -125,12 +125,12 @@ export class AuthController extends BaseController {
             const result = await authService.login(validatedData, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, undefined, result.expiresIn)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                accessTokenExpiry: result.expiresIn
+                accessTokenExpiry: SessionService.config.sessionTTL
             });
             
             // Rotate CSRF token on successful login if configured
@@ -206,7 +206,7 @@ export class AuthController extends BaseController {
             }
             return AuthController.createSuccessResponse({
                 user: mapUserResponse(routeContext.user),
-                sessionId: routeContext.user.id // Use user ID as session identifier
+                sessionId: routeContext.sessionId
             });
         } catch (error) {
             return AuthController.handleError(error, 'get profile');
@@ -362,9 +362,9 @@ export class AuthController extends BaseController {
     static async checkAuth(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             // Use the same middleware authentication logic but don't require auth
-            const user = await authMiddleware(request, env);
+            const userSession = await authMiddleware(request, env);
             
-            if (!user) {
+            if (!userSession) {
                 return AuthController.createSuccessResponse({
                     authenticated: false,
                     user: null
@@ -374,11 +374,11 @@ export class AuthController extends BaseController {
             return AuthController.createSuccessResponse({
                 authenticated: true,
                 user: {
-                    id: user.id,
-                    email: user.email,
-                    displayName: user.displayName
+                    id: userSession.user.id,
+                    email: userSession.user.email,
+                    displayName: userSession.user.displayName
                 },
-                sessionId: user.id
+                sessionId: userSession.sessionId
             });
         } catch (error) {
             return AuthController.createSuccessResponse({
@@ -559,12 +559,12 @@ export class AuthController extends BaseController {
             const result = await authService.verifyEmailWithOtp(email, otp, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, undefined, result.expiresIn)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                accessTokenExpiry: result.expiresIn
+                accessTokenExpiry: SessionService.config.sessionTTL
             });
             
             return response;

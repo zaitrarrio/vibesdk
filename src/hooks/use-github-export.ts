@@ -3,10 +3,10 @@ import { WebSocket } from 'partysocket';
 import { useAuth } from '@/contexts/auth-context';
 import { apiClient } from '@/lib/api-client';
 import type {
+    AuthUser,
     GitHubExportOptions,
     GitHubExportResult
 } from '../api-types';
-import type { User } from '@/contexts/auth-context';
 import type { WebSocketMessageData } from '@/api-types';
 
 // Use existing backend WebSocket types
@@ -34,7 +34,7 @@ export function useGitHubExport(_websocket?: WebSocket | null, agentId?: string)
     closeModal: () => void;
     startExport: (options: GitHubExportOptions) => Promise<void>;
     isAuthenticated: boolean;
-    user: User | null;
+    user: AuthUser | null;
     retry: () => void;
 } {
     const { user, isAuthenticated } = useAuth();

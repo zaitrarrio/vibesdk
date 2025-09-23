@@ -15,6 +15,11 @@ export interface RouteContext {
 	user: AuthUser | null;
 
     /**
+     * Session ID (null if not authenticated or public route)
+     */
+    sessionId: string | null;
+
+    /**
      * Global configurations for the application
      */
     config: GlobalConfigurableSettings;

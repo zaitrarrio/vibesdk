@@ -99,7 +99,7 @@ export class JWTUtils {
                 exp: payload.exp as number,
                 iat: payload.iat as number,
                 jti: payload.jti as string | undefined,
-                sessionId: payload.sessionId as string | undefined
+                sessionId: payload.sessionId as string
             };
         } catch (error) {
             return null;

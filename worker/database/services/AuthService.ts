@@ -16,7 +16,7 @@ import {
     SecurityError, 
     SecurityErrorType 
 } from 'shared/types/errors';
-import { AuthResult, OAuthUserInfo } from '../../types/auth-types';
+import { AuthResult, AuthUserSession, OAuthUserInfo } from '../../types/auth-types';
 import { generateId } from '../../utils/idGenerator';
 import {
     AuthUser, 
@@ -146,15 +146,16 @@ export class AuthService extends BaseService {
             logger.info('User registered and logged in directly', { userId, email: data.email });
             
             // Create session and tokens immediately (log user in after registration)
-            const { accessToken } = await this.sessionService.createSession(
+            const { accessToken, session } = await this.sessionService.createSession(
                 userId,
                 request
             );
             
             return {
                 user: mapUserResponse(newUser),
+                sessionId: session.sessionId,
+                expiresAt: session.expiresAt,
                 accessToken,
-                expiresIn: 3 * 24 * 60 * 60
             };
         } catch (error) {
             await this.logAuthAttempt(data.email, 'register', false, request);
@@ -214,7 +215,7 @@ export class AuthService extends BaseService {
             }
             
             // Create session
-            const { accessToken } = await this.sessionService.createSession(
+            const { accessToken, session } = await this.sessionService.createSession(
                 user.id,
                 request
             );
@@ -227,7 +228,8 @@ export class AuthService extends BaseService {
             return {
                 user: mapUserResponse(user),
                 accessToken,
-                expiresIn: 3 * 24 * 3600
+                sessionId: session.sessionId,
+                expiresAt: session.expiresAt,
             };
         } catch (error) {
             if (error instanceof SecurityError) {
@@ -413,7 +415,7 @@ export class AuthService extends BaseService {
             const user = await this.findOrCreateOAuthUser(provider, oauthUserInfo);
             
             // Create session
-            const { accessToken: sessionAccessToken } = await this.sessionService.createSession(
+            const { accessToken: sessionAccessToken, session } = await this.sessionService.createSession(
                 user.id,
                 request
             );
@@ -426,7 +428,8 @@ export class AuthService extends BaseService {
             return {
                 user: mapUserResponse(user),
                 accessToken: sessionAccessToken,
-                expiresIn: 3 * 24 * 3600,
+                sessionId: session.sessionId,
+                expiresAt: session.expiresAt,
                 redirectUrl: oauthState.redirectUri || undefined
             };
         } catch (error) {
@@ -653,7 +656,7 @@ export class AuthService extends BaseService {
                 .where(eq(schema.users.id, user.id));
 
             // Create session for verified user
-            const { accessToken } = await this.sessionService.createSession(
+            const { accessToken, session } = await this.sessionService.createSession(
                 user.id,
                 request
             );
@@ -665,7 +668,8 @@ export class AuthService extends BaseService {
             return {
                 user: mapUserResponse({ ...user, emailVerified: true }),
                 accessToken,
-                expiresIn: 3 * 24 * 3600
+                sessionId: session.sessionId,
+                expiresAt: session.expiresAt,
             };
         } catch (error) {
             await this.logAuthAttempt(email, 'email_verification', false, request);
@@ -724,7 +728,7 @@ export class AuthService extends BaseService {
     /**
      * Validate token and return user (for middleware)
      */
-    async validateTokenAndGetUser(token: string, env: Env): Promise<AuthUser | null> {
+    async validateTokenAndGetUser(token: string, env: Env): Promise<AuthUserSession | null> {
         try {
             const jwtUtils = JWTUtils.getInstance(env);
             const payload = await jwtUtils.verifyToken(token);
@@ -740,7 +744,15 @@ export class AuthService extends BaseService {
             }
             
             // Get user from database
-            return this.getUserForAuth(payload.sub);
+            const user = await this.getUserForAuth(payload.sub);
+            if (!user) {
+                return null;
+            }
+            
+            return {
+                user,
+                sessionId: payload.sessionId,
+            };
         } catch (error) {
             logger.error('Token validation error', error);
             return null;

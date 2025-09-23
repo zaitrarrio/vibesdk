@@ -215,8 +215,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession({
           userId: response.data.user.id,
           email: response.data.user.email,
-          sessionId: response.data.session?.id || response.data.user.id,
-          expiresAt: new Date(Date.now() + (response.data.expiresIn || 24 * 60 * 60) * 1000),
+          sessionId: response.data.sessionId,
+          expiresAt: response.data.expiresAt,
         });
         setupTokenRefresh();
         
@@ -253,8 +253,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession({
           userId: response.data.user.id,
           email: response.data.user.email,
-          sessionId: response.data.session?.id || response.data.user.id,
-          expiresAt: new Date(Date.now() + (response.data.expiresIn || 24 * 60 * 60) * 1000),
+          sessionId: response.data.sessionId,
+          expiresAt: response.data.expiresAt,
         });
         setupTokenRefresh();
         

@@ -28,6 +28,7 @@ export function adaptController<T extends BaseController>(
 
         const routeContext: RouteContext = {
             user: c.get('user'),
+            sessionId: c.get('sessionId'),
             config: c.get('config'),
             pathParams: c.req.param(),
             queryParams: new URL(c.req.url).searchParams,
