@@ -115,14 +115,18 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     logger(): StructuredLogger {
         if (!this._logger) {
             this._logger = createObjectLogger(this, 'CodeGeneratorAgent');
-            this._logger.setObjectId(this.state.sessionId);
+            this._logger.setObjectId(this.getAgentId());
             this._logger.setFields({
                 sessionId: this.state.sessionId,
-                agentId: this.state.inferenceContext.agentId,
+                agentId: this.getAgentId(),
                 userId: this.state.inferenceContext.userId,
             });
         }
         return this._logger;
+    }
+
+    getAgentId() {
+        return this.state.inferenceContext.agentId
     }
 
     // ===============================
@@ -195,8 +199,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         const fileName = key.split('/').pop() as string;
         const protocol = getProtocolForHost(this.state.hostname);
         const base = this.state.hostname ? `${protocol}://${this.state.hostname}` : '';
-        const sessionId = this.state.sessionId;
-        const url = `${base}/api/screenshots/${encodeURIComponent(sessionId)}/${encodeURIComponent(fileName)}`;
+        const agentId = this.state.inferenceContext.agentId;
+        const url = `${base}/api/screenshots/${encodeURIComponent(agentId)}/${encodeURIComponent(fileName)}`;
         return url;
     }
 
@@ -226,7 +230,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     };
 
     async saveToDatabase() {
-        this.logger().info(`Blueprint generated successfully for agent ${this.state.sessionId}`);
+        this.logger().info(`Blueprint generated successfully for agent ${this.getAgentId()}`);
         // Save the app to database (authenticated users only)
         const appService = new AppService(this.env);
         await appService.createApp({
@@ -260,7 +264,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         ..._args: unknown[]
     ): Promise<CodeGenState> {
 
-        const { query, language, frameworks, hostname, inferenceContext, templateInfo } = initArgs;
+        const { query, language, frameworks, hostname, inferenceContext, templateInfo, sandboxSessionId } = initArgs;
         // Generate a blueprint
         this.logger().info('Generating blueprint', { query, queryLength: query.length });
         this.logger().info(`Using language: ${language}, frameworks: ${frameworks ? frameworks.join(", ") : "none"}`);
@@ -294,7 +298,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             generatedPhases: [],
             commandsHistory: [],
             lastPackageJson: packageJson,
-            sessionId: inferenceContext.agentId,
+            sessionId: sandboxSessionId,
             hostname,
             inferenceContext,
         });
@@ -317,13 +321,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 error: `Error during deployment: ${error instanceof Error ? error.message : String(error)}`
             });
         }
-        this.logger().info(`Agent ${this.state.sessionId} initialized successfully`);
+        this.logger().info(`Agent ${this.getAgentId()} session: ${this.state.sessionId} initialized successfully`);
         await this.saveToDatabase();
         return this.state;
     }
 
     async isInitialized() {
-        return this.state.sessionId ? true : false
+        return this.getAgentId() ? true : false
     }  
     
     onStateUpdate(_state: CodeGenState, _source: "server" | Connection) {
@@ -351,7 +355,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         if (this.projectSetupAssistant === undefined) {
             this.projectSetupAssistant = new ProjectSetupAssistant({
                 env: this.env,
-                agentId: this.state.sessionId,
+                agentId: this.getAgentId(),
                 query: this.state.query,
                 blueprint: this.state.blueprint,
                 template: this.state.templateDetails,
@@ -361,10 +365,25 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         return this.projectSetupAssistant;
     }
 
+    getSessionId() {
+        return this.state.sessionId
+    }
+
+    resetSessionId() {
+        const newSessionId = generateId();
+        this.logger().info(`New Sandbox sessionId initialized: ${newSessionId}`)
+        this.setState({
+            ...this.state,
+            sessionId: newSessionId
+        })
+        // Reset sandbox service client
+        this.sandboxServiceClient = undefined;
+    }
+
     getSandboxServiceClient(): BaseSandboxService {
         if (this.sandboxServiceClient === undefined) {
             this.logger().info('Initializing sandbox service client');
-            this.sandboxServiceClient = getSandboxService(this.state.sessionId, this.state.hostname);
+            this.sandboxServiceClient = getSandboxService(this.getSessionId(), this.state.hostname);
         }
         return this.sandboxServiceClient;
     }
@@ -410,7 +429,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         });
 
         const readme = await this.operations.implementPhase.generateReadme({
-            agentId: this.state.sessionId,
+            agentId: this.getAgentId(),
             env: this.env,
             logger: this.logger(),
             context:GenerationContext.from(this.state, this.logger()),
@@ -511,7 +530,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } finally {
             const appService = new AppService(this.env);
             await appService.updateApp(
-                this.state.sessionId,
+                this.getAgentId(),
                 {
                     status: 'completed',
                 }
@@ -776,7 +795,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             },
             {
                 env: this.env,
-                agentId: this.state.sessionId,
+                agentId: this.getAgentId(),
                 logger: this.logger(),
                 context,
                 inferenceContext: this.state.inferenceContext,
@@ -869,7 +888,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             },
             {
                 env: this.env,
-                agentId: this.state.sessionId,
+                agentId: this.getAgentId(),
                 logger: this.logger(),
                 context,
                 inferenceContext: this.state.inferenceContext,
@@ -956,7 +975,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      * Used by WebSocket to provide configuration info to frontend
      */
     async getModelConfigsInfo() {
-        const userId = this.state.sessionId;
+        const userId = this.state.inferenceContext.userId;
         if (!userId) {
             throw new Error('No user session available for model configurations');
         }
@@ -1035,7 +1054,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             {issues: issueReport},
             {
                 env: this.env,
-                agentId: this.state.sessionId,
+                agentId: this.getAgentId(),
                 logger: this.logger(),
                 context,
                 inferenceContext: this.state.inferenceContext,
@@ -1071,7 +1090,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             {file, issues, retryIndex},
             {
                 env: this.env,
-                agentId: this.state.sessionId,
+                agentId: this.getAgentId(),
                 logger: this.logger(),
                 context,
                 inferenceContext: this.state.inferenceContext,
@@ -1425,7 +1444,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     //             allFiles,
     //         }, {
     //             env: this.env,
-    //             agentId: this.state.sessionId,
+    //             agentId: this.getAgentId(),
     //             context,
     //             logger: this.logger()
     //         });
@@ -1597,7 +1616,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     private async createNewDeployment(): Promise<PreviewType | null> {
         // Create new deployment
         const templateName = this.state.templateDetails?.name || 'scratch';
-        // Generate a short unique suffix (6 chars from session ID)
+        // Generate a unique suffix
         const uniqueSuffix = generateId();
         const projectName = `${this.state.blueprint?.projectName || templateName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueSuffix}`.toLowerCase();
         
@@ -1721,12 +1740,18 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             return preview;
         } catch (error) {
             this.logger().error("Error deploying to sandbox service:", error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            if (errorMsg.includes('Network connection lost')) {
+                // For this particular error, reset the sandbox sessionId
+                this.resetSessionId();
+            }
+
             this.setState({
                 ...this.state,
                 sandboxInstanceId: undefined,
             });
             this.broadcast(WebSocketMessageResponses.DEPLOYMENT_FAILED, {
-                error: `Error deploying to sandbox service: ${error instanceof Error ? error.message : String(error)}`,
+                error: `Error deploying to sandbox service: ${errorMsg}`,
             });
             return this.deployToSandbox();
         }
@@ -1809,7 +1834,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             const appService = new AppService(this.env);
             // Update cloudflare URL in database
             await appService.updateDeploymentUrl(
-                this.state.sessionId,
+                this.getAgentId(),
                 deploymentUrl || ''
             );
 
@@ -1850,7 +1875,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     //         {screenshotData},
     //         {
     //             env: this.env,
-    //             agentId: this.state.sessionId,
+    //             agentId: this.getAgentId(),
     //             context,
     //             logger: this.logger(),
     //             inferenceContext: this.state.inferenceContext,
@@ -1925,7 +1950,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      */
     private generateWebhookUrl(): string {
         // Use the agent's session ID as the agent identifier
-        const agentId = this.state.sessionId || 'unknown';
+        const agentId = this.getAgentId() || 'unknown';
         
         // Generate webhook URL with agent ID for routing
         return `${getProtocolForHost(this.state.hostname)}://${this.state.hostname}/api/webhook/sandbox/${agentId}/runtime_error`;
@@ -1942,7 +1967,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             this.logger().info('Received webhook from sandbox service', { 
                 eventType, 
-                agentId: this.state.sessionId 
+                agentId: this.getAgentId() 
             });
 
             const payload = await request.json() as WebhookPayload;
@@ -2226,7 +2251,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             const appService = new AppService(this.env);
             // Update database with GitHub repository URL and visibility
             await appService.updateGitHubRepository(
-                this.state.sessionId || '',
+                this.getAgentId() || '',
                 options.repositoryHtmlUrl || '',
                 options.isPrivate ? 'private' : 'public'
             );
@@ -2282,7 +2307,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         });
                     }
                 }, 
-                { env: this.env, agentId: this.state.sessionId, context, logger: this.logger(), inferenceContext: this.state.inferenceContext }
+                { env: this.env, agentId: this.getAgentId(), context, logger: this.logger(), inferenceContext: this.state.inferenceContext }
             );
 
             const { conversationResponse, messages } = conversationalResponse;
@@ -2418,7 +2443,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             // Prefer Cloudflare Images → then R2 → fallback to data URL
             const fileStamp = Date.now();
-            const fileBase = `${this.state.sessionId}-${fileStamp}`;
+            const fileBase = `${this.getAgentId()}-${fileStamp}`;
             let publicUrl: string | null = null;
 
             // 1) Try Cloudflare Images (REST API)
@@ -2431,7 +2456,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             // 2) Try R2 (serve via Worker route) if Images failed
             if (!publicUrl) {
                 try {
-                    const r2Key = `screenshots/${this.state.sessionId}/${fileBase}.png`;
+                    const r2Key = `screenshots/${this.getAgentId()}/${fileBase}.png`;
                     publicUrl = await this.uploadScreenshotToR2(base64Screenshot, r2Key);
                 } catch (r2Err) {
                     this.logger().warn('R2 upload fallback failed, will store as data URL', { error: r2Err instanceof Error ? r2Err.message : String(r2Err) });
@@ -2446,7 +2471,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             // Persist in database
             try {
                 const appService = new AppService(this.env);
-                await appService.updateAppScreenshot(this.state.sessionId, publicUrl);
+                await appService.updateAppScreenshot(this.getAgentId(), publicUrl);
             } catch (dbError) {
                 const error = `Database update failed: ${dbError instanceof Error ? dbError.message : 'Unknown database error'}`;
                 this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_ERROR, {
@@ -2498,8 +2523,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      * Save screenshot data to database - now triggers server-side screenshot capture
      */
     public async saveScreenshotToDatabase(screenshotData: ScreenshotData): Promise<void> {
-        if (!this.env.DB || !this.state.sessionId) {
-            const error = 'Cannot capture screenshot: DB or sessionId not available';
+        if (!this.env.DB || !this.getAgentId()) {
+            const error = 'Cannot capture screenshot: DB or agentId not available';
             this.logger().warn(error);
             this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_ERROR, {
                 error,
