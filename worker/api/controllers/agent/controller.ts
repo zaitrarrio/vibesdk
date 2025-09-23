@@ -11,6 +11,7 @@ import { ModelConfig } from '../../../agents/inferutils/config.types';
 import { RateLimitService } from '../../../services/rate-limit/rateLimits';
 import { validateWebSocketOrigin } from '../../../middleware/security/websocket';
 import { createLogger } from '../../../logger';
+import { getPreviewDomain } from 'worker/utils/urls';
 
 const defaultCodeGenArgs: CodeGenArgs = {
     query: '',
@@ -34,7 +35,7 @@ export class CodingAgentController extends BaseController {
             this.logger.info('Starting code generation process');
 
             const url = new URL(request.url);
-            const hostname = url.hostname === 'localhost' ? `localhost:${url.port}`: url.hostname;
+            const hostname = url.hostname === 'localhost' ? `localhost:${url.port}`: getPreviewDomain(env);
             // Parse the query from the request body
             let body: CodeGenArgs;
             try {

@@ -34,7 +34,7 @@ import { BaseSandboxService } from './BaseSandboxService';
 import { 
     buildDeploymentConfig, 
     parseWranglerConfig, 
-    deployToDispatch 
+    deployToDispatch, 
 } from '../deployer/deploy';
 import { 
     createAssetManifest 
@@ -1726,10 +1726,6 @@ export class SandboxSdkClient extends BaseSandboxService {
                 throw new Error('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN must be set in environment');
             }
             
-            // Get dispatch namespace from env or use default
-            const dispatchNamespace = env.DISPATCH_NAMESPACE;
-            this.logger.info('Using dispatch namespace', { dispatchNamespace });
-            
             const sandbox = this.getSandbox();
             this.logger.info('Processing deployment', { instanceId });
             
@@ -1796,33 +1792,39 @@ export class SandboxSdkClient extends BaseSandboxService {
                 ...config,
                 name: config.name
             };
+        
             
             // Step 6: Build deployment config using pure function
-            const deployConfig = {
-                ...buildDeploymentConfig(
-                    dispatchConfig,
-                    workerContent,
-                    accountId,
-                    apiToken,
-                    assetsManifest,
-                    config.compatibility_flags
-                ),
-                dispatchNamespace
-            };
+            const deployConfig = buildDeploymentConfig(
+                dispatchConfig,
+                workerContent,
+                accountId,
+                apiToken,
+                assetsManifest,
+                config.compatibility_flags
+            );
             
             // Step 7: Deploy using pure function
             this.logger.info('Deploying to Cloudflare');
-            await deployToDispatch(
-                deployConfig,
-                fileContents,
-                undefined, // additionalModules
-                config.migrations,
-                config.assets
-            );
+            if ('DISPATCH_NAMESPACE' in env) {
+                this.logger.info('Using dispatch namespace', { dispatchNamespace: env.DISPATCH_NAMESPACE });
+                await deployToDispatch(
+                    {
+                        ...deployConfig,
+                        dispatchNamespace: env.DISPATCH_NAMESPACE as string
+                    },
+                    fileContents,
+                    undefined, // additionalModules
+                    config.migrations,
+                    config.assets
+                );
+            } else {
+                throw new Error('DISPATCH_NAMESPACE not found in environment variables, cannot deploy without dispatch namespace');
+            }
             
             // Step 8: Determine deployment URL
             const deployedUrl = `${this.getProtocolForHost()}://${projectName}.${this.hostname}`;
-            const deploymentId = `deploy-${instanceId}-${Date.now()}`;
+            const deploymentId = projectName;
             
             this.logger.info('Deployment successful', { 
                 instanceId,
@@ -1836,7 +1838,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 message: `Successfully deployed ${instanceId} using secure API deployment`,
                 deployedUrl,
                 deploymentId,
-                output: `Deployed to dispatch namespace: ${dispatchNamespace}`
+                output: `Deployed`
             };
             
         } catch (error) {
