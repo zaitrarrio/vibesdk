@@ -424,11 +424,7 @@ export class AuthService extends BaseService {
             logger.info('OAuth login successful', { userId: user.id, provider });
             
             return {
-                user: {
-                    id: user.id,
-                    email: user.email,
-                    displayName: user.displayName || undefined,
-                },
+                user: mapUserResponse(user),
                 accessToken: sessionAccessToken,
                 expiresIn: 3 * 24 * 3600,
                 redirectUrl: oauthState.redirectUri || undefined
@@ -696,7 +692,14 @@ export class AuthService extends BaseService {
                 .select({
                     id: schema.users.id,
                     email: schema.users.email,
-                    displayName: schema.users.displayName
+                    displayName: schema.users.displayName,
+                    username: schema.users.username,
+                    avatarUrl: schema.users.avatarUrl,
+                    bio: schema.users.bio,
+                    timezone: schema.users.timezone,
+                    provider: schema.users.provider,
+                    emailVerified: schema.users.emailVerified,
+                    createdAt: schema.users.createdAt,
                 })
                 .from(schema.users)
                 .where(
@@ -711,11 +714,7 @@ export class AuthService extends BaseService {
                 return null;
             }
             
-            return {
-                id: user.id,
-                email: user.email,
-                displayName: user.displayName || undefined,
-            };
+            return mapUserResponse(user);
         } catch (error) {
             logger.error('Error getting user for auth', error);
             return null;

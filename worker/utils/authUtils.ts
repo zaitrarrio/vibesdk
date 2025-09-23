@@ -260,15 +260,6 @@ export interface SessionResponse {
 	expiresIn?: number;
 }
 
-/**
- * Re-export AuthUser as UserResponse for backward compatibility
- */
-export type UserResponse = AuthUser;
-
-/**
- * Centralized user response mapper - single source of truth for user data formatting
- * Ensures all endpoints return consistent user data structure
- */
 export function mapUserResponse(
 	user: (Partial<User> & { id: string; email: string }) | AuthUser,
 ): AuthUser {
@@ -284,6 +275,11 @@ export function mapUserResponse(
 		displayName: user.displayName || undefined,
 		username: user.username || undefined,
 		avatarUrl: user.avatarUrl || undefined,
+		bio: user.bio || undefined,
+		timezone: user.timezone || undefined,
+		provider: user.provider || undefined,
+		emailVerified: user.emailVerified || undefined,
+		createdAt: user.createdAt || undefined,
 	};
 }
 

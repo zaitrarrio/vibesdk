@@ -199,24 +199,14 @@ export class AuthController extends BaseController {
      * Get current user profile
      * GET /api/auth/profile
      */
-    static async getProfile(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async getProfile(_request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
-            // User is provided by middleware - no need for manual authentication
-            const user = routeContext.user;
-            if (!user) {
+            if (!routeContext.user) {
                 return AuthController.createErrorResponse('Unauthorized', 401);
             }
-            
-            const userService = new UserService(env);
-            const fullUser = await userService.findUserById(user.id);
-            
-            if (!fullUser) {
-                return AuthController.createErrorResponse('User not found', 404);
-            }
-            
             return AuthController.createSuccessResponse({
-                user: mapUserResponse(fullUser),
-                sessionId: user.id // Use user ID as session identifier
+                user: mapUserResponse(routeContext.user),
+                sessionId: routeContext.user.id // Use user ID as session identifier
             });
         } catch (error) {
             return AuthController.handleError(error, 'get profile');
