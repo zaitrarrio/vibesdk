@@ -35,7 +35,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/auth-context';
 import { toggleFavorite } from '@/hooks/use-apps';
 import { formatDistanceToNow, isValid } from 'date-fns';
@@ -714,18 +714,44 @@ export default function AppView() {
 				<Tabs
 					value={activeTab}
 					onValueChange={setActiveTab}
-					className="flex flex-col flex-1"
+					className="flex flex-col flex-1 gap-2"
 				>
-					{/* <TabsList className="grid w-full max-w-md grid-cols-3">
-						<TabsTrigger value="preview">Preview</TabsTrigger>
-						<TabsTrigger value="code">Code</TabsTrigger>
-						<TabsTrigger value="conversation">
-							Conversation
+					{/* Using proper TabsList and TabsTrigger components */}
+					<TabsList className="inline-flex h-auto w-fit items-center gap-0.5 bg-bg-2 dark:bg-bg-1 rounded-md p-0.5 border border-border-primary/30 ml-0">
+						<TabsTrigger 
+							value="preview" 
+							className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm"
+						>
+							<Eye className={cn(
+								"h-3.5 w-3.5 mr-1.5",
+								activeTab === 'preview' ? 'text-accent' : 'text-accent/60'
+							)} />
+							Preview
 						</TabsTrigger>
-					</TabsList> */}
+						<TabsTrigger 
+							value="code" 
+							className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm"
+						>
+							<Code2 className={cn(
+								"h-3.5 w-3.5 mr-1.5",
+								activeTab === 'code' ? 'text-accent' : 'text-accent/60'
+							)} />
+							Code
+						</TabsTrigger>
+						<TabsTrigger 
+							value="prompt" 
+							className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm"
+						>
+							<MessageSquare className={cn(
+								"h-3.5 w-3.5 mr-1.5",
+								activeTab === 'prompt' ? 'text-accent' : 'text-accent/60'
+							)} />
+							Prompt
+						</TabsTrigger>
+					</TabsList>
 
-					<TabsContent value="preview" className="space-y-4 flex-1">
-						<Card className=" px-2">
+					<TabsContent value="preview" className="flex-1">
+						<Card className="px-2">
 							<CardHeader className="overflow-hidden rounded-t">
 								<div className="flex items-center justify-between">
 									<CardTitle className="text-base">
@@ -841,10 +867,7 @@ export default function AppView() {
 					</TabsContent>
 
 					<TabsContent value="code" className="flex-1">
-						<Card
-							className="flex flex-col"
-							style={{ height: 'calc(100vh - 300px)' }}
-						>
+						<Card className="flex flex-col" style={{ maxHeight: '600px' }}>
 							<CardHeader>
 								<div className="flex items-center justify-between">
 									<div>
@@ -875,10 +898,10 @@ export default function AppView() {
 									)}
 								</div>
 							</CardHeader>
-							<CardContent className="p-0 flex-1 flex flex-col">
+							<CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
 								{files.length > 0 ? (
-									<div className="flex-1 relative bg-bg-3 overflow-hidden">
-										<div className="absolute inset-0 flex">
+									<div className="h-[450px] relative bg-bg-3 overflow-hidden">
+										<div className="h-full flex">
 											<div className="w-full max-w-[250px] bg-bg-3 border-r border-text/10 h-full overflow-y-auto">
 												<div className="p-2 px-3 text-sm flex items-center gap-1 text-text-primary/50 font-medium border-b bg-bg-3">
 													<Code2 className="size-4" />
@@ -979,84 +1002,59 @@ export default function AppView() {
 					</TabsContent>
 
 					<TabsContent
-						value="conversation"
-						className="space-y-4 flex-1"
+						value="prompt"
+						className="flex-1"
 					>
 						<Card>
 							<CardHeader>
-								<CardTitle>Conversation History</CardTitle>
+								<CardTitle>Original Prompt</CardTitle>
 								<CardDescription>
-									The prompts and interactions that created
-									this app
+									The initial prompt used to create this app
 								</CardDescription>
 							</CardHeader>
 							<CardContent>
-								{app?.agentSummary?.query || app?.agentSummary?.conversation?.length ? (
-									<div className="space-y-4">
-										{/* Original Prompt */}
-										{app?.agentSummary?.query && (
-											<div className="border-l-4 border-blue-500 pl-4 py-2">
-												<div className="flex items-center gap-2 mb-2">
-													<User className="h-4 w-4 text-blue-600" />
-													<span className="text-sm font-medium text-blue-600">
-														Original Prompt
-													</span>
+								{app?.agentSummary?.query || app?.originalPrompt ? (
+									<div className="bg-bg-2 rounded-lg p-6 border border-border-primary">
+										<div className="flex items-start gap-3">
+											<div className="flex-shrink-0 mt-1">
+												<div className="rounded-full bg-accent/10 p-2">
+													<MessageSquare className="h-4 w-4 text-accent" />
 												</div>
-												<p className="text-sm bg-blue-50 p-3 rounded">
-													{app?.agentSummary?.query}
+											</div>
+											<div className="flex-1">
+												<p className="text-sm text-text-secondary mb-2 font-medium">Prompt</p>
+												<p className="text-text-primary whitespace-pre-wrap">
+													{app?.agentSummary?.query || app?.originalPrompt}
 												</p>
 											</div>
-										)}
-
-										{/* Conversation Messages */}
-										{app?.agentSummary?.conversation && app?.agentSummary?.conversation.length > 0 && (
-											<div className="space-y-3">
-												<h4 className="text-sm font-medium text-muted-foreground">Development Conversation</h4>
-												{app?.agentSummary?.conversation.map((message, index) => (
-													<div
-														key={index}
-														className={cn(
-															"border-l-4 pl-4 py-2",
-															message.role === 'user' 
-																? "border-green-500" 
-																: "border-gray-400"
-														)}
-													>
-														<div className="flex items-center gap-2 mb-2">
-															{message.role === 'user' ? (
-																<User className="h-4 w-4 text-green-600" />
-															) : (
-																<MessageSquare className="h-4 w-4 text-gray-600" />
-															)}
-															<span className={cn(
-																"text-sm font-medium",
-																message.role === 'user' 
-																	? "text-green-600" 
-																	: "text-gray-600"
-															)}>
-																{message.role === 'user' ? 'User' : 'Assistant'}
-															</span>
-														</div>
-														<div className={cn(
-															"text-sm p-3 rounded",
-															message.role === 'user' 
-																? "bg-green-50" 
-																: "bg-gray-50"
-														)}>
-															{message.content as string}
-														</div>
-													</div>
-												))}
-											</div>
-										)}
+										</div>
+										
+										{/* Copy button */}
+										<div className="mt-4 flex justify-end">
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => {
+													const prompt = app?.agentSummary?.query || app?.originalPrompt;
+													if (prompt) {
+														navigator.clipboard.writeText(prompt);
+														toast.success('Prompt copied to clipboard');
+													}
+												}}
+												className="gap-2"
+											>
+												<Copy className="h-3 w-3" />
+												Copy Prompt
+											</Button>
+										</div>
 									</div>
 								) : (
 									<div className="flex items-center justify-center py-12 text-text-tertiary">
 										<MessageSquare className="h-8 w-8 mr-3" />
 										<p>
 											{app?.agentSummary === null 
-												? 'Loading conversation...' 
-												: 'No conversation history available'
+												? 'Loading prompt...' 
+												: 'No prompt available'
 											}
 										</p>
 									</div>
