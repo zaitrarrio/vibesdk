@@ -1524,10 +1524,12 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 // If there are unfixable issues but of type TS2307, extract external module names and install them
                 if (fixResult.unfixableIssues.length > 0) {
                     const modulesNotFound = fixResult.unfixableIssues.filter(issue => issue.issueCode === 'TS2307');
-                    // Reason is of the form: External package "xyz" should be handled by package manager
-                    const moduleNamesRaw = modulesNotFound.map(issue => issue.reason.match(/External package ["'](.+?)["']/)?.[1]);
-                    const moduleNames = moduleNamesRaw.filter((m): m is string => typeof m === 'string' && m.trim().length > 0);
-
+                    // Reason is of the form: External package "xyz" should be handled by package manager                    
+                    const moduleNames = modulesNotFound.flatMap(issue => {
+                        const match = issue.reason.match(/External package ["'](.+?)["']/);
+                        const name = match?.[1];
+                        return (typeof name === 'string' && name.trim().length > 0) ? [name] : [];
+                    });
                     if (moduleNames.length > 0) {
                         const installCommands = moduleNames.map(moduleName => `bun install ${moduleName}`);
                         await this.executeCommands(installCommands);
