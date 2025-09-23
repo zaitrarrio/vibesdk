@@ -2,7 +2,7 @@
  * Centralized Authentication Utilities
  */
 
-import type { AuthUser } from '../types/auth-types';
+import type {  AuthUser } from '../types/auth-types';
 import type { User } from '../database/schema';
 
 /**
@@ -245,30 +245,14 @@ export function extractRequestMetadata(request: Request): RequestMetadata {
 }
 
 /**
- * Create session response with consistent format
+ * Create session response
  */
 export interface SessionResponse {
-	user: {
-		id: string;
-		email: string;
-		displayName?: string;
-	};
-	session?: {
-		id: string;
-		expiresAt: string;
-	};
-	expiresIn?: number;
+	user: AuthUser;
+    sessionId: string;
+    expiresAt: Date | null;
 }
 
-/**
- * Re-export AuthUser as UserResponse for backward compatibility
- */
-export type UserResponse = AuthUser;
-
-/**
- * Centralized user response mapper - single source of truth for user data formatting
- * Ensures all endpoints return consistent user data structure
- */
 export function mapUserResponse(
 	user: (Partial<User> & { id: string; email: string }) | AuthUser,
 ): AuthUser {
@@ -284,30 +268,21 @@ export function mapUserResponse(
 		displayName: user.displayName || undefined,
 		username: user.username || undefined,
 		avatarUrl: user.avatarUrl || undefined,
+		bio: user.bio || undefined,
+		timezone: user.timezone || undefined,
+		provider: user.provider || undefined,
+		emailVerified: user.emailVerified || undefined,
+		createdAt: user.createdAt || undefined,
 	};
 }
 
-/**
- * Format authentication response consistently
- */
 export function formatAuthResponse(
 	user: AuthUser,
-	sessionId?: string,
-	expiresIn?: number,
+	sessionId: string,
+	expiresAt: Date | null,
 ): SessionResponse {
-	const response: SessionResponse = { user };
-
-	if (sessionId && expiresIn) {
-		response.session = {
-			id: sessionId,
-			expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
-		};
-	}
-
-	if (expiresIn) {
-		response.expiresIn = expiresIn;
-	}
-
+	const response: SessionResponse = { user, sessionId, expiresAt };
+    
 	return response;
 }
 

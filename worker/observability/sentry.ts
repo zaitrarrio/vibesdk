@@ -3,7 +3,14 @@ import type { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from '../types/appenv';
 
-export function sentryOptions(env: Env) {
+export function sentryOptions(env: Env) : Sentry.CloudflareOptions {
+    let transportOptions : Sentry.CloudflareOptions['transportOptions'] = {};
+    if (env.CF_ACCESS_ID && env.CF_ACCESS_SECRET) {
+        transportOptions.headers = {
+            'CF-Access-Client-Id': env.CF_ACCESS_ID,
+            'CF-Access-Client-Secret': env.CF_ACCESS_SECRET,
+        };
+    }
 	return {
 		dsn: env.SENTRY_DSN,
 		release: env.CF_VERSION_METADATA.id,
@@ -11,6 +18,7 @@ export function sentryOptions(env: Env) {
 		enableLogs: true,
 		sendDefaultPii: true,
 		tracesSampleRate: 1.0,
+        transportOptions,
 	};
 }
 
@@ -32,11 +40,6 @@ export function initHonoSentry(app: Hono<AppEnv>): void {
 			Sentry.setTag('http.path', url.pathname);
 			const cfRay = c.req.header('cf-ray');
 			if (cfRay) Sentry.setTag('cf_ray', cfRay);
-
-			const user = c.get('user');
-			if (user) {
-				Sentry.setUser({ id: user.id, email: user.email });
-			}
 		} catch {
             console.error('Failed to set Sentry context');
 		}
@@ -85,4 +88,8 @@ export function captureSecurityEvent(
         // no-op: telemetry must not break the app
         console.error('Failed to capture security event');
     }
+}
+
+export function captureException(error: Error): void {
+    Sentry.captureException(error);
 }

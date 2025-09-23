@@ -1,4 +1,4 @@
-import { getSandbox, Sandbox, parseSSEStream, type ExecEvent, ExecuteResponse } from '@cloudflare/sandbox';
+import { getSandbox, Sandbox, ExecuteResponse } from '@cloudflare/sandbox';
 
 import {
     TemplateDetailsResponse,
@@ -25,8 +25,6 @@ import {
     GitHubPushRequest, GitHubPushResponse, GitHubExportRequest, GitHubExportResponse,
     GetLogsResponse,
     ListInstancesResponse,
-    SaveInstanceResponse,
-    ResumeInstanceResponse,
 } from './sandboxTypes';
 
 import { createObjectLogger } from '../../logger';
@@ -152,10 +150,6 @@ export class SandboxSdkClient extends BaseSandboxService {
         return this.sandbox;
     }
 
-    private getRuntimeErrorFile(instanceId: string): string {
-        return `${instanceId}-runtime_errors.json`;
-    }
-
     private getInstanceMetadataFile(instanceId: string): string {
         return `${instanceId}-metadata.json`;
     }
@@ -163,33 +157,6 @@ export class SandboxSdkClient extends BaseSandboxService {
     private async executeCommand(instanceId: string, command: string, timeout?: number): Promise<ExecuteResponse> {
         return await this.getSandbox().exec(`cd ${instanceId} && ${command}`, { timeout });
         // return await this.getSandbox().exec(command, { cwd: instanceId, timeout });
-    }
-
-    private async storeRuntimeError(instanceId: string, error: RuntimeError): Promise<void> {
-        try {
-            const errorFile = this.getRuntimeErrorFile(instanceId);
-            const sandbox = this.getSandbox();
-            
-            // Read existing errors
-            let errors: RuntimeError[] = [];
-            try {
-                const existingFile = await sandbox.readFile(errorFile);
-                errors = JSON.parse(existingFile.content) as RuntimeError[];
-            } catch {
-                // No existing errors file
-            }
-            
-            errors.push(error);
-            
-            // Keep only last 100 errors
-            if (errors.length > 100) {
-                errors = errors.slice(-100);
-            }
-            
-            await sandbox.writeFile(errorFile, JSON.stringify(errors));
-        } catch (writeError) {
-            this.logger.warn('Failed to store runtime error', writeError);
-        }
     }
 
     private async getInstanceMetadata(instanceId: string): Promise<InstanceMetadata> {
@@ -920,7 +887,7 @@ export class SandboxSdkClient extends BaseSandboxService {
 
     async createInstance(templateName: string, projectName: string, webhookUrl?: string, localEnvVars?: Record<string, string>): Promise<BootstrapResponse> {
         try {
-            const instanceId = `${projectName}-${generateId()}`;
+            const instanceId = `i-${generateId()}`;
             this.logger.info('Creating sandbox instance', { instanceId, templateName, projectName });
             
             let results: {previewURL: string, tunnelURL: string, processId: string, allocatedPort: number} | undefined;
@@ -990,17 +957,12 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             const startTime = new Date(metadata.startTime);
             const uptime = Math.floor((Date.now() - startTime.getTime()) / 1000);
-            // Get file tree
-            const fileTree = await this.buildFileTree(instanceId);
 
             // Get runtime errors
-            let runtimeErrors: RuntimeError[] = [];
-            try {
-                const errorsFile = await this.getSandbox().readFile(this.getRuntimeErrorFile(instanceId));
-                runtimeErrors = JSON.parse(errorsFile.content) as RuntimeError[];
-            } catch {
-                // No errors stored
-            }
+            const [fileTree, runtimeErrors] = await Promise.all([
+                this.buildFileTree(instanceId),
+                this.getInstanceErrors(instanceId)
+            ]);
 
             const instanceDetails: InstanceDetails = {
                 runId: instanceId,
@@ -1010,7 +972,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 directory: instanceId,
                 serviceDirectory: instanceId,
                 fileTree,
-                runtimeErrors,
+                runtimeErrors: runtimeErrors.errors,
                 previewURL: metadata.previewURL,
                 processId: metadata.processId,
                 tunnelURL: metadata.tunnelURL,
@@ -1037,6 +999,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 return {
                     success: false,
                     pending: false,
+                    isHealthy: false,
                     error: `Instance ${instanceId} not found`
                 };
             }
@@ -1060,6 +1023,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             return {
                 success: true,
                 pending: false,
+                isHealthy,
                 message: isHealthy ? 'Instance is running normally' : 'Instance may have issues',
                 previewURL: metadata.previewURL,
                 tunnelURL: metadata.tunnelURL,
@@ -1070,6 +1034,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             return {
                 success: false,
                 pending: false,
+                isHealthy: false,
                 error: `Failed to get instance status: ${error instanceof Error ? error.message : 'Unknown error'}`
             };
         }
@@ -1363,7 +1328,6 @@ export class SandboxSdkClient extends BaseSandboxService {
                         exitCode: result.exitCode
                     });
                     
-                    // Track errors if command failed
                     if (result.exitCode !== 0) {
                         const error: RuntimeError = {
                             timestamp: new Date(),
@@ -1373,12 +1337,12 @@ export class SandboxSdkClient extends BaseSandboxService {
                             source: 'command_execution',
                             rawOutput: `Command: ${command}\nExit code: ${result.exitCode}\nSTDOUT: ${result.stdout}\nSTDERR: ${result.stderr}`
                         };
-                        await this.storeRuntimeError(instanceId, error);
+                        this.logger.error('Command execution failed', { command, error });
                     }
                     
                     this.logger.info('Command executed', { command, exitCode: result.exitCode });
                 } catch (error) {
-                    this.logger.error('Command execution failed', { command, error });
+                    this.logger.error('Command execution failed with error', { command, error });
                     results.push({
                         command,
                         success: false,
@@ -1500,20 +1464,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     }
                 }
             } catch (enhancedError) {
-                this.logger.warn('Enhanced error clearing unavailable, falling back to legacy', enhancedError);
-            }
-
-            // Fallback to legacy error system
-            const sandbox = this.getSandbox();
-            try {
-                const errorsFile = await sandbox.readFile(this.getRuntimeErrorFile(instanceId));
-                const errors = JSON.parse(errorsFile.content) as RuntimeError[];
-                clearedCount = errors.length;
-                
-                // Clear errors by writing empty array
-                await sandbox.writeFile(this.getRuntimeErrorFile(instanceId), JSON.stringify([]));
-            } catch {
-                // No errors to clear
+                this.logger.warn('Error clearing unavailable, falling back to legacy', enhancedError);
             }
 
             this.logger.info(`Cleared ${clearedCount} errors for instance ${instanceId}`);
@@ -2325,302 +2276,6 @@ export class SandboxSdkClient extends BaseSandboxService {
         return files;
     }
 
-    // ==========================================
-    // SAVE/RESUME OPERATIONS
-    // ==========================================
-
-    async packInstance(instanceId: string, build: boolean = true): Promise<string> {
-        const archiveName = `${instanceId}.zip`;
-        const sandbox = this.getSandbox();
-            
-        if (build) {
-            const buildResult = await this.executeCommand(instanceId, 'bun run build');
-            if (buildResult.exitCode !== 0) {
-                this.logger.warn('Build step failed or not available', buildResult.stdout, buildResult.stderr);
-                throw new Error(`Build failed: ${buildResult.stderr}`);
-            }
-        }
-
-        // Create zip archive excluding large directories for speed
-        // -0: no compression (fastest)
-        // -r: recursive
-        // -q: quiet (less output overhead)
-        // -x: exclude patterns
-        const zipCmd = `zip -6 -r -q ${archiveName} ${instanceId}/ ${instanceId}-metadata.json ${instanceId}-runtime_errors.json -x "data/*" "*/node_modules/*" "*/.cache/*" "*/.git/*" "*/.vscode/*" "*/coverage/*" "*/.nyc_output/*" "*/tmp/*" "*/temp/*" || true`;
-        const zipResult = await sandbox.exec(zipCmd);
-
-        if (zipResult.exitCode !== 0) {
-            throw new Error(`Failed to create zip archive: ${zipResult.stderr}`);
-        }
-
-        // Convert zip file to base64 for proper binary handling
-        const base64Result = await sandbox.exec(`base64 -w 0 ${archiveName} && rm ${archiveName}`);
-        if (base64Result.exitCode !== 0) {
-            throw new Error('Failed to encode zip file to base64');
-        }
-
-        return base64Result.stdout.trim();
-    }
-
-    async saveInstance(instanceId: string, buildBeforeSave: boolean = true): Promise<SaveInstanceResponse> {
-        try {
-            this.logger.info('Saving instance to R2', { instanceId });
-
-            // Check if instance exists
-            const metadata = await this.getInstanceMetadata(instanceId);
-            if (!metadata) {
-                return {
-                    success: false,
-                    error: `Instance ${instanceId} not found`
-                };
-            }
-            // Create archive name based on instance details
-            const compressionStart = Date.now();
-            const compressionTime = Date.now() - compressionStart;
-            this.logger.info('Instance compressed', { instanceId, timeMs: compressionTime });
-
-            // Upload to R2 bucket using PUT request
-            const uploadStart = Date.now();
-            
-            // Decode base64 back to binary for R2 upload
-            const base64Content = await this.packInstance(instanceId, buildBeforeSave);
-            const binaryBuffer = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
-
-            const uploadResponse = await env.TEMPLATES_BUCKET.put(`instances/${instanceId}.zip`, binaryBuffer);
-
-            if (!uploadResponse) {
-                throw new Error(`Failed to upload to R2`);
-            }
-
-            const uploadTime = Date.now() - uploadStart;
-
-            // Cleanup local archive
-            // await sandbox.exec(`rm -f ${archiveName}`);
-
-            this.logger.info('Instance saved successfully', { instanceId, compressionTimeMs: compressionTime, uploadTimeMs: uploadTime, response: uploadResponse });
-
-            return {
-                success: true,
-                message: `Successfully saved instance ${instanceId}`,
-                compressionTime,
-                uploadTime
-            };
-
-        } catch (error) {
-            this.logger.error('saveInstance', error, { instanceId });
-            return {
-                success: false,
-                error: `Failed to save instance: ${error instanceof Error ? error.message : 'Unknown error'}`
-            };
-        }
-    }
-
-    async resumeInstance(instanceId: string, forceRestart?: boolean): Promise<ResumeInstanceResponse> {
-        try {
-            this.logger.info(`Resuming instance ${instanceId}`, { forceRestart });
-            
-            const sandbox = this.getSandbox();
-            let needsDownload = false;
-            let needsStart = false;
-
-            // Check if instance exists locally  
-            let metadata = await this.getInstanceMetadata(instanceId);
-            
-            if (!metadata) {
-                this.logger.info('Instance not found locally, downloading from R2', { instanceId });
-                needsDownload = true;
-                needsStart = true;
-            } else {
-                // Instance exists, check process status
-                if (!metadata.processId || forceRestart) {
-                    this.logger.info('Instance requires restart', { instanceId, reason: forceRestart ? 'forced' : 'no process' });
-                    needsStart = true;
-                } else {
-                    // Check if process is still running
-                    try {
-                        const process = await sandbox.getProcess(metadata.processId);
-                        if (!process || process.status !== 'running') {
-                            this.logger.info('Instance process not running', { instanceId, processId: metadata.processId });
-                            needsStart = true;
-                        } else {
-                            this.logger.info('Instance already running', { instanceId, processId: metadata.processId });
-                            return {
-                                success: true,
-                                message: `Instance ${instanceId} is already running`,
-                                resumed: false,
-                                previewURL: metadata.previewURL,
-                                processId: metadata.processId
-                            };
-                        }
-                    } catch (error) {
-                        this.logger.warn(`Failed to check process ${metadata.processId}, will restart`, error);
-                        needsStart = true;
-                    }
-                }
-            }
-
-            let downloadTime = 0;
-            let setupTime = 0;
-
-            // Download from R2 if needed using existing ensureTemplateExists function
-            if (needsDownload) {
-                const downloadStart = Date.now();
-                
-                this.logger.info('Downloading instance from R2', { instanceId });
-                
-                // Use the existing ensureTemplateExists function which handles zip download and extraction
-                await this.ensureTemplateExists(instanceId, "instances", true);
-
-                downloadTime = Date.now() - downloadStart;
-                this.logger.info('Instance downloaded and extracted', { instanceId, downloadTimeMs: downloadTime });
-
-                // Re-read metadata after extraction
-                const extractedMetadata = await this.getInstanceMetadata(instanceId);
-                if (extractedMetadata) {
-                    metadata = extractedMetadata;
-                }
-            }
-
-            // Start process if needed
-            if (needsStart) {
-                const setupStart = Date.now();
-
-                // Install dependencies and start dev server (reuse existing logic)
-                const setupResult = await this.setupInstance(instanceId, metadata?.projectName || instanceId);
-                
-                if (!setupResult) {
-                    throw new Error('Failed to setup instance');
-                }
-
-                // Update metadata with new process info
-                const updatedMetadata = {
-                    ...metadata,
-                    templateName: metadata?.templateName || 'unknown',
-                    projectName: metadata?.projectName || instanceId,
-                    startTime: new Date().toISOString(),
-                    previewURL: setupResult.previewURL,
-                    processId: setupResult.processId,
-                    tunnelURL: setupResult.tunnelURL,
-                    allocatedPort: setupResult.allocatedPort
-                };
-
-                await this.storeInstanceMetadata(instanceId, updatedMetadata);
-
-                setupTime = Date.now() - setupStart;
-                this.logger.info('Instance started', { instanceId, setupTimeMs: setupTime });
-
-                return {
-                    success: true,
-                    message: `Successfully resumed instance ${instanceId}`,
-                    resumed: true,
-                    previewURL: setupResult.previewURL,
-                    tunnelURL: setupResult.tunnelURL,
-                    processId: setupResult.processId
-                };
-            }
-
-            return {
-                success: true,
-                message: `Instance ${instanceId} was already running`,
-                resumed: false,
-                previewURL: metadata?.previewURL,
-                processId: metadata?.processId
-            };
-
-        } catch (error) {
-            this.logger.error('resumeInstance', error, { instanceId, forceRestart });
-            return {
-                success: false,
-                resumed: false,
-                error: `Failed to resume instance: ${error instanceof Error ? error.message : 'Unknown error'}`
-            };
-        }
-    }
-
-    async *executeStream(instanceId: string, command: string): AsyncIterable<StreamEvent> {
-        try {
-            const sandbox = this.getSandbox();
-
-            const fullCommand = `cd ${instanceId} && ${command}`;
-            
-            this.logger.info('Starting command stream', { command });
-            
-            const stream = await sandbox.execStream(fullCommand);
-            
-            for await (const event of parseSSEStream<ExecEvent>(stream)) {
-                const streamEvent: StreamEvent = {
-                    type: 'stdout', // Default type
-                    timestamp: new Date()
-                };
-                
-                switch (event.type) {
-                    case 'start':
-                        streamEvent.type = 'stdout';
-                        streamEvent.data = 'Command started';
-                        break;
-                    case 'stdout':
-                        streamEvent.type = 'stdout';
-                        streamEvent.data = event.data;
-                        break;
-                    case 'stderr':
-                        streamEvent.type = 'stderr';
-                        streamEvent.data = event.data;
-                        break;
-                    case 'complete':
-                        streamEvent.type = 'exit';
-                        streamEvent.code = event.exitCode;
-                        break;
-                    case 'error':
-                        streamEvent.type = 'error';
-                        streamEvent.error = event.error;
-                        break;
-                    default:
-                        streamEvent.type = 'error';
-                        streamEvent.error = `Unknown event type: ${event.type}`;
-                }
-                
-                yield streamEvent;
-            }
-        } catch (error) {
-            yield {
-                type: 'error',
-                error: error instanceof Error ? error.message : 'Streaming execution failed',
-                timestamp: new Date()
-            };
-        }
-    }
-
-    async exposePort(instanceId: string, port: number): Promise<string> {
-        try {
-            const sandbox = this.getSandbox();
-            const preview = await sandbox.exposePort(port, { hostname: this.hostname, name: instanceId });
-            this.logger.info('Port exposed', { instanceId, port, url: preview.url });
-            return preview.url;
-        } catch (error) {
-            this.logger.error('exposePort', error, { instanceId, port });
-            throw new Error(`Failed to expose port: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }
-
-    async gitCheckout(instanceId: string, repository: string, branch?: string): Promise<void> {
-        try {
-            const sandbox = this.getSandbox();
-            const result = await sandbox.gitCheckout(repository, {
-                branch: branch || 'main',
-                targetDir: 'project'
-            });
-            
-            if (!result.success) {
-                throw new Error(`Git checkout failed: ${result.stderr}`);
-            }
-            
-            this.logger.info('Repository checked out', { repository, branch, targetDir: result.targetDir });
-        } catch (error) {
-            this.logger.error('gitCheckout', error, { instanceId, repository, branch });
-            throw new Error(`Failed to checkout repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }
-
     /**
      * Map enhanced severity levels to legacy format for backward compatibility
      */
@@ -2636,67 +2291,4 @@ export class SandboxSdkClient extends BaseSandboxService {
                 return 'warning';
         }
     }
-
-    // /**
-    //  * Generate JWT token for templates gateway authentication using existing TokenService
-    //  */
-    // private async generateTemplatesGatewayToken(sessionId: string, instanceId: string): Promise<string> {
-    //     const tokenService = new TokenService(env);
-        
-    //     // Create JWT token with custom payload for templates gateway
-    //     const token = await tokenService.createToken(
-    //         {
-    //             sub: sessionId, // Use sessionId as subject
-    //             email: `sandbox-${sessionId}@templates.gateway`, // Dummy email for TokenService compatibility
-    //             type: 'access' as const,
-    //             sessionId: sessionId,
-    //             jti: instanceId // Use jti field to store instanceId for validation
-    //         },
-    //         86400 // 24 hours in seconds
-    //     );
-        
-    //     this.logger.info('Generated JWT token for templates gateway authentication');
-    //     return token;
-    // }
-
-    // /**
-    //  * Register JWT token in KV for authentication
-    //  */
-    // private async registerAuthToken(jwtToken: string, instanceId: string): Promise<void> {
-    //     try {
-    //         const kvKey = `agent-orangebuild-${jwtToken}`;
-    //         await env.VibecoderStore.put(
-    //             kvKey,
-    //             instanceId,
-    //             { expirationTtl: 86400 } // 24 hours TTL
-    //         );
-    //         this.logger.info('Registered JWT token in KV registry', { instanceId });
-    //     } catch (error) {
-    //         this.logger.error('Failed to register JWT token in KV registry', error);
-    //         throw new Error('Failed to register authentication token');
-    //     }
-    // }
-
-    // /**
-    //  * Set authentication environment variables for sandbox
-    //  */
-    // private async setAuthEnvironmentVariables(jwtToken: string): Promise<void> {
-    //     const authEnvVars = {
-    //         CF_AI_API_KEY: jwtToken,
-    //         CF_AI_BASE_URL: env.AI_GATEWAY_PROXY_FOR_TEMPLATES_URL || 'https://templates.coder.eti-india.workers.dev'
-    //     };
-        
-    //     // Merge with existing environment variables
-    //     const combinedEnvVars = { ...this.envVars, ...authEnvVars };
-        
-    //     // Set the combined environment variables on the sandbox
-    //     this.getSandbox().setEnvVars(combinedEnvVars);
-    //     this.logger.info('Set authentication environment variables for sandbox', {
-    //         CF_AI_BASE_URL: authEnvVars.CF_AI_BASE_URL,
-    //         hasApiKey: !!authEnvVars.CF_AI_API_KEY
-    //     });
-        
-    //     // Update the instance's envVars for future use
-    //     this.envVars = combinedEnvVars;
-    // }
 }

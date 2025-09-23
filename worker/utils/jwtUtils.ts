@@ -2,6 +2,7 @@ import { jwtVerify, SignJWT } from 'jose';
 import { TokenPayload } from '../types/auth-types';
 import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 import { createLogger } from '../logger';
+import { SessionService } from 'worker/database/services/SessionService';
 
 const logger = createLogger('JWTUtils');
 
@@ -99,7 +100,7 @@ export class JWTUtils {
                 exp: payload.exp as number,
                 iat: payload.iat as number,
                 jti: payload.jti as string | undefined,
-                sessionId: payload.sessionId as string | undefined
+                sessionId: payload.sessionId as string
             };
         } catch (error) {
             return null;
@@ -110,7 +111,7 @@ export class JWTUtils {
         accessToken: string;
         expiresIn: number;
     }> {
-        const accessTokenExpiry = 3 * 24 * 3600;
+        const accessTokenExpiry = SessionService.config.sessionTTL;
         
         const payload = { sub: userId, email, sessionId };
         

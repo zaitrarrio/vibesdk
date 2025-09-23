@@ -16,6 +16,7 @@ export interface AgentInitArgs {
         templateDetails: TemplateDetails;
         selection: TemplateSelection;
     }
+    sandboxSessionId: string
     onBlueprintChunk: (chunk: string) => void;
     // writer: WritableStreamDefaultWriter<{chunk: string}>;
 }

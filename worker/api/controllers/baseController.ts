@@ -20,7 +20,11 @@ export abstract class BaseController {
      */
     static async getOptionalUser(request: Request, env: Env): Promise<AuthUser | null> {
         try {
-            return await authMiddleware(request, env);
+            const userSession = await authMiddleware(request, env);
+            if (!userSession) {
+                return null;
+            }
+            return userSession.user;
         } catch (error) {
             this.logger.debug('Optional auth failed, continuing without user', { error });
             return null;

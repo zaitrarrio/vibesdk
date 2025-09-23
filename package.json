@@ -122,6 +122,7 @@
 		"@cloudflare/vite-plugin": "^1.13.2",
 		"@cloudflare/vitest-pool-workers": "^0.8.70",
 		"@eslint/js": "^9.35.0",
+		"@types/node": "^22.9.0",
 		"@tailwindcss/typography": "^0.5.16",
 		"@tailwindcss/vite": "^4.1.13",
 		"@types/jest": "^29.5.14",
@@ -148,7 +149,7 @@
 		"vite-plugin-monaco-editor": "^1.1.0",
 		"vite-plugin-node-polyfills": "^0.24.0",
 		"vitest": "^3.2.4",
-		"wrangler": "4.37.1"
+		"wrangler": "4.38.0"
 	},
 	"prettier": {
 		"singleQuote": true,

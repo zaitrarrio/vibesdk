@@ -10,6 +10,7 @@ import { AGENT_CONFIG } from '../inferutils/config';
 export interface PhaseGenerationInputs {
     issues: IssueReport;
     userSuggestions?: string[] | null;
+    isUserSuggestedPhase?: boolean;
 }
 
 const SYSTEM_PROMPT = `<ROLE>
@@ -36,6 +37,7 @@ const SYSTEM_PROMPT = `<ROLE>
     If no more phases are needed, conclude by putting blank fields in the response.
     Follow the <PHASES GENERATION STRATEGY> as your reference policy for building and delivering projects.
     You cannot suggest changes to core configuration files (package.json, tsconfig.json, etc.) except specific exceptions like tailwind.config.js.
+    **Never write image files! Never write jpeg, png, svg, etc files yourself! Always use some image url from the web.**
 </TASK>
 
 <STARTING TEMPLATE>
@@ -62,25 +64,8 @@ additional dependencies/frameworks provided:
 These are the only dependencies, components and plugins available for the project. No other plugin or component or dependency is available.
 </DEPENDENCIES>`;
 
-const INITIAL_PHASE_USER_PROMPT = `**GENERATE THE INITIAL PHASE**
-Generate the initial phase of the application.
-Adhere to the following guidelines:
-
-<SUGGESTING INITIAL PHASE>
-•   Suggest the initial phase based on the blueprint provided, our phase planning strategy and the client query.
-•   Thoroughly understand the current codebase (template boilerplate code) and what changes might be required to implement the phase as per the blueprint.
-•   Closely follow the <PHASES GENERATION STRATEGY> provided as a reference policy we use to build and deliver projects.
-•   **VISUAL DESIGN FOCUS**: Ensure this phase includes beautiful, modern UI elements with proper spacing, typography, colors, and interactive states.
-•   **RESPONSIVE DESIGN**: Plan for mobile-first responsive layouts that work seamlessly across all device sizes.
-•   **USER EXPERIENCE**: Include proper loading states, error handling, smooth transitions, and intuitive user flows.
-•   The Phase needs to be deployable with all the views/pages working properly AND looking stunning!
-•   Provide a clear, concise, to the point description of the next phase and the purpose and contents of each file in it.
-•   Keep all the description fields very short and concise.
-•   Don't think or write too much. Keep everything simple and straight to the point.
-</SUGGESTING INITIAL PHASE>`;
-
 const NEXT_PHASE_USER_PROMPT = `**GENERATE THE PHASE**
-Generate the next phase of the application.
+{{generateInstructions}}
 Adhere to the following guidelines: 
 
 <SUGGESTING NEXT PHASE>
@@ -120,6 +105,7 @@ Adhere to the following guidelines:
 •   **Every phase needs to be deployable with all the views/pages working properly AND looking absolutely beautiful!**
 •   **VISUAL EXCELLENCE STANDARD**: Each phase should elevate the app's visual appeal with modern design principles, ensuring users are impressed by both functionality and aesthetics.
 •   IF you need to get any file to be deleted or cleaned, please set the \`changes\` field to \`delete\` for that file.
+•   **NEVER WRITE IMAGE FILES! NEVER WRITE JPEG, PNG, SVG, ETC FILES YOURSELF! ALWAYS USE SOME IMAGE URL FROM THE WEB.**
 </SUGGESTING NEXT PHASE>
 
 Always remember our strategy for phase generation: 
@@ -150,8 +136,8 @@ const formatUserSuggestions = (suggestions?: string[] | null): string => {
     
     return `
 <USER SUGGESTIONS>
-The following client suggestions and feedback have been provided for the **phase before the last phase**
-Please incorporate these suggestions **on priority** (if they are still relevant) into your phase planning:
+The following client suggestions and feedback have been provided, relayed by our client conversation agent.
+Please incorporate these suggestions **on priority** into your phase planning:
 
 **Client Feedback & Suggestions**:
 ${suggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n')}
@@ -163,50 +149,26 @@ Try to make small targeted, isolated changes to the codebase to address the user
 </USER SUGGESTIONS>`;
 };
 
-const userPromptFormatter = (issues: IssueReport, userSuggestions?: string[] | null) => {
-    const prompt = NEXT_PHASE_USER_PROMPT
+const userPromptFormatter = (issues: IssueReport, userSuggestions?: string[] | null, isUserSuggestedPhase?: boolean) => {
+    let prompt = NEXT_PHASE_USER_PROMPT
         .replaceAll('{{issues}}', issuesPromptFormatter(issues))
         .replaceAll('{{userSuggestions}}', formatUserSuggestions(userSuggestions));
+    
+    if (isUserSuggestedPhase) {
+        prompt = prompt.replaceAll('{{generateInstructions}}', 'User requested some changes/modifications. Please thoroughly review the user suggestions and generate the next phase of the application accordingly');
+    } else {
+        prompt = prompt.replaceAll('{{generateInstructions}}', 'Generate the next phase of the application.');
+    }
+    
     return PROMPT_UTILS.verifyPrompt(prompt);
 }
 
 export class PhaseGenerationOperation extends AgentOperation<PhaseGenerationInputs, PhaseConceptGenerationSchemaType> {
-    async generateInitialPhase(options: OperationOptions) {
-        const { env, logger, context } = options;
-        try {
-            logger.info("Generating initial phase");
-            const messages: Message[] = [
-                ...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, false),
-                createUserMessage(INITIAL_PHASE_USER_PROMPT)
-            ];
-            const { object: results } = await executeInference({
-                env: env,
-                messages,
-                agentActionName: "phaseGeneration",
-                schema: PhaseConceptGenerationSchema,
-                context: options.inferenceContext || { agentId: options.agentId },
-                // format: 'markdown',
-            });
-
-            if (results) {
-                // Filter and remove any pdf files
-                results.files = results.files.filter(f => !f.path.endsWith('.pdf'));
-            }
-    
-            logger.info(`Generated initial phase: ${results.name}, ${results.description}`);
-    
-            return results;
-        } catch (error) {
-            logger.error("Error generating initial phase:", error);
-            throw error;
-        }
-    }
-
     async execute(
         inputs: PhaseGenerationInputs,
         options: OperationOptions
     ): Promise<PhaseConceptGenerationSchemaType> {
-        const { issues, userSuggestions } = inputs;
+        const { issues, userSuggestions, isUserSuggestedPhase } = inputs;
         const { env, logger, context } = options;
         try {
             const suggestionsInfo = userSuggestions && userSuggestions.length > 0
@@ -217,7 +179,7 @@ export class PhaseGenerationOperation extends AgentOperation<PhaseGenerationInpu
     
             const messages: Message[] = [
                 ...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, false),
-                createUserMessage(userPromptFormatter(issues, userSuggestions))
+                createUserMessage(userPromptFormatter(issues, userSuggestions, isUserSuggestedPhase))
             ];
     
             const { object: results } = await executeInference({

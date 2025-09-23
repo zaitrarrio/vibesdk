@@ -27,8 +27,6 @@ import {
     
     GetLogsResponse,
     ListInstancesResponse,
-    SaveInstanceResponse,
-    ResumeInstanceResponse,
     GitHubPushRequest,
     GitHubPushResponse,
     GitHubExportRequest,
@@ -231,40 +229,4 @@ import {
      * Push instance files to existing GitHub repository
      */
     abstract pushToGitHub(instanceId: string, request: GitHubPushRequest): Promise<GitHubPushResponse>
-
-    // ==========================================
-    // SAVE/RESUME OPERATIONS (Required)
-    // ==========================================
-
-    /**
-     * Save instance to R2 bucket as compressed archive
-     */
-    abstract saveInstance(instanceId: string): Promise<SaveInstanceResponse>;
-
-    /**
-     * Resume instance from local files or R2 bucket if needed
-     */
-    abstract resumeInstance(instanceId: string, forceRestart?: boolean): Promise<ResumeInstanceResponse>;
-  
-    // ==========================================
-    // Sandbox-specific
-    // ==========================================
-  
-    /**
-     * Execute command with real-time streaming output
-     * Only available in Sandbox SDK implementation
-     */
-    executeStream?(instanceId: string, command: string): AsyncIterable<StreamEvent>;
-  
-    /**
-     * Expose a port for external access and get preview URL
-     * Only available in Sandbox SDK implementation
-     */
-    exposePort?(instanceId: string, port: number): Promise<string>;
-  
-    /**
-     * Checkout a Git repository directly in the sandbox
-     * Only available in Sandbox SDK implementation
-     */
-    gitCheckout?(instanceId: string, repository: string, branch?: string): Promise<void>;
   }

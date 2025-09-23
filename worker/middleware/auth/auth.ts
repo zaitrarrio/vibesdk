@@ -3,7 +3,7 @@
  * Handles JWT validation and session management
  */
 
-import { AuthUser } from '../../types/auth-types';
+import { AuthUserSession } from '../../types/auth-types';
 import { createLogger } from '../../logger';
 import { AuthService } from '../../database/services/AuthService';
 import { extractToken } from '../../utils/authUtils';
@@ -15,7 +15,7 @@ const logger = createLogger('AuthMiddleware');
 export async function validateToken(
     token: string,
     env: Env
-): Promise<AuthUser | null> {
+): Promise<AuthUserSession | null> {
     try {
         // Use AuthService for token validation and user retrieval
         const authService = new AuthService(env);
@@ -32,16 +32,16 @@ export async function validateToken(
 export async function authMiddleware(
     request: Request,
     env: Env
-): Promise<AuthUser | null> {
+): Promise<AuthUserSession | null> {
     try {
         // Extract token
         const token = extractToken(request);
         
         if (token) {
-            const user = await validateToken(token, env);
-            if (user) {
-                logger.debug('User authenticated', { userId: user.id });
-                return user;
+            const userResponse = await validateToken(token, env);
+            if (userResponse) {
+                logger.debug('User authenticated', { userId: userResponse.user.id });
+                return userResponse;
             }
         }
         

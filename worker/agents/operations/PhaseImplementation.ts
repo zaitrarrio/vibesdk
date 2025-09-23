@@ -92,8 +92,6 @@ ${PROMPT_UTILS.UI_GUIDELINES}
 We follow the following strategy at our team for rapidly delivering projects:
 ${STRATEGIES.FRONTEND_FIRST_CODING}
 
-${PROMPT_UTILS.COMMON_PITFALLS}
-
 {{template}}`;
 
 const USER_PROMPT = `**IMPLEMENT THE FOLLOWING PROJECT PHASE**
@@ -189,7 +187,9 @@ These are the instructions and quality standards that must be followed to implem
         - **The principle of having a "single source of truth" is paramount in React**
 
 Also understand the following:
-${PROMPT_UTILS.REACT_RENDER_LOOP_PREVENTION}
+
+${PROMPT_UTILS.COMMON_PITFALLS}
+
 </INSTRUCTIONS & CODE QUALITY STANDARDS>
 
 Every single file listed in <CURRENT_PHASE> needs to be implemented in this phase, based on the provided <OUTPUT FORMAT>.

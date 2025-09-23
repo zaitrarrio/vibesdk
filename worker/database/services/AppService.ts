@@ -246,10 +246,10 @@ export class AppService extends BaseService {
      * Update app record in database
      */
     async updateApp(
-        sessionId: string,
+        appId: string,
         updates: Partial<typeof schema.apps.$inferInsert>
     ): Promise<boolean> {
-        if (!sessionId) {
+        if (!appId) {
             return false;
         }
 
@@ -260,7 +260,7 @@ export class AppService extends BaseService {
                     ...updates, 
                     updatedAt: new Date() 
                 })
-                .where(eq(schema.apps.id, sessionId));
+                .where(eq(schema.apps.id, appId));
             return true;
         } catch (error) {
             return false;
@@ -271,10 +271,10 @@ export class AppService extends BaseService {
      * Update app with deployment URL
      */
     async updateDeploymentUrl(
-        sessionId: string,
+        appId: string,
         deploymentUrl: string,
     ): Promise<boolean> {
-        return this.updateApp(sessionId, {
+        return this.updateApp(appId, {
             deploymentUrl,
         });
     }
@@ -283,11 +283,11 @@ export class AppService extends BaseService {
      * Update app with GitHub repository URL and visibility
      */
     async updateGitHubRepository(
-        sessionId: string,
+        appId: string,
         repositoryUrl: string,
         repositoryVisibility: 'public' | 'private'
     ): Promise<boolean> {
-        return this.updateApp(sessionId, {
+        return this.updateApp(appId, {
             githubRepositoryUrl: repositoryUrl,
             githubRepositoryVisibility: repositoryVisibility
         });
@@ -297,10 +297,10 @@ export class AppService extends BaseService {
      * Update app with screenshot data
      */
     async updateAppScreenshot(
-        sessionId: string,
+        appId: string,
         screenshotUrl: string
     ): Promise<boolean> {
-        return this.updateApp(sessionId, {
+        return this.updateApp(appId, {
             screenshotUrl,
             screenshotCapturedAt: new Date()
         });

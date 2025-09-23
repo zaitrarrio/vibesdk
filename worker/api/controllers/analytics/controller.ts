@@ -65,7 +65,7 @@ export class AnalyticsController extends BaseController {
 				days,
 			);
 
-			AnalyticsController.logger.info('User analytics retrieved successfully', {
+			this.logger.info('User analytics retrieved successfully', {
 				userId,
 				days: days || 'all-time',
 				requestCount: analyticsData.totalRequests,
@@ -75,7 +75,7 @@ export class AnalyticsController extends BaseController {
 
 			return AnalyticsController.createSuccessResponse(analyticsData);
 		} catch (error) {
-			AnalyticsController.logger.error('Error fetching user analytics:', error);
+			this.logger.error('Error fetching user analytics:', error);
 
 			if (error instanceof AnalyticsError) {
 				return AnalyticsController.createErrorResponse<UserAnalyticsResponseData>(
@@ -141,7 +141,7 @@ export class AnalyticsController extends BaseController {
 				days,
 			);
 
-			AnalyticsController.logger.info('Agent analytics retrieved successfully', {
+			this.logger.info('Agent analytics retrieved successfully', {
 				agentId,
 				days: days || 'all-time',
 				requestCount: analyticsData.totalRequests,
@@ -151,7 +151,7 @@ export class AnalyticsController extends BaseController {
 
 			return AnalyticsController.createSuccessResponse(analyticsData);
 		} catch (error) {
-			AnalyticsController.logger.error('Error fetching agent analytics:', error);
+			this.logger.error('Error fetching agent analytics:', error);
 
 			if (error instanceof AnalyticsError) {
 				return AnalyticsController.createErrorResponse<AgentAnalyticsResponseData>(

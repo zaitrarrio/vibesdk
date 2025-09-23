@@ -117,6 +117,7 @@ Required in `.dev.vars` for local development:
 - Never use dynamic imports. If you see dynamic imports, Correct it!
 - Implement everything the 'right' and 'correct' way instead of 'fast' and 'quick'.
 - Don't add comments for explaining your changes to me. Comments should be professional, to the point and should be there to explain the code, not your changes
+- Don't start writing new 'corrected' versions of files instead of working on fixing the existing ones
 
 ## Common Tasks
 

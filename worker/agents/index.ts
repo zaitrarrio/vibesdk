@@ -76,12 +76,14 @@ export async function getTemplateForQuery(
     query: string,
     hostname: string,
     logger: StructuredLogger,
-) : Promise<{templateDetails: TemplateDetails, selection: TemplateSelection}> {
+) : Promise<{sandboxSessionId: string, templateDetails: TemplateDetails, selection: TemplateSelection}> {
     // Fetch available templates
     const templatesResponse = await SandboxSdkClient.listTemplates();
     if (!templatesResponse || !templatesResponse.success) {
         throw new Error('Failed to fetch templates from sandbox service');
     }
+
+    const sandboxSessionId = generateId();
         
     const [analyzeQueryResponse, sandboxClient] = await Promise.all([
             selectTemplate({
@@ -90,7 +92,7 @@ export async function getTemplateForQuery(
                 query,
                 availableTemplates: templatesResponse.templates,
             }), 
-            getSandboxService(inferenceContext.agentId, hostname)
+            getSandboxService(sandboxSessionId, hostname)
         ]);
         
         logger.info('Selected template', { selectedTemplate: analyzeQueryResponse });
@@ -114,5 +116,5 @@ export async function getTemplateForQuery(
         }
             
         const templateDetails = templateDetailsResponse.templateDetails;
-        return { templateDetails, selection: analyzeQueryResponse };
+        return { sandboxSessionId, templateDetails, selection: analyzeQueryResponse };
 }

@@ -5,8 +5,8 @@
 
 import React, { useCallback } from 'react';
 import { useAuth } from '../contexts/auth-context';
-import type { User } from '../contexts/auth-context';
 import { useAuthModal } from '../components/auth/AuthModalProvider';
+import { AuthUser } from '@/api-types';
 
 export interface AuthGuardOptions {
   requireFullAuth?: boolean; // If true, anonymous users are not allowed
@@ -17,7 +17,7 @@ export interface AuthGuardOptions {
 
 export interface AuthGuardReturn {
   isAuthenticated: boolean;
-  user: User | null;
+  user: AuthUser | null;
   requireAuth: (options?: AuthGuardOptions) => boolean;
 }
 

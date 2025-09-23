@@ -34,7 +34,7 @@
             "name": "AUTH_RATE_LIMITER",
             "type": "ratelimit",
             "namespace_id": "2102",
-            "simple": { "limit": 60, "period": 60 }
+            "simple": { "limit": 1000, "period": 60 }
         }
     ]
   },
@@ -47,9 +47,6 @@
 	"ai": {
 		"binding": "AI",
         "remote": true
-	},
-	"browser": {
-		"binding": "BROWSER"
 	},
 	"images": {
 		"binding": "IMAGES"

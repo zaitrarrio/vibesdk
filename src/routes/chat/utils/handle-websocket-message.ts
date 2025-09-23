@@ -20,6 +20,7 @@ import {
 import { completeStages } from './project-stage-helpers';
 import { sendWebSocketMessage } from './websocket-helpers';
 import type { FileType, PhaseTimelineItem } from '../hooks/use-chat';
+import { toast } from 'sonner';
 
 export interface HandleMessageDeps {
     // State setters
@@ -328,6 +329,11 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 break;
             }
 
+            case 'deployment_failed': {
+                toast.error(`Error: ${message.message}`);
+                break;
+            }
+
             case 'code_reviewed': {
                 const reviewData = message.review;
                 const totalIssues = reviewData?.filesToFix?.reduce((count: number, file: any) => 
@@ -578,6 +584,8 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     id: 'cloudflare_deployment_error',
                     message: `❌ Deployment failed: ${message.error}\n\n🔄 You can try deploying again.`,
                 });
+
+                toast.error(`Error: ${message.error}`);
                 
                 onDebugMessage?.('error', 
                     'Deployment Failed - State Reset',
@@ -616,6 +624,9 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     id: 'github_export_error',
                     message: `❌ GitHub export failed: ${message.error}`,
                 });
+
+                toast.error(`Error: ${message.error}`);
+                
                 break;
             }
 
@@ -708,6 +719,9 @@ Message: ${message.errors.map((e: any) => e.message).join('\n').trim()}`;
                     onDebugMessage
                 );
                 setMessages(prev => [...prev, rateLimitMessage]);
+
+                toast.error(`Error: ${message.error}`);
+                
                 break;
             }
 

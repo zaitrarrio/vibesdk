@@ -54,13 +54,13 @@ export class AppViewController extends BaseController {
             let previewUrl: string = '';
             
             try {
-                const agentStub = await getAgentStub(env, appResult.id, true, AppViewController.logger);
+                const agentStub = await getAgentStub(env, appResult.id, true, this.logger);
                 agentSummary = await agentStub.getSummary();
 
                 previewUrl = await agentStub.getPreviewUrlCache();
             } catch (agentError) {
                 // If agent doesn't exist or error occurred, fall back to database stored files
-                AppViewController.logger.warn('Could not fetch agent state, using stored files:', agentError);
+                this.logger.warn('Could not fetch agent state, using stored files:', agentError);
             }
 
             const responseData: AppDetailsData = {
@@ -77,7 +77,7 @@ export class AppViewController extends BaseController {
 
             return AppViewController.createSuccessResponse(responseData);
         } catch (error) {
-            AppViewController.logger.error('Error fetching app details:', error);
+            this.logger.error('Error fetching app details:', error);
             return AppViewController.createErrorResponse<AppDetailsData>('Internal server error', 500);
         }
     }
@@ -105,7 +105,7 @@ export class AppViewController extends BaseController {
             const responseData: AppStarToggleData = result;
             return AppViewController.createSuccessResponse(responseData);
         } catch (error) {
-            AppViewController.logger.error('Error toggling star:', error);
+            this.logger.error('Error toggling star:', error);
             return AppViewController.createErrorResponse<AppStarToggleData>('Internal server error', 500);
         }
     }
@@ -135,8 +135,8 @@ export class AppViewController extends BaseController {
 
     //         // Duplicate agent state first
     //         try {
-    //             const { newAgentId } = await cloneAgent(env, appId, AppViewController.logger);
-    //             AppViewController.logger.info(`Successfully duplicated agent state from ${appId} to ${newAgentId}`);
+    //             const { newAgentId } = await cloneAgent(env, appId, this.logger);
+    //             this.logger.info(`Successfully duplicated agent state from ${appId} to ${newAgentId}`);
 
     //             // Create forked app using app service
     //             const forkedApp = await appService.createForkedApp(originalApp, newAgentId, user.id);
@@ -148,11 +148,11 @@ export class AppViewController extends BaseController {
 
     //             return AppViewController.createSuccessResponse(responseData);
     //         } catch (error) {
-    //             AppViewController.logger.error('Failed to duplicate agent state:', error);
+    //             this.logger.error('Failed to duplicate agent state:', error);
     //             return AppViewController.createErrorResponse<ForkAppData>('Failed to duplicate agent state', 500);
     //         }
     //     } catch (error) {
-    //         AppViewController.logger.error('Error forking app:', error);
+    //         this.logger.error('Error forking app:', error);
     //         return AppViewController.createErrorResponse<ForkAppData>('Internal server error', 500);
     //     }
     // }

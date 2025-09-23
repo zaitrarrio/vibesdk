@@ -18,6 +18,12 @@ export interface AuthUser {
 	displayName?: string;
 	username?: string;
 	avatarUrl?: string;
+    bio?: string;
+    timezone?: string;
+    provider?: string;
+    emailVerified?: boolean;
+    createdAt?: Date;
+    isAnonymous?: boolean;
 }
 
 /**
@@ -45,20 +51,23 @@ export interface TokenPayload {
 	jti?: string; // JWT ID (for refresh tokens)
 
 	// Session context
-	sessionId?: string;
+	sessionId: string;
 
 	// Security metadata
 	ipHash?: string; // Hashed IP for security validation
 }
 
+export interface AuthUserSession {
+    user: AuthUser;
+    sessionId: string;
+}
+
 /**
  * Authentication result from login/register operations
  */
-export interface AuthResult {
-	user: AuthUser;
+export interface AuthResult extends AuthUserSession {
+    expiresAt: Date | null;
 	accessToken: string;
-	expiresIn: number;
-	sessionId?: string;
 	isNewUser?: boolean;
 	requiresEmailVerification?: boolean;
 	redirectUrl?: string;

@@ -65,7 +65,7 @@ export class UserController extends BaseController {
 
             return UserController.createSuccessResponse(responseData);
         } catch (error) {
-            UserController.logger.error('Error getting user apps:', error);
+            this.logger.error('Error getting user apps:', error);
             return UserController.createErrorResponse<UserAppsData>('Failed to get user apps', 500);
         }
     }
@@ -98,7 +98,7 @@ export class UserController extends BaseController {
             const responseData: ProfileUpdateData = result;
             return UserController.createSuccessResponse(responseData);
         } catch (error) {
-            UserController.logger.error('Error updating user profile:', error);
+            this.logger.error('Error updating user profile:', error);
             return UserController.createErrorResponse<ProfileUpdateData>('Failed to update profile', 500);
         }
     }

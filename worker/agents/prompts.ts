@@ -547,9 +547,12 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
     - ✅ cn function from '@/lib/utils' (named export)
     - ✅ Router hooks from 'react-router-dom' (not Next.js)
 
+    **A \`require()\` or \`import()\` style import is forbidden. Always import properly at the top of the file.**
     # Few more heuristics:
         **IF** you receive a TypeScript error "cannot be used as a JSX component" for a component \`<MyComponent />\`, **AND** the error says its type is \`'typeof import(...)'\`, then check if the import is correct (named vs default import).
         Applying this rule to your situation will fix both the type-check errors and the browser's runtime error.
+
+    # Never write image files! Never write jpeg, png, svg, etc files yourself! Always use some image url from the web.
 
 </AVOID COMMON PITFALLS>`,
     STYLE_GUIDE: `<STYLE_GUIDE>
@@ -960,8 +963,7 @@ export function generalSystemPromptBuilder(
 }
 
 export function issuesPromptFormatter(issues: IssueReport): string {
-    const runtimeErrorsText = PROMPT_UTILS.serializeErrors(issues.runtimeErrors || []);
-    const clientErrorsText = PROMPT_UTILS.serializeClientReportedErrors(issues.clientErrors || []);
+    const runtimeErrorsText = issues.runtimeErrors.map((error) => `<error>${error.rawOutput}</error>`).join('\n');
     const staticAnalysisText = PROMPT_UTILS.serializeStaticAnalysis(issues.staticAnalysis);
     
     return `## ERROR ANALYSIS PRIORITY MATRIX
@@ -972,13 +974,7 @@ export function issuesPromptFormatter(issues: IssueReport): string {
 
 ${runtimeErrorsText || 'No runtime errors detected'}
 
-### 2. CLIENT-REPORTED ERRORS (Validate Against Current Code)
-**Error Count:** ${issues.clientErrors?.length || 0} client errors
-**Note:** These may reference old code versions. Cross-reference with current codebase before fixing.
-
-${clientErrorsText || 'No client-reported errors'}
-
-### 3. STATIC ANALYSIS ISSUES (Fix After Runtime Issues)
+### 2. STATIC ANALYSIS ISSUES (Fix After Runtime Issues)
 **Lint Issues:** ${issues.staticAnalysis?.lint?.issues?.length || 0}
 **Type Issues:** ${issues.staticAnalysis?.typecheck?.issues?.length || 0}
 

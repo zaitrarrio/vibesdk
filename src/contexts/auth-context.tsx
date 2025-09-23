@@ -6,27 +6,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { apiClient, ApiError } from '@/lib/api-client';
-import type { AuthSession } from '../api-types';
-
-export interface User {
-  id: string;
-  email: string;
-  displayName?: string;
-  username?: string;
-  avatarUrl?: string;
-  bio?: string;
-  isAnonymous: boolean;
-  emailVerified?: boolean;
-  provider?: 'google' | 'github' | 'email';
-  createdAt?: Date;
-  lastActiveAt?: Date;
-  theme?: 'light' | 'dark' | 'system';
-  timezone?: string;
-}
-
+import { useSentryUser } from '@/hooks/useSentryUser';
+import type { AuthSession, AuthUser } from '../api-types';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   token: string | null;
   session: AuthSession | null;
   isAuthenticated: boolean;
@@ -65,7 +49,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_REFRESH_INTERVAL = 60 * 60 * 1000; // 1 hour (check less frequently since tokens last 24h)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,6 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasOAuth, setHasOAuth] = useState<boolean>(false);
   const [requiresEmailAuth, setRequiresEmailAuth] = useState<boolean>(true);
   const navigate = useNavigate();
+  
+  // Sync user context with Sentry for error tracking
+  useSentryUser(user);
   
   // Ref to store the refresh timer
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -131,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await apiClient.getProfile(true);
       
       if (response.success && response.data?.user) {
-        setUser({ ...response.data.user, isAnonymous: false } as User);
+        setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
         setToken(null); // Profile endpoint doesn't return token, cookies are used
         setSession({
           userId: response.data.user.id,
@@ -223,13 +210,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await apiClient.loginWithEmail(credentials);
 
       if (response.success && response.data) {
-        setUser({ ...response.data.user, isAnonymous: false } as User);
+        setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
         setToken(null); // Using cookies for authentication
         setSession({
           userId: response.data.user.id,
           email: response.data.user.email,
-          sessionId: response.data.session?.id || response.data.user.id,
-          expiresAt: new Date(Date.now() + (response.data.expiresIn || 24 * 60 * 60) * 1000),
+          sessionId: response.data.sessionId,
+          expiresAt: response.data.expiresAt,
         });
         setupTokenRefresh();
         
@@ -261,13 +248,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await apiClient.register(data);
 
       if (response.success && response.data) {
-        setUser({ ...response.data.user, isAnonymous: false } as User);
+        setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
         setToken(null); // Using cookies for authentication
         setSession({
           userId: response.data.user.id,
           email: response.data.user.email,
-          sessionId: response.data.session?.id || response.data.user.id,
-          expiresAt: new Date(Date.now() + (response.data.expiresIn || 24 * 60 * 60) * 1000),
+          sessionId: response.data.sessionId,
+          expiresAt: response.data.expiresAt,
         });
         setupTokenRefresh();
         

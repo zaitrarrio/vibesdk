@@ -90,33 +90,42 @@ function AppMenuItem({
 	return (
 		<SidebarMenuItem className="group/app-item">
 			<SidebarMenuButton
-				onClick={() => onClick(app.id)}
+				asChild
 				tooltip={app.title}
 				className="cursor-pointer transition-opacity hover:opacity-75 pr-0"
 			>
-				<div className="flex-1 min-w-0 pr-2">
-					<div className="flex items-center gap-2 min-w-0">
-						{variant === 'bookmarked' && (
-							<Bookmark className="h-3 w-3 fill-yellow-500 text-yellow-500 flex-shrink-0" />
-						)}
+				<a
+					href={`/app/${app.id}`}
+					onClick={(e) => {
+						e.preventDefault();
+						onClick(app.id);
+					}}
+					className="w-full no-underline"
+				>
+					<div className="flex-1 min-w-0 pr-2">
+						<div className="flex items-center gap-2 min-w-0">
+							{variant === 'bookmarked' && (
+								<Bookmark className="h-3 w-3 fill-yellow-500 text-yellow-500 flex-shrink-0" />
+							)}
 
-						<div className="relative flex-1 min-w-0 overflow-hidden">
-							<span className="font-medium flex justify-start  items-center  gap-2 text-text-primary/80 whitespace-nowrap">
-								<span className="text-ellipsis w-fit overflow-hidden">
-									{app.title}{' '}
+							<div className="relative flex-1 min-w-0 overflow-hidden">
+								<span className="font-medium flex justify-start  items-center  gap-2 text-text-primary/80 whitespace-nowrap">
+									<span className="text-ellipsis w-fit overflow-hidden">
+										{app.title}{' '}
+									</span>
+									<div className="flex-shrink-0 min-w-6">
+										{getVisibilityIcon(app.visibility)}
+									</div>
 								</span>
-								<div className="flex-shrink-0 min-w-6">
-									{getVisibilityIcon(app.visibility)}
-								</div>
-							</span>
 
-							<div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-bg-2 to-transparent pointer-events-none" />
+								<div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-bg-2 to-transparent pointer-events-none" />
+							</div>
 						</div>
+						<p className="text-xs text-text-tertiary truncate">
+							{formatTimestamp()}
+						</p>
 					</div>
-					<p className="text-xs text-text-tertiary truncate">
-						{formatTimestamp()}
-					</p>
-				</div>
+				</a>
 			</SidebarMenuButton>
 
 			{!isCollapsed && showActions && (

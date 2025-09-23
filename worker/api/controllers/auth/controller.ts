@@ -70,12 +70,12 @@ export class AuthController extends BaseController {
             const result = await authService.register(validatedData, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, undefined, result.expiresIn)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                accessTokenExpiry: result.expiresIn
+                accessTokenExpiry: SessionService.config.sessionTTL
             });
             
             // Rotate CSRF token on successful registration if configured
@@ -125,12 +125,12 @@ export class AuthController extends BaseController {
             const result = await authService.login(validatedData, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, undefined, result.expiresIn)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                accessTokenExpiry: result.expiresIn
+                accessTokenExpiry: SessionService.config.sessionTTL
             });
             
             // Rotate CSRF token on successful login if configured
@@ -160,7 +160,7 @@ export class AuthController extends BaseController {
 					const sessionService = new SessionService(env);
 					await sessionService.revokeSessionId(sessionId);
 				} catch (error) {
-					AuthController.logger.debug(
+					this.logger.debug(
 						'Failed to properly logout session',
 						error,
 					);
@@ -179,7 +179,7 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            AuthController.logger.error('Logout failed', error);
+            this.logger.error('Logout failed', error);
             
             const response = AuthController.createSuccessResponse({ 
                 success: true, 
@@ -199,24 +199,14 @@ export class AuthController extends BaseController {
      * Get current user profile
      * GET /api/auth/profile
      */
-    static async getProfile(_request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
+    static async getProfile(_request: Request, _env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
-            // User is provided by middleware - no need for manual authentication
-            const user = routeContext.user;
-            if (!user) {
+            if (!routeContext.user) {
                 return AuthController.createErrorResponse('Unauthorized', 401);
             }
-            
-            const userService = new UserService(env);
-            const fullUser = await userService.findUserById(user.id);
-            
-            if (!fullUser) {
-                return AuthController.createErrorResponse('User not found', 404);
-            }
-            
             return AuthController.createSuccessResponse({
-                user: mapUserResponse(fullUser),
-                sessionId: user.id // Use user ID as session identifier
+                user: mapUserResponse(routeContext.user),
+                sessionId: routeContext.sessionId
             });
         } catch (error) {
             return AuthController.handleError(error, 'get profile');
@@ -299,7 +289,7 @@ export class AuthController extends BaseController {
             
             return Response.redirect(authUrl, 302);
         } catch (error) {
-            AuthController.logger.error('OAuth initiation failed', error);
+            this.logger.error('OAuth initiation failed', error);
             
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
@@ -322,7 +312,7 @@ export class AuthController extends BaseController {
             const error = routeContext.queryParams.get('error');
             
             if (error) {
-                AuthController.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
+                this.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
                 const baseUrl = new URL(request.url).origin;
                 return Response.redirect(`${baseUrl}/?error=oauth_failed`, 302);
             }
@@ -359,7 +349,7 @@ export class AuthController extends BaseController {
             
             return response;
         } catch (error) {
-            AuthController.logger.error('OAuth callback failed', error);
+            this.logger.error('OAuth callback failed', error);
             const baseUrl = new URL(request.url).origin;
             return Response.redirect(`${baseUrl}/?error=auth_failed`, 302);
         }
@@ -372,9 +362,9 @@ export class AuthController extends BaseController {
     static async checkAuth(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             // Use the same middleware authentication logic but don't require auth
-            const user = await authMiddleware(request, env);
+            const userSession = await authMiddleware(request, env);
             
-            if (!user) {
+            if (!userSession) {
                 return AuthController.createSuccessResponse({
                     authenticated: false,
                     user: null
@@ -384,11 +374,11 @@ export class AuthController extends BaseController {
             return AuthController.createSuccessResponse({
                 authenticated: true,
                 user: {
-                    id: user.id,
-                    email: user.email,
-                    displayName: user.displayName
+                    id: userSession.user.id,
+                    email: userSession.user.email,
+                    displayName: userSession.user.displayName
                 },
-                sessionId: user.id
+                sessionId: userSession.sessionId
             });
         } catch (error) {
             return AuthController.createSuccessResponse({
@@ -509,7 +499,7 @@ export class AuthController extends BaseController {
                 keyPreview
             });
 
-            AuthController.logger.info('API key created', { userId: user.id, name: sanitizedName });
+            this.logger.info('API key created', { userId: user.id, name: sanitizedName });
 
             return AuthController.createSuccessResponse({
                 key, // Return the actual key only once
@@ -538,7 +528,7 @@ export class AuthController extends BaseController {
             const apiKeyService = new ApiKeyService(env);
             await apiKeyService.revokeApiKey(keyId, user.id);
 
-            AuthController.logger.info('API key revoked', { userId: user.id, keyId });
+            this.logger.info('API key revoked', { userId: user.id, keyId });
 
             return AuthController.createSuccessResponse({
                 message: 'API key revoked successfully'
@@ -569,12 +559,12 @@ export class AuthController extends BaseController {
             const result = await authService.verifyEmailWithOtp(email, otp, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, undefined, result.expiresIn)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
             
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
-                accessTokenExpiry: result.expiresIn
+                accessTokenExpiry: SessionService.config.sessionTTL
             });
             
             return response;

@@ -5,6 +5,7 @@ import { usePaginatedApps } from '@/hooks/use-paginated-apps';
 import { AppListContainer } from '@/components/shared/AppListContainer';
 import { AppFiltersForm } from '@/components/shared/AppFiltersForm';
 import { AppSortTabs } from '@/components/shared/AppSortTabs';
+import { VisibilityFilter } from '@/components/shared/VisibilityFilter';
 
 export default function AppsPage() {
 	const navigate = useNavigate();
@@ -72,28 +73,37 @@ export default function AppsPage() {
 						</p>
 					</div>
 
-					<div className="flex items-start gap-4 justify-between">
-						{/* Search and Filters */}
-						<AppFiltersForm
-							searchQuery={searchQuery}
-							onSearchChange={setSearchQuery}
-							onSearchSubmit={handleSearchSubmit}
-							searchPlaceholder="Search your apps..."
-							filterFramework={filterFramework}
-							onFrameworkChange={handleFrameworkChange}
-							filterVisibility={filterVisibility}
-							onVisibilityChange={handleVisibilityChange}
-							showVisibility={true}
-							period={period}
-							onPeriodChange={handlePeriodChange}
-							sortBy={sortBy}
-						/>
+					<div className="flex flex-col gap-4">
+						<div className="flex items-center gap-4">
+							<VisibilityFilter
+								value={filterVisibility}
+								onChange={handleVisibilityChange}
+							/>
+						</div>
+						
+						<div className="flex items-start gap-4 justify-between">
+							{/* Search and Filters */}
+							<AppFiltersForm
+								searchQuery={searchQuery}
+								onSearchChange={setSearchQuery}
+								onSearchSubmit={handleSearchSubmit}
+								searchPlaceholder="Search your apps..."
+								filterFramework={filterFramework}
+								onFrameworkChange={handleFrameworkChange}
+								filterVisibility={filterVisibility}
+								onVisibilityChange={handleVisibilityChange}
+								showVisibility={false}
+								period={period}
+								onPeriodChange={handlePeriodChange}
+								sortBy={sortBy}
+							/>
 
-						<AppSortTabs
-							value={sortBy}
-							onValueChange={handleSortChange}
-							availableSorts={['recent', 'popular', 'trending']}
-						/>
+							<AppSortTabs
+								value={sortBy}
+								onValueChange={handleSortChange}
+								availableSorts={['recent', 'popular', 'trending']}
+							/>
+						</div>
 					</div>
 
 					{/* Unified App List */}

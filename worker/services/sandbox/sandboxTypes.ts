@@ -156,6 +156,7 @@ export const BootstrapStatusResponseSchema = z.object({
     previewURL: z.string().optional(),
     tunnelURL: z.string().optional(),
     processId: z.string().optional(),
+    isHealthy: z.boolean(),
     error: z.string().optional(),
 })
 export type BootstrapStatusResponse = z.infer<typeof BootstrapStatusResponseSchema>
@@ -519,39 +520,3 @@ export const GitHubPushResponseSchema = z.object({
     }).optional(),
 })
 export type GitHubPushResponse = z.infer<typeof GitHubPushResponseSchema>
-
-
-// --- Save/Resume Instance Types ---
-
-// /instances/:id/save (POST)
-export const SaveInstanceRequestSchema = z.object({
-})
-export type SaveInstanceRequest = z.infer<typeof SaveInstanceRequestSchema>
-
-export const SaveInstanceResponseSchema = z.object({
-    success: z.boolean(),
-    message: z.string().optional(),
-    savedUrl: z.string().optional(),
-    savedAs: z.string().optional(),
-    compressionTime: z.number().optional(),
-    uploadTime: z.number().optional(),
-    error: z.string().optional(),
-})
-export type SaveInstanceResponse = z.infer<typeof SaveInstanceResponseSchema>
-
-// /instances/:id/resume (POST)
-export const ResumeInstanceRequestSchema = z.object({
-    forceRestart: z.boolean().optional(), // Force restart even if process is running
-})
-export type ResumeInstanceRequest = z.infer<typeof ResumeInstanceRequestSchema>
-
-export const ResumeInstanceResponseSchema = z.object({
-    success: z.boolean(),
-    message: z.string().optional(),
-    resumed: z.boolean(), // Whether instance was actually resumed or already running
-    previewURL: z.string().optional(),
-    tunnelURL: z.string().optional(),
-    processId: z.string().optional(),
-    error: z.string().optional(),
-})
-export type ResumeInstanceResponse = z.infer<typeof ResumeInstanceResponseSchema>

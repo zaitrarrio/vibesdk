@@ -4,7 +4,7 @@ import { proxyToSandbox } from '@cloudflare/sandbox';
 import { isDispatcherAvailable } from './utils/dispatcherUtils';
 import { createApp } from './app';
 import * as Sentry from '@sentry/cloudflare';
-import { sentryOptions, captureSecurityEvent } from './observability/sentry';
+import { sentryOptions } from './observability/sentry';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -43,7 +43,6 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 	logger.info(`Sandbox miss for ${hostname}, attempting dispatch to permanent worker.`);
 	if (!isDispatcherAvailable(env)) {
 		logger.warn(`Dispatcher not available, cannot serve: ${hostname}`);
-		captureSecurityEvent('dispatcher_unavailable', { hostname }, { level: 'error' });
 		return new Response('This application is not currently available.', { status: 404 });
 	}
 
@@ -56,9 +55,7 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 		return await worker.fetch(request);
 	} catch (error: any) {
 		// This block catches errors if the binding doesn't exist or if worker.fetch() fails.
-		logger.error(`Error dispatching to worker '${appName}': ${error.message}`);
-		captureSecurityEvent('dispatch_error', { subdomain: appName, hostname }, { level: 'error', error });
-		// Return a generic error to the user to avoid leaking implementation details.
+		logger.warn(`Error dispatching to worker '${appName}': ${error.message}`);
 		return new Response('An error occurred while loading this application.', { status: 500 });
 	}
 }
@@ -82,7 +79,6 @@ const worker = {
 		// 2. Security: Immediately reject any requests made via an IP address.
 		const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 		if (ipRegex.test(hostname)) {
-			captureSecurityEvent('forbidden_ip_access', { hostname }, { level: 'warning' });
 			return new Response('Access denied. Please use the assigned domain name.', { status: 403 });
 		}
 
@@ -112,9 +108,6 @@ const worker = {
 			return handleUserAppRequest(request, env);
 		}
 
-		// Route 3: Catch-all for invalid hostnames.
-		// This is a security measure to prevent unauthorized domains from accessing the worker.
-		captureSecurityEvent('invalid_hostname', { hostname }, { level: 'warning' });
 		return new Response('Not Found', { status: 404 });
 	},
 } satisfies ExportedHandler<Env>;

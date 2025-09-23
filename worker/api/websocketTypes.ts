@@ -313,6 +313,7 @@ type DeterministicCodeFixCompletedMessage = {
 	type: 'deterministic_code_fix_completed';
 	message: string;
     fixResult: CodeFixResult;
+    issues: CodeIssue[];
 };
 
 type ModelConfigsInfoMessage = {
