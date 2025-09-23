@@ -15,9 +15,9 @@ export default function Home() {
 	
 	
 	const placeholderPhrases = useMemo(() => [
-		"Todo list app",
+		"todo list app",
 		"F1 fantasy game",
-		"Financial manager"
+		"personal finance tracker"
 	], []);
 	const [currentPlaceholderPhraseIndex, setCurrentPlaceholderPhraseIndex] = useState(0);
 	const [currentPlaceholderText, setCurrentPlaceholderText] = useState("");
@@ -116,8 +116,8 @@ export default function Home() {
 					</svg>
 				</div>
 				<div className="px-6 p-8 flex flex-col items-center z-10">
-					<h1 className="font-[departureMono] text-shadow-sm text-shadow-red-200 dark:text-shadow-red-900 text-accent font-medium leading-[1.1] tracking-tight text-8xl w-full mb-4 bg-clip-text bg-gradient-to-r from-text-primary to-text-primary/90">
-						BUILD
+					<h1 className="text-shadow-sm text-shadow-red-200 dark:text-shadow-red-900 text-accent font-medium leading-[1.1] tracking-tight text-6xl w-full mb-4 bg-clip-text bg-gradient-to-r from-text-primary to-text-primary/90">
+						What should we build today?
 					</h1>
 
 					<form
