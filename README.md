@@ -1,12 +1,12 @@
-# 🧡 Cloudflare Orange Build
+# 🧡 Cloudflare Vibe SDK
 
-> **An open source full-stack AI webapp generator** – Deploy your own instance of Cloudflare Orange Build, an AI vibe coding platform that you can run and customize yourself.
+> **An open source full-stack AI webapp generator** – Deploy your own instance of Cloudflare VibeSDK, an AI vibe coding platform that you can run and customize yourself.
 
 <div align="center">
 
 **🌟 [Try the Live Demo](https://build.cloudflare.dev) 🌟**
 
-*See Orange Build in action before deploying your own instance*
+*See VibeSDK Build in action before deploying your own instance*
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/vibesdk)
 
@@ -18,9 +18,9 @@
 
 ---
 
-## ✨ What is Cloudflare Orange Build?
+## ✨ What is Cloudflare VibeSDK?
 
-Cloudflare Orange Build is an open source AI vibe coding platform built on Cloudflare's developer platform. If you're building an AI-powered platform for building applications, this is a great example that you can deploy and customize to build the whole platform yourself. Once the platform is deployed, users can say what they want to build in natural language, and the AI agent will create and deploy the application. 
+Cloudflare VibeSDK is an open source AI vibe coding platform built on Cloudflare's developer platform. If you're building an AI-powered platform for building applications, this is a great example that you can deploy and customize to build the whole platform yourself. Once the platform is deployed, users can say what they want to build in natural language, and the AI agent will create and deploy the application. 
 
 **🌐 [Experience it live at build.cloudflare.dev](https://build.cloudflare.dev)** – Try it out before deploying your own instance!
 
@@ -48,7 +48,7 @@ Let your customers extend your product's functionality without learning your API
 
 ### 🏗️ Built on Cloudflare's Platform
 
-Cloudflare Orange Build utilizes the full Cloudflare developer ecosystem:
+Cloudflare VibeSDK Build utilizes the full Cloudflare developer ecosystem:
 
 - **Frontend**: React + Vite with modern UI components
 - **Backend**: Workers with Durable Objects for AI agents  
@@ -62,11 +62,14 @@ Cloudflare Orange Build utilizes the full Cloudflare developer ecosystem:
 
 Before clicking "Deploy to Cloudflare", have these ready:
 
-### ✅ Required API Keys
-Get these API keys from each provider:
+### ✅ Prerequisites
+- Cloudflare Workers Paid Plan
+- Workers for Platforms subscription
+
+### 🔑 Required API Key
 - **Google Gemini API Key** - Get from [ai.google.dev](https://ai.google.dev)
 
-Once you click "Deploy to Cloudflare", you'll be taken to your Cloudflare dashboard where you can configure your Orange Build deployment with these variables. 
+Once you click "Deploy to Cloudflare", you'll be taken to your Cloudflare dashboard where you can configure your VibeSDK deployment with these variables. 
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/vibesdk)
 
@@ -82,7 +85,7 @@ Once you click "Deploy to Cloudflare", you'll be taken to your Cloudflare dashbo
 
 ### 🏗️ Sandbox Instance Configuration (Optional)
 
-Orange Build uses Cloudflare Containers to run generated applications in isolated environments. You can configure the container performance tier based on your needs and Cloudflare plan.
+VibeSDK uses Cloudflare Containers to run generated applications in isolated environments. You can configure the container performance tier based on your needs and Cloudflare plan.
 
 #### Available Instance Types
 
@@ -157,7 +160,7 @@ OAuth configuration is **not** shown on the initial deploy page. If you want use
 **GitHub OAuth Setup:**
 1. GitHub → **Settings** → **Developer settings** → **OAuth Apps**
 2. Click **New OAuth App**
-3. Application name: `Cloudflare Orange Build`
+3. Application name: `Cloudflare VibeSDK`
 4. Homepage URL: `https://your-worker-name.workers.dev`
 5. Authorization callback URL: `https://your-worker-name.workers.dev/api/auth/github/callback`
 6. Add to **both** `.dev.vars` (for local development) and `.prod.vars` (for deployment):
@@ -251,7 +254,7 @@ export default {
 ```
 
 ### Iteration-based Code Generation
-Cloudflare Orange Build generates apps in intelligent phases:
+Cloudflare VibeSDK generates apps in intelligent phases:
 
 1. **Planning Phase**: Analyzes requirements, creates file structure
 2. **Foundation Phase**: Generates package.json, basic setup files  
@@ -271,8 +274,8 @@ Cloudflare Orange Build generates apps in intelligent phases:
 ### Quick Setup
 ```bash
 # Clone your repository (or this repo)
-git clone https://github.com/your-username/your-orange-build-fork.git
-cd your-orange-build-fork
+git clone https://github.com/your-username/your-vibe-sdk-fork.git
+cd your-vibe-sdk-fork
 bun install
 
 # Set up local database
@@ -332,7 +335,7 @@ Example: If `MAX_SANDBOX_INSTANCES` is set both as an environment variable (`exp
 
 ## 🔒 Security & Privacy
 
-Cloudflare Orange Build implements enterprise-grade security:
+Cloudflare VibeSDK implements enterprise-grade security:
 
 - 🔐 **Encrypted Secrets**: All API keys stored with Cloudflare encryption
 - 🏰 **Sandboxed Execution**: Generated apps run in completely isolated containers
@@ -372,7 +375,7 @@ Cloudflare Orange Build implements enterprise-grade security:
 - **With AI Gateway Token**: The deployment script should automatically create the gateway. Check that your token has Read, Edit, and **Run** permissions.
 - **Without AI Gateway Token**: You must manually create an AI Gateway before deployment:
   1. Go to [AI Gateway Dashboard](https://dash.cloudflare.com/ai/ai-gateway)
-  2. Create gateway named `orange-build-gateway` (or your custom name)
+  2. Create gateway named `vibesdk-gateway` (or your custom name)
   3. Enable authentication and create a token with **Run** permissions
 
 **🏗️ "Container Instance Type Issues"**
@@ -391,7 +394,7 @@ Cloudflare Orange Build implements enterprise-grade security:
 
 ## 🤝 Contributing
 
-Want to contribute to Cloudflare Orange Build? Here's how:
+Want to contribute to Cloudflare VibeSDK? Here's how:
 
 1. **🍴 Fork** via the Deploy button (creates your own instance!)
 2. **💻 Develop** new features or improvements  
