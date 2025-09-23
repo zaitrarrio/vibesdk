@@ -423,18 +423,8 @@ export const AppCard = React.memo<AppCardProps>(
 				>
 					<Card
 						className={cn(
-							'h-full transition-all duration-300 ease-out cursor-pointer group relative overflow-hidden rounded-md p-2 bg-bg-1 hover:!bg-text',
+							'h-full transition-all duration-300 ease-out cursor-pointer group relative overflow-hidden rounded-md p-2 bg-bg-1 hover:!bg-text hover:dark:!bg-text-primary',
 							'border border-border-primary hover:border-border-primary/60',
-							// Status-aware enhancements with subtle gradients
-							deploymentStatus?.color === 'text-green-500' &&
-								'hover:shadow-green-500/15 hover:border-green-200/25 hover:bg-gradient-to-br hover:from-green-50/20 hover:to-transparent dark:hover:from-green-950/15',
-							deploymentStatus?.color === 'text-green-400' &&
-								'hover:shadow-green-400/15 hover:border-green-200/25 hover:bg-gradient-to-br hover:from-green-50/20 hover:to-transparent dark:hover:from-green-950/15',
-							deploymentStatus?.color === 'text-gray-500' &&
-								'hover:shadow-gray-400/15 hover:border-gray-200/25 hover:bg-gradient-to-br hover:from-gray-50/20 hover:to-transparent dark:hover:from-gray-950/15',
-							// Default enhanced styling
-							!deploymentStatus &&
-								'hover:bg-gradient-to-br hover:from-orange-50/20 hover:to-transparent dark:hover:from-orange-950/10',
 						)}
 					>
 					{/* Enhanced Preview Section with High-Quality Rendering */}

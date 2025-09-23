@@ -171,11 +171,16 @@ export const MonacoEditor = memo<MonacoEditorProps>(function MonacoEditor({
 	const stickyScroll = useRef(true);
 	const { theme } = useTheme();
 
+
 	useEffect(() => {
+		let configuredTheme = theme;
+		if (theme === 'system') {
+			configuredTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+		}
 		editor.current = monaco.editor.create(containerRef.current!, {
 			language: createOptions.language || 'typescript',
 			minimap: { enabled: false },
-			theme: theme === 'dark' ? 'v1-dev-dark' : 'v1-dev',
+			theme: configuredTheme === 'dark' ? 'v1-dev-dark' : 'v1-dev',
 			automaticLayout: true,
 			value: defaultCode,
 			fontSize: 13,
