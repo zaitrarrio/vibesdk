@@ -1835,9 +1835,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             const appService = new AppService(this.env);
             // Update cloudflare URL in database
-            await appService.updateDeploymentUrl(
+            await appService.updateDeploymentId(
                 this.getAgentId(),
-                deploymentUrl || ''
+                deploymentResult.deploymentId || ''
             );
 
             // Broadcast success message

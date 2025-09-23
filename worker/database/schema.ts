@@ -156,7 +156,7 @@ export const apps = sqliteTable('apps', {
     status: text('status', { enum: ['generating', 'completed'] }).notNull().default('generating'),
     
     // Deployment Information
-    deploymentUrl: text('deployment_url'), // Live deployment URL
+    deploymentId: text('deployment_id'), // Deployment ID (extracted from deployment URL)
     
     // GitHub Repository Integration
     githubRepositoryUrl: text('github_repository_url'), // GitHub repository URL

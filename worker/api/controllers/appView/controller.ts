@@ -10,6 +10,7 @@ import {
 } from './types';
 import { AgentSummary } from '../../../agents/core/types';
 import { createLogger } from '../../../logger';
+import { buildUserWorkerUrl } from 'worker/utils/urls';
 
 export class AppViewController extends BaseController {
     static logger = createLogger('AppViewController');
@@ -63,10 +64,12 @@ export class AppViewController extends BaseController {
                 this.logger.warn('Could not fetch agent state, using stored files:', agentError);
             }
 
+            const cloudflareUrl = appResult.deploymentId ? buildUserWorkerUrl(env, appResult.deploymentId) : '';
+
             const responseData: AppDetailsData = {
                 ...appResult, // Spread all EnhancedAppData fields including stats
-                cloudflareUrl: appResult.deploymentUrl,
-                previewUrl: previewUrl || appResult.deploymentUrl,
+                cloudflareUrl: cloudflareUrl,
+                previewUrl: previewUrl || cloudflareUrl,
                 user: {
                     id: appResult.userId!,
                     displayName: appResult.userName || 'Unknown',

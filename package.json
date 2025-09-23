@@ -69,6 +69,7 @@
 		"@radix-ui/react-tooltip": "^1.2.8",
 		"@rolldown/binding-linux-x64-gnu": "^1.0.0-beta.9-commit.d91dfb5",
 		"@sentry/cloudflare": "^10.11.0",
+		"@sentry/react": "^10.13.0",
 		"@sentry/vite-plugin": "^4.3.0",
 		"@typescript-eslint/eslint-plugin": "^8.42.0",
 		"@typescript-eslint/parser": "^8.42.0",

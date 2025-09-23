@@ -19,6 +19,10 @@ export function sentryOptions(env: Env) : Sentry.CloudflareOptions {
 		sendDefaultPii: true,
 		tracesSampleRate: 1.0,
         transportOptions,
+        allowUrls: [
+            // Only capture errors from our API endpoints
+            new RegExp(`^https://${env.CUSTOM_DOMAIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/.*$`)
+        ]
 	};
 }
 

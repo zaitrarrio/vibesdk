@@ -5,10 +5,11 @@ import { isDispatcherAvailable } from './utils/dispatcherUtils';
 import { createApp } from './app';
 import * as Sentry from '@sentry/cloudflare';
 import { sentryOptions } from './observability/sentry';
+import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
+import { getPreviewDomain } from './utils/urls';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
-import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
 
 export const CodeGeneratorAgent = Sentry.instrumentDurableObjectWithSentry(sentryOptions, SmartCodeGeneratorAgent);
 export const DORateLimitStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, BaseDORateLimitStore);
@@ -67,8 +68,9 @@ const worker = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		// --- Pre-flight Checks ---
 
-		// 1. Critical configuration check: Ensure CUSTOM_DOMAIN is set.
-		if (!env.CUSTOM_DOMAIN || env.CUSTOM_DOMAIN.trim() === '') {
+		// 1. Critical configuration check: Ensure custom domain is set.
+        const previewDomain = getPreviewDomain(env);
+		if (!previewDomain || previewDomain.trim() === '') {
 			console.error('FATAL: env.CUSTOM_DOMAIN is not configured in wrangler.toml or the Cloudflare dashboard.');
 			return new Response('Server configuration error: Application domain is not set.', { status: 500 });
 		}
@@ -88,7 +90,7 @@ const worker = {
 		const isMainDomainRequest =
 			hostname === env.CUSTOM_DOMAIN || hostname === 'localhost';
 		const isSubdomainRequest =
-			hostname.endsWith(`.${env.CUSTOM_DOMAIN}`) ||
+			hostname.endsWith(`.${previewDomain}`) ||
 			(hostname.endsWith('.localhost') && hostname !== 'localhost');
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)

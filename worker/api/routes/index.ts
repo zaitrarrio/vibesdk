@@ -9,6 +9,7 @@ import { setupModelProviderRoutes } from './modelProviderRoutes';
 import { setupGitHubExporterRoutes } from './githubExporterRoutes';
 import { setupCodegenRoutes } from './codegenRoutes';
 import { setupScreenshotRoutes } from './screenshotRoutes';
+import { setupSentryRoutes } from './sentryRoutes';
 import { Hono } from "hono";
 import { AppEnv } from "../../types/appenv";
 
@@ -17,6 +18,9 @@ export function setupRoutes(app: Hono<AppEnv>): void {
     app.get('/api/health', (c) => {
         return c.json({ status: 'ok' });
     });
+    
+    // Sentry tunnel routes (public - no auth required)
+    setupSentryRoutes(app);
 
     // Authentication and user management routes
     setupAuthRoutes(app);

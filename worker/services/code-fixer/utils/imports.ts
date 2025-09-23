@@ -132,7 +132,7 @@ export function findImportAtLocation(ast: t.File, line: number): ImportInfo | nu
         logger.debug(`No import found at line ${line}. Available imports: ${allImports.map(i => `${i.moduleSpecifier}:${i.line}`).join(', ')}`);
     }
 
-    logger.debug(`All imports found: ${JSON.stringify(allImports)}`);
+    logger.debug(`All imports found: count=${allImports.length}, first few: ${allImports.slice(0, 5).map(i => `${i.moduleSpecifier}:${i.line}`).join(', ')}${allImports.length > 5 ? ', ...' : ''}`);
     return foundImport;
 }
 

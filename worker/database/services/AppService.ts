@@ -268,14 +268,14 @@ export class AppService extends BaseService {
     }
 
     /**
-     * Update app with deployment URL
+     * Update app deployment ID
      */
-    async updateDeploymentUrl(
+    async updateDeploymentId(
         appId: string,
-        deploymentUrl: string,
+        deploymentId: string,
     ): Promise<boolean> {
         return this.updateApp(appId, {
-            deploymentUrl,
+            deploymentId,
         });
     }
 
