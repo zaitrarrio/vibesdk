@@ -1,7 +1,7 @@
 /**
  * Simple Structured Logger
  */
-
+import * as Sentry from '@sentry/cloudflare';
 import type { LoggerConfig, ObjectContext, LogEntry, LogLevel } from './types';
 
 const DEFAULT_CONFIG: LoggerConfig = {
@@ -377,6 +377,7 @@ export class StructuredLogger {
 
 	error(message: string, ...args: unknown[]): void {
 		const { data, error } = this.processArgsWithError(args);
+        Sentry.captureException(error || new Error(message), { extra: data });
 		this.log('error', message, data, error);
 	}
 

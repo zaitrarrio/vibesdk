@@ -12,6 +12,7 @@ import { errorResponse } from '../../api/responses';
 import { Context } from 'hono';
 import { AppEnv } from '../../types/appenv';
 import { RateLimitExceededError } from 'shared/types/errors';
+import * as Sentry from '@sentry/cloudflare';
 
 const logger = createLogger('RouteAuth');
 
@@ -146,6 +147,11 @@ export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Respo
     if (!user && (requirement.level === 'authenticated' || requirement.level === 'owner-only')) {
         user = await authMiddleware(c.req.raw, c.env);
         c.set('user', user);
+		if (user) {
+			Sentry.setUser({ id: user.id, email: user.email });
+		} else {
+			logger.warn('No user found');
+		}
 
         try {
             await RateLimitService.enforceAuthRateLimit(c.env, c.get('config').security.rateLimit, user, c.req.raw);
@@ -162,7 +168,7 @@ export async function enforceAuthRequirement(c: Context<AppEnv>) : Promise<Respo
     const env = c.env;
     const result = await routeAuthChecks(user, env, requirement, params);
     if (!result.success) {
-        logger.error('Authentication check failed', result.response);
+        logger.warn('Authentication check failed', result.response);
         return result.response;
     }
 }
