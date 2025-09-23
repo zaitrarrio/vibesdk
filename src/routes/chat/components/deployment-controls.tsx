@@ -177,7 +177,7 @@ export function DeploymentControls({
 	const isCurrentlyDeploying = currentState === DeploymentState.DEPLOYING || currentState === DeploymentState.REDEPLOYING;
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-3 deployment-controls">
 			{/* Main Deployment Panel - Always visible, changes based on state */}
 			{currentState !== DeploymentState.DEPLOYED && (
 				<div 

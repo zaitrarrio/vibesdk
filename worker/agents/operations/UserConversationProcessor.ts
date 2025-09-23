@@ -19,7 +19,12 @@ const CHUNK_SIZE = 64;
 export interface UserConversationInputs {
     userMessage: string;
     pastMessages: ConversationMessage[];
-    conversationResponseCallback: (message: string, conversationId: string, isStreaming: boolean) => void;
+    conversationResponseCallback: (
+        message: string,
+        conversationId: string,
+        isStreaming: boolean,
+        tool?: { name: string; status: 'start' | 'success' | 'error'; args?: Record<string, unknown> }
+    ) => void;
 }
 
 export interface UserConversationOutputs {
@@ -43,18 +48,19 @@ const SYSTEM_PROMPT = `You are an AI assistant for Cloudflare's development plat
 ## YOUR CAPABILITIES:
 - You can answer questions about the project and its current state
 - You can search the web for information when needed
-- Most importantly, you can modify the application when users request changes or ask for new features
+- Most importantly, you can modify the application when users request changes or ask for new features or points of issues/bugs
 - You can execute other tools provided to you to help users with their projects
 
 ## HOW TO INTERACT:
 
 1. **For general questions or discussions**: Simply respond naturally and helpfully. Be friendly and informative.
 
-2. **When users want to modify their app**: Use the edit_app tool to queue the modification request. 
+2. **When users want to modify their app or point out issues/bugs**: Use the edit_app tool to queue the modification request. 
    - First acknowledge what they want to change
    - Then call the edit_app tool with a clear, actionable description
    - The modification request should be specific but NOT include code-level implementation details
    - After calling the tool, let them know the changes will be implemented in the next development phase
+   - edit_app would simply relay the request to a super intelligent AI that would generate the code changes. This is a cheap operation and dont refrain from using it.
 
 3. **For information requests**: Use the appropriate tools (web_search, etc) when they would be helpful.
 
@@ -126,15 +132,30 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             const aiConversationId = IdGenerator.generateConversationId();
 
             logger.info("Generated conversation ID", { aiConversationId });
-            // Get available tools for the conversation
+            // Get available tools for the conversation and attach lifecycle callbacks for chat updates
+            const attachLifecycle = <TArgs, TResult>(td: ToolDefinition<TArgs, TResult>): ToolDefinition<TArgs, TResult> => ({
+                ...td,
+                onStart: (args: TArgs) => inputs.conversationResponseCallback(
+                    `🛠️ Executing tool ${td.function.name}...`,
+                    aiConversationId,
+                    false,
+                    { name: td.function.name, status: 'start', args: args as Record<string, unknown> }
+                ),
+                onComplete: (args: TArgs, _result: TResult) => inputs.conversationResponseCallback(
+                    `✅ Tool ${td.function.name} completed`,
+                    aiConversationId,
+                    false,
+                    { name: td.function.name, status: 'success', args: args as Record<string, unknown> }
+                )
+            });
             const tools = [
-                toolWebSearchDefinition,
-                toolWeatherDefinition,
-                buildEditAppTool((modificationRequest) => {
+                attachLifecycle(toolWebSearchDefinition),
+                attachLifecycle(toolWeatherDefinition),
+                attachLifecycle(buildEditAppTool((modificationRequest) => {
                     logger.info("Received app edit request", { modificationRequest }); 
                     extractedEnhancedRequest = modificationRequest;
-                })
-            ]
+                }))
+            ];
 
             logger.info("Executing inference for user message", { 
                 messageLength: userMessage.length,

@@ -1,21 +1,19 @@
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Eye, Code, Terminal } from 'lucide-react';
+import { Eye, Code } from 'lucide-react';
 
 export function ViewModeSwitch({
 	view,
 	onChange,
 	previewAvailable = false,
 	showTooltip = false,
-	terminalAvailable = true,
 }: {
-	view: 'preview' | 'editor' | 'blueprint' | 'terminal';
-	onChange: (mode: 'preview' | 'editor' | 'terminal') => void;
+	view: 'preview' | 'editor' | 'blueprint'
+	onChange: (mode: 'preview' | 'editor' | 'blueprint') => void;
 	previewAvailable: boolean;
 	showTooltip: boolean;
-	terminalAvailable?: boolean;
 }) {
-	if (!previewAvailable && !terminalAvailable) {
+	if (!previewAvailable) {
 		return null;
 	}
 
@@ -56,7 +54,7 @@ export function ViewModeSwitch({
 			>
 				<Code className="size-4" />
 			</button>
-			{terminalAvailable && (
+			{/* {terminalAvailable && (
 				<button
 					onClick={() => onChange('terminal')}
 					className={clsx(
@@ -69,7 +67,7 @@ export function ViewModeSwitch({
 				>
 					<Terminal className="size-4" />
 				</button>
-			)}
+			)} */}
 		</div>
 	);
 }
