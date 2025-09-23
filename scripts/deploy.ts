@@ -1626,7 +1626,7 @@ class CloudflareDeploymentManager {
 
 		// Add environment marker
 		prodVarsContent.push('');
-		// prodVarsContent.push('ENVIRONMENT="production"');
+		// prodVarsContent.push('ENVIRONMENT="prod"');
 
 		try {
 			writeFileSync(

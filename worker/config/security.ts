@@ -48,7 +48,7 @@ function getAllowedOrigins(env: Env): string[] {
     }
     
     // Development origins (only in development)
-    if (env.ENVIRONMENT === 'development') {
+    if (env.ENVIRONMENT === 'dev') {
         origins.push('http://localhost:3000');
         origins.push('http://localhost:5173');
         origins.push('http://127.0.0.1:3000');
@@ -148,7 +148,7 @@ interface SecureHeadersConfig {
  * Comprehensive security headers with CSP
  */
 export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
-    const isDevelopment = env.ENVIRONMENT === 'development';
+    const isDevelopment = env.ENVIRONMENT === 'dev';
     
     return {
         // Content Security Policy - strict by default
