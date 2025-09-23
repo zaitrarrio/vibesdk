@@ -98,7 +98,7 @@ export async function executeInference<T extends z.AnyZodObject>(   {
     reasoning_effort = reasoning_effort || finalConf.reasoning_effort;
 
     // Exponential backoff for retries
-    const backoffMs = (attempt: number) => Math.min(100 * Math.pow(2, attempt), 10000);
+    const backoffMs = (attempt: number) => Math.min(500 * Math.pow(2, attempt), 10000);
 
     let useCheaperModel = false;
 

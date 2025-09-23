@@ -126,8 +126,9 @@ export async function getUserConfigurableSettings(env: Env, userId: string, glob
     }
 
     if (invocationUserCache.has(userId)) {
-        logger.info(`Using cached configuration for user ${userId}`);
-        return invocationUserCache.get(userId)!;
+        const conf = invocationUserCache.get(userId)!
+        logger.info(`Using cached configuration for user ${userId}`, conf);
+        return conf;
     }
     try {
         // Try to fetch override config from KV

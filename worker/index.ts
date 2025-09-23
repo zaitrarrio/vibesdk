@@ -3,16 +3,18 @@ import { SmartCodeGeneratorAgent } from './agents/core/smartGeneratorAgent';
 import { proxyToSandbox } from '@cloudflare/sandbox';
 import { isDispatcherAvailable } from './utils/dispatcherUtils';
 import { createApp } from './app';
-import * as Sentry from '@sentry/cloudflare';
-import { sentryOptions } from './observability/sentry';
+// import * as Sentry from '@sentry/cloudflare';
+// import { sentryOptions } from './observability/sentry';
 import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
 import { getPreviewDomain } from './utils/urls';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
 
-export const CodeGeneratorAgent = Sentry.instrumentDurableObjectWithSentry(sentryOptions, SmartCodeGeneratorAgent);
-export const DORateLimitStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, BaseDORateLimitStore);
+// export const CodeGeneratorAgent = Sentry.instrumentDurableObjectWithSentry(sentryOptions, SmartCodeGeneratorAgent);
+// export const DORateLimitStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, BaseDORateLimitStore);
+export const CodeGeneratorAgent = SmartCodeGeneratorAgent;
+export const DORateLimitStore = BaseDORateLimitStore;
 
 // Logger for the main application and handlers
 const logger = createLogger('App');
@@ -114,5 +116,7 @@ const worker = {
 	},
 } satisfies ExportedHandler<Env>;
 
+export default worker;
+
 // Wrap the entire worker with Sentry for comprehensive error monitoring.
-export default Sentry.withSentry(sentryOptions, worker);
+// export default Sentry.withSentry(sentryOptions, worker);

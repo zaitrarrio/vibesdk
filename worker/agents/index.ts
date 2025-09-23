@@ -74,7 +74,6 @@ export async function getTemplateForQuery(
     env: Env,
     inferenceContext: InferenceContext,
     query: string,
-    hostname: string,
     logger: StructuredLogger,
 ) : Promise<{sandboxSessionId: string, templateDetails: TemplateDetails, selection: TemplateSelection}> {
     // Fetch available templates
@@ -92,7 +91,7 @@ export async function getTemplateForQuery(
                 query,
                 availableTemplates: templatesResponse.templates,
             }), 
-            getSandboxService(sandboxSessionId, hostname)
+            getSandboxService(sandboxSessionId)
         ]);
         
         logger.info('Selected template', { selectedTemplate: analyzeQueryResponse });

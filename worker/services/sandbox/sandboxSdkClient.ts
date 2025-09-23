@@ -46,6 +46,7 @@ import { ResourceProvisioner } from './resourceProvisioner';
 import { TemplateParser } from './templateParser';
 import { ResourceProvisioningResult } from './types';
 import { GitHubService } from '../github/GitHubService';
+import { getPreviewDomain } from 'worker/utils/urls';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -103,18 +104,16 @@ function getAutoAllocatedSandbox(sessionId: string): string {
 
 export class SandboxSdkClient extends BaseSandboxService {
     private sandbox: SandboxType;
-    private hostname: string;
     private metadataCache = new Map<string, InstanceMetadata>();
     
     private envVars?: Record<string, string>;
 
-    constructor(sandboxId: string, hostname: string, envVars?: Record<string, string>) {
+    constructor(sandboxId: string, envVars?: Record<string, string>) {
         if (env.ALLOCATION_STRATEGY === AllocationStrategy.MANY_TO_ONE) {
             sandboxId = getAutoAllocatedSandbox(sandboxId);
         }
         super(sandboxId);
         this.sandbox = this.getSandbox();
-        this.hostname = hostname;
         this.envVars = envVars;
         // Set environment variables FIRST, before any other operations
         // SHOULD NEVER SEND SECRETS TO SANDBOX!
@@ -832,8 +831,13 @@ export class SandboxSdkClient extends BaseSandboxService {
                     this.logger.info('Instance created successfully', { instanceId, processId, port: allocatedPort });
                         
                     // Expose the same port for preview URL
-                    const previewResult = await sandbox.exposePort(allocatedPort, { hostname: this.hostname });
-                    const previewURL = previewResult.url;
+                    const previewResult = await sandbox.exposePort(allocatedPort, { hostname: getPreviewDomain(env) });
+                    let previewURL = previewResult.url;
+                    const previewDomain = getPreviewDomain(env);
+                    if (previewDomain) {
+                        // Replace CUSTOM_DOMAIN with previewDomain in previewURL
+                        previewURL = previewURL.replace(env.CUSTOM_DOMAIN, previewDomain);
+                    }
                         
                     // Wait for tunnel URL (tunnel forwards to same port)
                     // const tunnelURL = await tunnelPromise;
@@ -1823,7 +1827,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
             
             // Step 8: Determine deployment URL
-            const deployedUrl = `${this.getProtocolForHost()}://${projectName}.${this.hostname}`;
+            const deployedUrl = `${this.getProtocolForHost()}://${projectName}.${getPreviewDomain(env)}`;
             const deploymentId = projectName;
             
             this.logger.info('Deployment successful', { 
@@ -1911,7 +1915,8 @@ export class SandboxSdkClient extends BaseSandboxService {
      */
     private getProtocolForHost(): string {
         // Simple heuristic - use https for production-like domains
-        if (this.hostname.includes('localhost') || this.hostname.includes('127.0.0.1')) {
+        const previewDomain = getPreviewDomain(env);
+        if (previewDomain.includes('localhost') || previewDomain.includes('127.0.0.1')) {
             return 'http';
         }
         return 'https';
