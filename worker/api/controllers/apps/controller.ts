@@ -1,6 +1,5 @@
-import { AnalyticsService } from '../../../database/services/AnalyticsService';
 import { AppService } from '../../../database/services/AppService';
-import type { BatchAppStats, AppSortOption, SortOrder, TimePeriod, Visibility } from '../../../database/types';
+import type { AppSortOption, SortOrder, TimePeriod, Visibility } from '../../../database/types';
 import { formatRelativeTime } from '../../../utils/timeFormatter';
 import { BaseController } from '../baseController';
 import { ApiResponse, ControllerResponse } from '../types';
@@ -111,12 +110,10 @@ export class AppController extends BaseController {
         try {
             const url = new URL(request.url);
             
-            // Pagination and filtering - handle both page and offset params
+            // Parse query parameters with type safety
             const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
             const page = parseInt(url.searchParams.get('page') || '1');
-            const offset = url.searchParams.get('offset') ? 
-                parseInt(url.searchParams.get('offset') || '0') : 
-                (page - 1) * limit;
+            const offset = (page - 1) * limit;
             const sort = (url.searchParams.get('sort') || 'recent') as AppSortOption;
             const order = (url.searchParams.get('order') || 'desc') as SortOrder;
             const period = (url.searchParams.get('period') || 'all') as TimePeriod;
@@ -126,6 +123,7 @@ export class AppController extends BaseController {
             const user = await AppController.getOptionalUser(request, env);
             const userId = user?.id;
             
+            // Get apps
             const appService = new AppService(env);
             const result = await appService.getPublicApps({
                 limit,
@@ -137,86 +135,17 @@ export class AppController extends BaseController {
                 search,
                 userId
             });
-            const { data: apps, pagination } = result;
             
-            // Handle analytics sorting if needed
-            let finalApps = apps; 
-            let analyticsData: BatchAppStats = {};
-            
-            if (sort === 'popular' || sort === 'trending') {
-                // For analytics-based sorting, we need to fetch analytics for ALL apps, sort, then paginate
-                // First get all apps without pagination
-                const allAppsResult = await appService.getPublicApps({
-                    framework: framework,
-                    search: search,
-                    userId: userId,
-                    limit: 1000, // Get more apps for proper sorting
-                    offset: 0
-                });
-                
-                const analyticsService = new AnalyticsService(env);
-                const appIds = allAppsResult.data.map(app => app.id);
-                analyticsData = await analyticsService.batchGetAppStats(appIds);
-                
-                // Add analytics data to all apps
-                const appsWithAnalytics = allAppsResult.data.map(app => ({
-                    ...app,
-                    viewCount: analyticsData[app.id]?.viewCount || 0,
-                    forkCount: analyticsData[app.id]?.forkCount || 0,
-                    likeCount: analyticsData[app.id]?.likeCount || 0
-                }));
-                
-                // Sort by analytics
-                if (sort === 'popular') {
-                    appsWithAnalytics.sort((a, b) => {
-                        const aScore = (a.viewCount || 0) + (a.likeCount || 0) * 2 + (a.forkCount || 0) * 3;
-                        const bScore = (b.viewCount || 0) + (b.likeCount || 0) * 2 + (b.forkCount || 0) * 3;
-                        return bScore - aScore;
-                    });
-                } else if (sort === 'trending') {
-                    appsWithAnalytics.sort((a, b) => {
-                        const now = Date.now();
-                        const aCreatedAt = a.createdAt ? new Date(a.createdAt).getTime() : now;
-                        const bCreatedAt = b.createdAt ? new Date(b.createdAt).getTime() : now;
-                        const aDays = Math.max(1, (now - aCreatedAt) / (1000 * 60 * 60 * 24));
-                        const bDays = Math.max(1, (now - bCreatedAt) / (1000 * 60 * 60 * 24));
-                        
-                        const aScore = ((a.viewCount || 0) + (a.likeCount || 0) * 2 + (a.forkCount || 0) * 3) / Math.log10(aDays + 1);
-                        const bScore = ((b.viewCount || 0) + (b.likeCount || 0) * 2 + (b.forkCount || 0) * 3) / Math.log10(bDays + 1);
-                        
-                        return bScore - aScore;
-                    });
-                }
-                
-                // Now apply pagination to sorted results
-                finalApps = appsWithAnalytics.slice(offset, offset + limit);
-                
-                // Update pagination info to reflect correct total
-                pagination.total = allAppsResult.pagination.total;
-                pagination.hasMore = offset + limit < pagination.total;
-            } else {
-                // For non-analytics sorting, get analytics only for the current page
-                const analyticsService = new AnalyticsService(env);
-                const appIds = apps.map(app => app.id);
-                analyticsData = await analyticsService.batchGetAppStats(appIds);
-            }
-            
+            // Format response with relative timestamps
             const responseData: PublicAppsData = {
-                apps: finalApps.map(app => ({
+                apps: result.data.map(app => ({
                     ...app,
-                    userName: app.userId ? app.userName : 'Anonymous User',
-                    userAvatar: app.userId ? app.userAvatar : null,
+                    userName: app.userName || 'Anonymous User',
+                    userAvatar: app.userAvatar || null,
                     updatedAtFormatted: formatRelativeTime(app.updatedAt),
-                    viewCount: analyticsData[app.id]?.viewCount || 0,
-                    forkCount: analyticsData[app.id]?.forkCount || 0,
-                    likeCount: analyticsData[app.id]?.likeCount || 0
+                    createdAtFormatted: app.createdAt ? formatRelativeTime(app.createdAt) : ''
                 })),
-                pagination: {
-                    total: pagination.total,
-                    limit: pagination.limit,
-                    offset: pagination.offset,
-                    hasMore: pagination.hasMore
-                }
+                pagination: result.pagination
             };
             
             return AppController.createSuccessResponse(responseData);
