@@ -63,12 +63,9 @@ export interface PaginatedResult<T> {
 }
 
 /**
- * Base pagination options for queries
+ * Pagination input parameters (for requests)
  */
-export interface PaginationOptions {
-    limit?: number;
-    offset?: number;
-}
+export type PaginationParams = Partial<Pick<PaginationInfo, 'limit' | 'offset'>>;
 
 // ========================================
 // APP-RELATED TYPES
@@ -92,7 +89,7 @@ export type SortOrder = 'asc' | 'desc';
 /**
  * Base app query options with common filters and pagination
  */
-export interface BaseAppQueryOptions extends PaginationOptions {
+export interface BaseAppQueryOptions extends PaginationParams {
     framework?: string;
     search?: string;
     sort?: AppSortOption;

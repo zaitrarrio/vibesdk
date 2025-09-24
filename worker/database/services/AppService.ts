@@ -5,7 +5,7 @@
 
 import { BaseService } from './BaseService';
 import * as schema from '../schema';
-import { eq, and, or, desc, asc, sql, SQL, isNull, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, asc, sql, isNull, inArray } from 'drizzle-orm';
 import { generateId } from '../../utils/idGenerator';
 import { formatRelativeTime } from '../../utils/timeFormatter';
 import type {
@@ -13,20 +13,17 @@ import type {
     AppWithFavoriteStatus,
     FavoriteToggleResult,
     PaginatedResult,
-    PaginationOptions,
     AppQueryOptions,
     PublicAppQueryOptions,
     OwnershipResult,
     AppVisibilityUpdateResult,
     TimePeriod,
-    AppSortOption,
+    PaginationParams,
+    AppSortOption
 } from '../types';
-import { AnalyticsService } from './AnalyticsService';
 
-/**
- * Type-safe where conditions for queries
- */
-type WhereCondition = SQL<unknown> | undefined;
+// Local type definitions
+type WhereCondition = ReturnType<typeof eq> | ReturnType<typeof and> | ReturnType<typeof or> | undefined;
 
 /**
  * App with only favorite apps (always true) - Service specific
@@ -288,7 +285,7 @@ export class AppService extends BaseService {
      */
     async getUserAppsWithFavorites(
         userId: string, 
-        options: PaginationOptions = {}
+        options: PaginationParams = {}
     ): Promise<AppWithFavoriteStatus[]> {
         const { limit = 50, offset = 0 } = options;
         
@@ -754,8 +751,6 @@ export class AppService extends BaseService {
 
     /**
      * Add analytics data to app collections
-     * OPTIMIZED: Uses batch queries to eliminate N+1 problems and minimize database round trips
-     * All analytics data fetched in 6 total queries regardless of app count
      */
     private async addAnalyticsToApps(
         basicApps: (typeof schema.apps.$inferSelect & { userName?: string | null; userAvatar?: string | null })[],
@@ -766,73 +761,80 @@ export class AppService extends BaseService {
 
         const appIds = basicApps.map(app => app.id);
         
-        // Use read replicas for analytics data - can tolerate slight staleness
+        // Use read replicas for analytics data
         const readDb = this.getReadDb('fast');
         const userReadDb = userId ? this.getReadDb('fresh') : readDb;
         
-        // BATCH FETCH ALL ANALYTICS DATA IN PARALLEL (6 queries total)
         const [
-            analyticsData,
-            starCounts,
-            userStars,
-            userFavorites
-        ] = await Promise.all([
-            // 1. Batch analytics (views, forks, likes) - 3 queries in parallel
-            new AnalyticsService(this.env).batchGetAppStats(appIds),
+            // Query 1: Combined analytics - views, forks, stars in one query
+            analyticsWithStars,
             
-            // 2. Batch star counts for all apps - 1 query
+            // Query 2: User-specific data (stars and favorites) in one query if user exists
+            userData
+        ] = await Promise.all([
+            // Combined analytics query
             readDb
                 .select({
-                    appId: schema.stars.appId,
-                    count: sql<number>`COUNT(*)`.as('count')
+                    appId: schema.apps.id,
+                    viewCount: sql<number>`(SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id})`,
+                    forkCount: sql<number>`(SELECT COUNT(*) FROM ${schema.apps} AS forks WHERE parent_app_id = ${schema.apps.id})`,
+                    starCount: sql<number>`(SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id})`
                 })
-                .from(schema.stars)
-                .where(inArray(schema.stars.appId, appIds))
-                .groupBy(schema.stars.appId)
+                .from(schema.apps)
+                .where(inArray(schema.apps.id, appIds))
                 .all(),
             
-            // 3. Batch user stars - 1 query
+            // Combined user data if userId exists
             userId ? userReadDb
                 .select({
-                    appId: schema.stars.appId
+                    appId: sql<string>`app_id`,
+                    type: sql<string>`type`,
                 })
-                .from(schema.stars)
-                .where(and(
-                    eq(schema.stars.userId, userId),
-                    inArray(schema.stars.appId, appIds)
-                ))
-                .all() : [],
-            
-            // 4. Batch user favorites - 1 query
-            userId ? userReadDb
-                .select({
-                    appId: schema.favorites.appId
-                })
-                .from(schema.favorites)
-                .where(and(
-                    eq(schema.favorites.userId, userId),
-                    inArray(schema.favorites.appId, appIds)
-                ))
+                .from(
+                    sql`(
+                        SELECT app_id, 'star' as type FROM ${schema.stars} 
+                        WHERE user_id = ${userId} AND app_id IN ${appIds}
+                        UNION ALL
+                        SELECT app_id, 'favorite' as type FROM ${schema.favorites} 
+                        WHERE user_id = ${userId} AND app_id IN ${appIds}
+                    )`
+                )
                 .all() : []
         ]);
 
-        // Create lookup maps for O(1) access
-        const starCountMap = new Map(starCounts.map(s => [s.appId, s.count]));
-        const userStarMap = new Set(userStars.map(s => s.appId as string));
-        const userFavoriteMap = new Set(userFavorites.map(f => f.appId as string));
+        // Create lookup maps
+        const analyticsMap = new Map(analyticsWithStars.map(a => [
+            a.appId, 
+            { 
+                viewCount: a.viewCount || 0, 
+                forkCount: a.forkCount || 0, 
+                starCount: a.starCount || 0 
+            }
+        ]));
+        
+        const userStarSet = new Set<string>();
+        const userFavoriteSet = new Set<string>();
+        
+        userData.forEach(item => {
+            if (item.type === 'star') userStarSet.add(item.appId);
+            if (item.type === 'favorite') userFavoriteSet.add(item.appId);
+        });
 
-        // Transform apps with O(1) lookups instead of additional queries
-        return basicApps.map(app => ({
-            ...app,
-            userName: includeUserInfo ? (app.userName || null) : null,
-            userAvatar: includeUserInfo ? (app.userAvatar || null) : null,
-            starCount: starCountMap.get(app.id) || 0,
-            userStarred: userStarMap.has(app.id),
-            userFavorited: userFavoriteMap.has(app.id),
-            viewCount: analyticsData[app.id]?.viewCount || 0,
-            forkCount: analyticsData[app.id]?.forkCount || 0,
-            likeCount: 0
-        }));
+        // Transform apps with O(1) lookups
+        return basicApps.map(app => {
+            const analytics = analyticsMap.get(app.id);
+            return {
+                ...app,
+                userName: includeUserInfo ? (app.userName || null) : null,
+                userAvatar: includeUserInfo ? (app.userAvatar || null) : null,
+                starCount: analytics?.starCount || 0,
+                userStarred: userStarSet.has(app.id),
+                userFavorited: userFavoriteSet.has(app.id),
+                viewCount: analytics?.viewCount || 0,
+                forkCount: analytics?.forkCount || 0,
+                likeCount: 0
+            };
+        });
     }
 
     // ========================================
