@@ -644,7 +644,6 @@ export class AppService extends BaseService {
 
     /**
      * Get user apps with analytics data integrated
-     * Uses unified analytics approach for consistency with proper sorting
      */
     async getUserAppsWithAnalytics(userId: string, options: Partial<AppQueryOptions> = {}): Promise<EnhancedAppData[]> {
         const { 
@@ -658,7 +657,7 @@ export class AppService extends BaseService {
             order = 'desc'
         } = options;
 
-        // For performance-critical sorts (popular/trending), use optimized aggregation method
+        // For performance-critical sorts (popular/trending), use optimized aggregation
         if (sort === 'popular' || sort === 'trending') {
             return this.getUserAppsWithAggregations(userId, options);
         }

@@ -11,45 +11,7 @@ import type {
     BatchAppStats
 } from '../types';
 
-/**
- * Comment statistics (service-specific type)
- */
-interface CommentStats {
-    likeCount: number;
-    replyCount: number;
-}
-
 export class AnalyticsService extends BaseService {
-    /**
-     * Get comment statistics
-     */
-    async getCommentStats(commentId: string): Promise<CommentStats> {
-        const [likeCount, replyCount] = await Promise.all([
-            // Count comment likes
-            this.database
-                .select({ count: count() })
-                .from(schema.commentLikes)
-                .where(eq(schema.commentLikes.commentId, commentId))
-                .get(),
-            
-            // Count replies
-            this.database
-                .select({ count: count() })
-                .from(schema.appComments)
-                .where(
-                    and(
-                        eq(schema.appComments.parentCommentId, commentId),
-                        eq(schema.appComments.isDeleted, false)
-                    )
-                )
-                .get()
-        ]);
-
-        return {
-            likeCount: likeCount?.count ?? 0,
-            replyCount: replyCount?.count ?? 0
-        };
-    }
 
     /**
      * Batch get statistics for multiple entities

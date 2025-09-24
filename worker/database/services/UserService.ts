@@ -7,14 +7,6 @@ import { BaseService } from './BaseService';
 import * as schema from '../schema';
 import { eq, and, sql, lt, ne } from 'drizzle-orm';
 import { generateId } from '../../utils/idGenerator';
-import type {
-    EnhancedAppData,
-    AppQueryOptions,
-    UserStats,
-    UserActivity,
-} from '../types';
-import { AnalyticsService } from './AnalyticsService';
-import { AppService } from './AppService';
 
 /**
  * User Service Class
@@ -33,33 +25,41 @@ export class UserService extends BaseService {
         return user;
     }
 
-    async findUserByEmail(email: string): Promise<schema.User | null> {
+    /**
+     * User lookup method
+     */
+    async findUser(options: {
+        id?: string;
+        email?: string;
+        provider?: { name: string; id: string };
+    }): Promise<schema.User | null> {
+        const whereConditions = [];
+        
+        if (options.id) {
+            whereConditions.push(eq(schema.users.id, options.id));
+        }
+        
+        if (options.email) {
+            whereConditions.push(eq(schema.users.email, options.email));
+        }
+        
+        if (options.provider) {
+            whereConditions.push(and(
+                eq(schema.users.provider, options.provider.name),
+                eq(schema.users.providerId, options.provider.id)
+            ));
+        }
+        
+        if (whereConditions.length === 0) {
+            return null;
+        }
+        
         const users = await this.database
             .select()
             .from(schema.users)
-            .where(eq(schema.users.email, email))
+            .where(whereConditions.length === 1 ? whereConditions[0] : and(...whereConditions))
             .limit(1);
-        return users[0] || null;
-    }
-
-    async findUserById(id: string): Promise<schema.User | null> {
-        const users = await this.database
-            .select()
-            .from(schema.users)
-            .where(eq(schema.users.id, id))
-            .limit(1);
-        return users[0] || null;
-    }
-
-    async findUserByProvider(provider: string, providerId: string): Promise<schema.User | null> {
-        const users = await this.database
-            .select()
-            .from(schema.users)
-            .where(and(
-                eq(schema.users.provider, provider),
-                eq(schema.users.providerId, providerId)
-            ))
-            .limit(1);
+            
         return users[0] || null;
     }
 
@@ -107,23 +107,6 @@ export class UserService extends BaseService {
     // ========================================
     // USER PROFILE OPERATIONS
     // ========================================
-    /**
-     * Get user apps with analytics data integrated
-     */
-    async getUserAppsWithAnalytics(userId: string, options: Partial<AppQueryOptions> = {}): Promise<EnhancedAppData[]> {
-        // Use AppService for consistent app operations
-        const appService = new AppService(this.env);
-        return appService.getUserAppsWithAnalytics(userId, options);
-    }
-
-    /**
-     * Get total count of user apps with filters (for pagination)
-     */
-    async getUserAppsCount(userId: string, options: Partial<AppQueryOptions> = {}): Promise<number> {
-        // Use AppService for consistent app operations
-        const appService = new AppService(this.env);
-        return appService.getUserAppsCount(userId, options);
-    }
 
     /**
      * Update user profile directly
@@ -267,19 +250,4 @@ export class UserService extends BaseService {
         return { totalApps, appsThisMonth };
     }
 
-    /**
-     * Get comprehensive user statistics for stats controller
-     */
-    async getUserStatistics(userId: string): Promise<UserStats> {
-        const analyticsService = new AnalyticsService(this.env);
-        return analyticsService.getUserStats(userId);
-    }
-
-    /**
-     * Get user activity timeline for stats controller
-     */
-    async getUserActivityTimeline(userId: string, limit?: number): Promise<UserActivity[]> {
-        const analyticsService = new AnalyticsService(this.env);
-        return analyticsService.getUserActivityTimeline(userId, limit);
-    }
 }

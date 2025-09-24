@@ -254,7 +254,7 @@ export class AuthController extends BaseController {
                 timezone: updateData.timezone
             });
             
-            const updatedUser = await userService.findUserById(user.id);
+            const updatedUser = await userService.findUser({ id: user.id });
             
             if (!updatedUser) {
                 return AuthController.createErrorResponse('User not found', 404);
