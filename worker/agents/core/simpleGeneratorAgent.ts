@@ -226,7 +226,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         currentDevState: CurrentDevState.IDLE,
         phasesCounter: MAX_PHASES,
         mvpGenerated: false,
-        shouldBeGenerating: false
+        shouldBeGenerating: false,
+        reviewingInitiated: false,
     };
 
     async saveToDatabase() {
@@ -650,7 +651,15 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     async executeReviewCycle(): Promise<CurrentDevState> {
         this.logger().info("Executing REVIEWING state");
 
-        const reviewCycles = 3;
+        const reviewCycles = 2;
+        if (this.state.reviewingInitiated) {
+            this.logger().info("Reviewing already initiated, skipping");
+            return CurrentDevState.IDLE;
+        }
+        this.setState({
+            ...this.state,
+            reviewingInitiated: true
+        });
         
         try {
             this.logger().info("Starting code review and improvement cycle...");
