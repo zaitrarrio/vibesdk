@@ -154,7 +154,6 @@ const extractTextFromHtml = (html: string): string => {
     sanitized = sanitized
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
         .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => 
@@ -162,7 +161,8 @@ const extractTextFromHtml = (html: string): string => {
         )
         .replace(/&#(\d+);/g, (_, dec) => 
             String.fromCharCode(parseInt(dec, 10))
-        );
+        )
+        .replace(/&amp;/g, '&');
     
     // Final cleanup of whitespace
     return sanitized.replace(/\s+/g, ' ').trim();
