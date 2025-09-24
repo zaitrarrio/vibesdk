@@ -156,7 +156,7 @@ export interface AppForForkResult {
 // ========================================
 
 /**
- * User statistics interface
+ * User statistics with all metrics
  */
 export interface UserStats {
     appCount: number;
@@ -164,12 +164,6 @@ export interface UserStats {
     favoriteCount: number;
     totalLikesReceived: number;
     totalViewsReceived: number;
-}
-
-/**
- * Enhanced user statistics with additional metrics
- */
-export interface EnhancedUserStats extends UserStats {
     streakDays: number;
     achievements: string[];
 }

@@ -2,12 +2,12 @@
  * Type definitions for Stats Controller responses
  */
 
-import { EnhancedUserStats, UserActivity } from '../../../database/types';
+import { UserStats, UserActivity } from '../../../database/types';
 
 /**
- * Response data for getUserStats - uses EnhancedUserStats directly
+ * Response data for getUserStats - uses UserStats directly
  */
-export type UserStatsData = EnhancedUserStats;
+export type UserStatsData = UserStats;
 
 /**
  * Response data for getUserActivity

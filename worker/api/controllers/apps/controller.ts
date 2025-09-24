@@ -127,7 +127,7 @@ export class AppController extends BaseController {
             const userId = user?.id;
             
             const appService = new AppService(env);
-            const result = await appService.getPublicAppsEnhanced({
+            const result = await appService.getPublicApps({
                 limit,
                 offset,
                 sort,
@@ -146,7 +146,7 @@ export class AppController extends BaseController {
             if (sort === 'popular' || sort === 'trending') {
                 // For analytics-based sorting, we need to fetch analytics for ALL apps, sort, then paginate
                 // First get all apps without pagination
-                const allAppsResult = await appService.getPublicAppsEnhanced({
+                const allAppsResult = await appService.getPublicApps({
                     framework: framework,
                     search: search,
                     userId: userId,

@@ -16,10 +16,9 @@ export class StatsController extends BaseController {
 
             // Get comprehensive user statistics using analytics service
             const analyticsService = new AnalyticsService(env);
-            const enhancedStats = await analyticsService.getEnhancedUserStats(user.id);
+            const userStats = await analyticsService.getUserStats(user.id);
 
-            // Use EnhancedUserStats directly as response data
-            const responseData = enhancedStats;
+            const responseData = userStats;
 
             return StatsController.createSuccessResponse(responseData);
         } catch (error) {

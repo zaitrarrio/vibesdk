@@ -10,7 +10,7 @@ import { generateId } from '../../utils/idGenerator';
 import type {
     EnhancedAppData,
     AppQueryOptions,
-    EnhancedUserStats,
+    UserStats,
     UserActivity,
 } from '../types';
 import { AnalyticsService } from './AnalyticsService';
@@ -270,9 +270,9 @@ export class UserService extends BaseService {
     /**
      * Get comprehensive user statistics for stats controller
      */
-    async getUserStatisticsEnhanced(userId: string): Promise<EnhancedUserStats> {
+    async getUserStatistics(userId: string): Promise<UserStats> {
         const analyticsService = new AnalyticsService(this.env);
-        return analyticsService.getEnhancedUserStats(userId);
+        return analyticsService.getUserStats(userId);
     }
 
     /**

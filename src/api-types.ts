@@ -125,7 +125,7 @@ export type {
 
 export type {
   FavoriteToggleResult,
-  EnhancedUserStats,
+  UserStats,
   UserActivity,
   EncryptedSecret,
   UserModelConfigWithMetadata,

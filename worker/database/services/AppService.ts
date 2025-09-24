@@ -91,40 +91,16 @@ export class AppService extends BaseService {
             .returning();
         return app;
     }
-    
-    async getUserApps(
-        userId: string,
-        options: AppQueryOptions = {}
-    ): Promise<schema.App[]> {
-        const { status, visibility, limit = 50, offset = 0 } = options;
-
-        const whereConditions: WhereCondition[] = [
-            eq(schema.apps.userId, userId),
-            status ? eq(schema.apps.status, status) : undefined,
-            visibility ? eq(schema.apps.visibility, visibility) : undefined,
-        ];
-
-        const whereClause = this.buildWhereConditions(whereConditions);
-
-        return await this.database
-            .select()
-            .from(schema.apps)
-            .where(whereClause)
-            .orderBy(desc(schema.apps.updatedAt))
-            .limit(limit)
-            .offset(offset);
-    }
-
     /**
      * Get public apps with user stats and pagination
      * Uses optimized queries with aggregations for performance
      */
-    async getPublicAppsEnhanced(options: PublicAppQueryOptions = {}): Promise<PaginatedResult<EnhancedAppData>> {
+    async getPublicApps(options: PublicAppQueryOptions = {}): Promise<PaginatedResult<EnhancedAppData>> {
         const { sort = 'recent' } = options;
 
         // Use optimized aggregation method for performance-critical sorts
         if (sort === 'popular' || sort === 'trending') {
-            return this.getEnhancedAppsWithAggregations(options);
+            return this.getAppsWithAggregations(options);
         }
 
         // Use simple query for basic sorts
@@ -182,10 +158,10 @@ export class AppService extends BaseService {
             userName: row.userName,
             userAvatar: row.userAvatar
         }));
-        const enhancedApps = await this.enhanceAppsWithAnalytics(appsWithUserInfo, userId, true);
+        const appsWithAnalytics = await this.addAnalyticsToApps(appsWithUserInfo, userId, true);
 
         return {
-            data: enhancedApps,
+            data: appsWithAnalytics,
             pagination: {
                 limit,
                 offset,
@@ -520,10 +496,10 @@ export class AppService extends BaseService {
     // ========================================
 
     /**
-     * Get enhanced app details with user info and stats for app view controller
+     * Get app details with user info and stats for app view controller
      * Combines app data, user info, and analytics in single optimized query
      */
-    async getAppDetailsEnhanced(appId: string, userId?: string): Promise<EnhancedAppData | null> {
+    async getAppDetails(appId: string, userId?: string): Promise<EnhancedAppData | null> {
         // Use read replica for public app data - high frequency operation
         const readDb = this.getReadDb('fast');
         
@@ -667,56 +643,6 @@ export class AppService extends BaseService {
     }
 
     /**
-     * Get app for forking with permission checks
-     * Single query with built-in ownership/visibility validation
-     */
-    async getAppForFork(appId: string, userId: string): Promise<{ app: schema.App | null; canFork: boolean }> {
-        // Use read replica for fork permission checks
-        const readDb = this.getReadDb('fast');
-        const app = await readDb
-            .select()
-            .from(schema.apps)
-            .where(eq(schema.apps.id, appId))
-            .get();
-
-        if (!app) {
-            return { app: null, canFork: false };
-        }
-
-        // Check visibility permissions (same logic as original controller)
-        const canFork = app.visibility === 'public' || app.userId === userId;
-
-        return { app, canFork };
-    }
-
-    /**
-     * Create forked app using same patterns as createSimpleApp
-     */
-    async createForkedApp(originalApp: schema.App, newAgentId: string, userId: string): Promise<schema.App> {
-        const now = new Date();
-        
-        const [forkedApp] = await this.database
-            .insert(schema.apps)
-            .values({
-                id: newAgentId,
-                userId: userId,
-                title: `${originalApp.title} (Fork)`,
-                description: originalApp.description,
-                originalPrompt: originalApp.originalPrompt,
-                finalPrompt: originalApp.finalPrompt,
-                framework: originalApp.framework,
-                visibility: 'private', // Forks start as private
-                status: 'completed', // Forked apps start as completed
-                parentAppId: originalApp.id,
-                createdAt: now,
-                updatedAt: now
-            })
-            .returning();
-
-        return forkedApp;
-    }
-
-    /**
      * Get user apps with analytics data integrated
      * Uses unified analytics approach for consistency with proper sorting
      */
@@ -784,8 +710,8 @@ export class AppService extends BaseService {
             return [];
         }
 
-        // Use unified analytics enhancement approach
-        return await this.enhanceAppsWithAnalytics(basicApps, userId, false);
+        // Use unified analytics approach
+        return await this.addAnalyticsToApps(basicApps, userId, false);
     }
 
     /**
@@ -828,11 +754,11 @@ export class AppService extends BaseService {
     // ========================================
 
     /**
-     * Unified analytics enhancement for app collections
+     * Add analytics data to app collections
      * OPTIMIZED: Uses batch queries to eliminate N+1 problems and minimize database round trips
      * All analytics data fetched in 6 total queries regardless of app count
      */
-    private async enhanceAppsWithAnalytics(
+    private async addAnalyticsToApps(
         basicApps: (typeof schema.apps.$inferSelect & { userName?: string | null; userAvatar?: string | null })[],
         userId?: string,
         includeUserInfo: boolean = false
@@ -941,10 +867,10 @@ export class AppService extends BaseService {
     // ========================================
 
     /**
-     * Optimized query for popular/trending apps using efficient aggregations
+     * Optimized query for popular/trending apps using aggregations
      * Prevents N+1 query problem by using JOINs instead of subqueries
      */
-    private async getEnhancedAppsWithAggregations(options: PublicAppQueryOptions): Promise<PaginatedResult<EnhancedAppData>> {
+    private async getAppsWithAggregations(options: PublicAppQueryOptions): Promise<PaginatedResult<EnhancedAppData>> {
         const { 
             limit = 20, 
             offset = 0, 

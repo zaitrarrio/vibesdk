@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { apiClient } from '@/lib/api-client';
-import type { EnhancedUserStats, UserActivity } from '@/api-types';
+import type { UserStats, UserActivity } from '@/api-types';
 
 export function useUserStats() {
   const { isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<EnhancedUserStats | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

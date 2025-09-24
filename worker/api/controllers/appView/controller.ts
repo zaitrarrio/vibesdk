@@ -29,7 +29,7 @@ export class AppViewController extends BaseController {
 
             // Get app details with stats using app service
             const appService = new AppService(env);
-            const appResult = await appService.getAppDetailsEnhanced(appId, userId);
+            const appResult = await appService.getAppDetails(appId, userId);
 
             if (!appResult) {
                 return AppViewController.createErrorResponse<AppDetailsData>('App not found', 404);
