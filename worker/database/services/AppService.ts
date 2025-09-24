@@ -94,12 +94,13 @@ export class AppService extends BaseService {
         const whereClause = this.buildWhereConditions(whereConditions);
         const readDb = this.getReadDb('fast');
         const orderByExpression = this.buildRankingExpression(sort, period, order);
+        
         const basicApps = await readDb
             .select({
                 app: schema.apps,
                 userName: schema.users.displayName,
                 userAvatar: schema.users.avatarUrl,
-                ...this.getCountSubqueries()
+                ...this.getCountSubqueries(),
             })
             .from(schema.apps)
             .leftJoin(schema.users, eq(schema.apps.userId, schema.users.id))
@@ -131,7 +132,7 @@ export class AppService extends BaseService {
         const appIds = basicApps.map(row => row.app.id);
 
         const { userStars, userFavorites } = await this.addUserSpecificAppData(appIds, userId);
-
+        
         const appsWithAnalytics: EnhancedAppData[] = basicApps.map(row => {
             const isStarred = userStars.has(row.app.id);
             const isFavorited = userFavorites.has(row.app.id);
@@ -747,11 +748,6 @@ export class AppService extends BaseService {
 
     /**
      * Get count subqueries for analytics (views, stars, forks)
-     * NOTE: These correlated subqueries are indexed properly via:
-     * - app_views_app_idx on app_views(app_id)
-     * - stars_app_idx on stars(app_id)  
-     * - apps_parent_app_idx on apps(parent_app_id)
-     * SQLite's query planner will use these indexes efficiently
      */
     private getCountSubqueries() {
         return {
@@ -774,23 +770,31 @@ export class AppService extends BaseService {
         if (sort === 'popular') {
             return sql`(
                 (SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id}) * ${this.RANKING_WEIGHTS.VIEWS} +
-                (SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id}) * ${this.RANKING_WEIGHTS.STARS} +
-                (SELECT COUNT(*) FROM ${schema.apps} AS forks WHERE parent_app_id = ${schema.apps.id}) * ${this.RANKING_WEIGHTS.FORKS}
+                (SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id}) * ${this.RANKING_WEIGHTS.STARS}
+                /* Forking disabled for now:
+                + (SELECT COUNT(*) FROM apps AS forks WHERE parent_app_id = apps.id) * 5
+                */
             ) DESC`;
         } else if (sort === 'trending') {
             const periodThreshold = this.getTimePeriodThreshold(period);
-            // Trending: Recent engagement with mild time decay
-            // Using logarithmic decay instead of linear to avoid punishing older apps too much
-            // Apps with recent activity will rank high regardless of age
+            const periodUnixTimestamp = Math.floor(periodThreshold.getTime() / 1000);
+            // Trending: Combines recency with engagement
+            // Activity score gets high weight, but recency is important for tiebreaking
             return sql`(
-                (SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id} AND viewed_at >= ${periodThreshold.toISOString()}) * ${this.RANKING_WEIGHTS.VIEWS} +
-                (SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id} AND starred_at >= ${periodThreshold.toISOString()}) * ${this.RANKING_WEIGHTS.STARS} * 2
-            ) * CASE 
-                WHEN julianday('now') - julianday(${schema.apps.updatedAt}) < 1 THEN 2.0
-                WHEN julianday('now') - julianday(${schema.apps.updatedAt}) < 7 THEN 1.5
-                WHEN julianday('now') - julianday(${schema.apps.updatedAt}) < 30 THEN 1.2
-                ELSE 1.0
-            END DESC`;
+                /* Activity score (views + stars) within period */
+                (
+                    (SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id} AND viewed_at >= ${periodUnixTimestamp}) * ${this.RANKING_WEIGHTS.VIEWS} +
+                    (SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id} AND starred_at >= ${periodUnixTimestamp}) * ${this.RANKING_WEIGHTS.STARS} * 2
+                    /* Forking disabled for now:
+                    + (SELECT COUNT(*) FROM apps AS forks WHERE parent_app_id = apps.id AND created_at >= periodUnixTimestamp) * 5
+                    */
+                ) * 10000000 + 
+                /* Recency score with better granularity (higher = more recent) */
+                /* Using Unix timestamp math: (now - updated_at) / 86400 = days */
+                CAST(
+                    (1000000 / (1.0 + (strftime('%s', 'now') - ${schema.apps.updatedAt}) / 86400.0))
+                AS INTEGER)
+            ) DESC`;
         } else if (sort === 'starred') {
             return sql`(SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id}) DESC`;
         } else {

@@ -12,7 +12,7 @@ import {
     UpdateAppVisibilityData,
     AppDeleteData
 } from './types';
-import { withCache } from '../../../services/cache/wrapper';
+// import { withCache } from '../../../services/cache/wrapper';
 import { createLogger } from '../../../logger';
 
 export class AppController extends BaseController {
@@ -105,8 +105,7 @@ export class AppController extends BaseController {
     }
 
     // Get public apps feed (like a global board)
-   static getPublicApps = withCache(
-        async function(this: AppController, request: Request, env: Env, _ctx: ExecutionContext, _context: RouteContext): Promise<ControllerResponse<ApiResponse<PublicAppsData>>> {
+   static getPublicApps = async function(this: AppController, request: Request, env: Env, _ctx: ExecutionContext, _context: RouteContext): Promise<ControllerResponse<ApiResponse<PublicAppsData>>> {
         try {
             const url = new URL(request.url);
             
@@ -153,9 +152,7 @@ export class AppController extends BaseController {
             AppController.logger.error('Error fetching public apps:', error);
             return AppController.createErrorResponse<PublicAppsData>('Failed to fetch public apps', 500);
         }
-    },
-        { ttlSeconds: 45 * 60, tags: ['public-apps'] }
-    );
+    }
 
     // Get single app
     static async getApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SingleAppData>>> {
