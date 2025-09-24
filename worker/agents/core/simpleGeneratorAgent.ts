@@ -1628,7 +1628,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // Create new deployment
         const templateName = this.state.templateDetails?.name || 'scratch';
         // Generate a unique suffix
-        let prefix = this.state.blueprint?.projectName || templateName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        let prefix = (this.state.blueprint?.projectName || templateName).toLowerCase().replace(/[^a-z0-9]/g, '-');
         const uniqueSuffix = generateId();
         // Only use the first 20 characters of the prefix
         prefix = prefix.slice(0, 20);
