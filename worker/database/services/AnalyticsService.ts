@@ -94,10 +94,13 @@ export class AnalyticsService extends BaseService {
     async batchGetAppStats(appIds: string[]): Promise<BatchAppStats> {
         if (appIds.length === 0) return {};
 
+        // Use read replica for batch analytics
+        const readDb = this.getReadDb('fast');
+        
         // Get all stats in parallel using batch queries
         const [views, forks, likes] = await Promise.all([
             // Batch view counts
-            this.database
+            readDb
                 .select({
                     appId: schema.appViews.appId,
                     count: count()
@@ -108,7 +111,7 @@ export class AnalyticsService extends BaseService {
                 .all(),
             
             // Batch fork counts
-            this.database
+            readDb
                 .select({
                     parentAppId: schema.apps.parentAppId,
                     count: count()
@@ -119,7 +122,7 @@ export class AnalyticsService extends BaseService {
                 .all(),
             
             // Batch like counts
-            this.database
+            readDb
                 .select({
                     appId: schema.appLikes.appId,
                     count: count()
@@ -209,10 +212,13 @@ export class AnalyticsService extends BaseService {
         // Get basic stats first
         const basicStats = await this.getUserStats(userId);
 
+        // Use 'fresh' strategy for user dashboard data
+        const readDb = this.getReadDb('fresh');
+        
         // Get additional stats in parallel
         const [publicAppCount, totalLikesReceived, streakDays] = await Promise.all([
             // Count user's public apps
-            this.database
+            readDb
                 .select({ count: count() })
                 .from(schema.apps)
                 .where(
@@ -225,7 +231,7 @@ export class AnalyticsService extends BaseService {
                 .then(r => r?.count ?? 0),
 
             // Count total likes received on user's apps
-            this.database
+            readDb
                 .select({ count: count() })
                 .from(schema.favorites)
                 .innerJoin(schema.apps, eq(schema.favorites.appId, schema.apps.id))
@@ -300,8 +306,11 @@ export class AnalyticsService extends BaseService {
      * Returns recent activities for user dashboard
      */
     async getUserActivityTimeline(userId: string, limit: number = 20): Promise<UserActivity[]> {
+        // Use 'fresh' strategy for user's activity feed
+        const readDb = this.getReadDb('fresh');
+        
         // Get recent app activities
-        const appActivities = await this.database
+        const appActivities = await readDb
             .select({
                 id: schema.apps.id,
                 title: schema.apps.title,
@@ -315,7 +324,7 @@ export class AnalyticsService extends BaseService {
             .limit(limit);
 
         // Get recent favorites
-        const favoriteActivities = await this.database
+        const favoriteActivities = await readDb
             .select({
                 appId: schema.favorites.appId,
                 appTitle: schema.apps.title,

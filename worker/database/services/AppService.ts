@@ -142,7 +142,8 @@ export class AppService extends BaseService {
         const direction = order === 'asc' ? asc : desc;
 
         // Get basic apps for simple sorts
-        const basicApps = await this.database
+        const readDb = this.getReadDb('fast');
+        const basicApps = await readDb
             .select({
                 app: schema.apps,
                 userName: schema.users.displayName,
@@ -156,7 +157,7 @@ export class AppService extends BaseService {
             .offset(offset);
 
         // Get total count for pagination
-        const totalCountResult = await this.database
+        const totalCountResult = await readDb
             .select({ count: sql<number>`COUNT(*)` })
             .from(schema.apps)
             .where(whereClause);
@@ -315,7 +316,9 @@ export class AppService extends BaseService {
     ): Promise<AppWithFavoriteStatus[]> {
         const { limit = 50, offset = 0 } = options;
         
-        const results = await this.database
+        // Use 'fresh' strategy for user's own data to ensure they see latest changes
+        const readDb = this.getReadDb('fresh');
+        const results = await readDb
             .select({
                 app: schema.apps,
                 isFavorite: this.createFavoriteStatusQuery(userId)
@@ -409,7 +412,9 @@ export class AppService extends BaseService {
      * Check if user owns an app
      */
     async checkAppOwnership(appId: string, userId: string): Promise<OwnershipResult> {
-        const app = await this.database
+        // Use read replica for ownership checks
+        const readDb = this.getReadDb('fast');
+        const app = await readDb
             .select({
                 id: schema.apps.id,
                 userId: schema.apps.userId
@@ -435,7 +440,9 @@ export class AppService extends BaseService {
         appId: string, 
         userId: string
     ): Promise<AppWithFavoriteStatus | null> {
-        const apps = await this.database
+        // Use 'fresh' strategy since this includes user-specific favorite status
+        const readDb = this.getReadDb('fresh');
+        const apps = await readDb
             .select({
                 app: schema.apps,
                 isFavorite: this.createFavoriteStatusQuery(userId)
@@ -517,8 +524,11 @@ export class AppService extends BaseService {
      * Combines app data, user info, and analytics in single optimized query
      */
     async getAppDetailsEnhanced(appId: string, userId?: string): Promise<EnhancedAppData | null> {
+        // Use read replica for public app data - high frequency operation
+        const readDb = this.getReadDb('fast');
+        
         // Get app with user info using full app selection
-        const appResult = await this.database
+        const appResult = await readDb
             .select({
                 app: schema.apps,
                 userName: schema.users.displayName,
@@ -536,9 +546,12 @@ export class AppService extends BaseService {
         const app = appResult.app;
 
         // Get stats in parallel using same pattern as analytics service
+        // Use 'fresh' strategy for user-specific queries for consistency
+        const userReadDb = userId ? this.getReadDb('fresh') : readDb;
+        
         const [viewCount, starCount, isFavorite, userHasStarred] = await Promise.all([
             // View count
-            this.database
+            readDb
                 .select({ count: sql<number>`count(*)` })
                 .from(schema.appViews)
                 .where(eq(schema.appViews.appId, appId))
@@ -546,7 +559,7 @@ export class AppService extends BaseService {
                 .then(r => r?.count || 0),
             
             // Star count
-            this.database
+            readDb
                 .select({ count: sql<number>`count(*)` })
                 .from(schema.stars)
                 .where(eq(schema.stars.appId, appId))
@@ -554,7 +567,7 @@ export class AppService extends BaseService {
                 .then(r => r?.count || 0),
             
             // Is favorited by current user
-            userId ? this.database
+            userId ? userReadDb
                 .select({ id: schema.favorites.id })
                 .from(schema.favorites)
                 .where(and(
@@ -564,8 +577,8 @@ export class AppService extends BaseService {
                 .get()
                 .then(r => !!r) : false,
             
-            // Is starred by current user  
-            userId ? this.database
+            // Is starred by current user
+            userId ? userReadDb
                 .select({ id: schema.stars.id })
                 .from(schema.stars)
                 .where(and(
@@ -658,7 +671,9 @@ export class AppService extends BaseService {
      * Single query with built-in ownership/visibility validation
      */
     async getAppForFork(appId: string, userId: string): Promise<{ app: schema.App | null; canFork: boolean }> {
-        const app = await this.database
+        // Use read replica for fork permission checks
+        const readDb = this.getReadDb('fast');
+        const app = await readDb
             .select()
             .from(schema.apps)
             .where(eq(schema.apps.id, appId))
@@ -789,8 +804,11 @@ export class AppService extends BaseService {
 
         const whereClause = this.buildWhereConditions(whereConditions);
 
+        // Use read replica for count queries
+        const readDb = this.getReadDb('fast');
+        
         // For "starred" sort, we need to join with favorites table
-        const countQuery = this.database
+        const countQuery = readDb
             .select({ count: sql<number>`COUNT(*)` })
             .from(schema.apps);
 
@@ -823,6 +841,10 @@ export class AppService extends BaseService {
 
         const appIds = basicApps.map(app => app.id);
         
+        // Use read replicas for analytics data - can tolerate slight staleness
+        const readDb = this.getReadDb('fast');
+        const userReadDb = userId ? this.getReadDb('fresh') : readDb;
+        
         // BATCH FETCH ALL ANALYTICS DATA IN PARALLEL (6 queries total)
         const [
             analyticsData,
@@ -834,7 +856,7 @@ export class AppService extends BaseService {
             new AnalyticsService(this.env).batchGetAppStats(appIds),
             
             // 2. Batch star counts for all apps - 1 query
-            this.database
+            readDb
                 .select({
                     appId: schema.stars.appId,
                     count: sql<number>`COUNT(*)`.as('count')
@@ -844,8 +866,8 @@ export class AppService extends BaseService {
                 .groupBy(schema.stars.appId)
                 .all(),
             
-            // 3. Batch user stars - 1 query (only if userId provided)
-            userId ? this.database
+            // 3. Batch user stars - 1 query
+            userId ? userReadDb
                 .select({
                     appId: schema.stars.appId
                 })
@@ -856,8 +878,8 @@ export class AppService extends BaseService {
                 ))
                 .all() : [],
             
-            // 4. Batch user favorites - 1 query (only if userId provided)
-            userId ? this.database
+            // 4. Batch user favorites - 1 query
+            userId ? userReadDb
                 .select({
                     appId: schema.favorites.appId
                 })
@@ -948,8 +970,11 @@ export class AppService extends BaseService {
         // Build the score expression for ORDER BY based on industry-standard algorithms  
         const scoreExpression = this.createAdvancedScoreExpression(sort, period, WEIGHTS);
 
+        // Use read replica for heavy aggregation queries
+        const readDb = this.getReadDb('fast');
+        
         // Use efficient aggregation query with LEFT JOINs
-        const basicApps = await this.database
+        const basicApps = await readDb
             .select({
                 app: schema.apps,
                 userName: schema.users.displayName,
@@ -993,7 +1018,7 @@ export class AppService extends BaseService {
             .offset(offset);
 
         // Get total count
-        const totalQuery = await this.database
+        const totalQuery = await readDb
             .select({ count: sql<number>`count(*)` })
             .from(schema.apps)
             .where(whereClause);
@@ -1007,9 +1032,11 @@ export class AppService extends BaseService {
         if (userId && basicApps.length > 0) {
             const appIds = basicApps.map(row => row.app.id);
             
+            // Use 'fresh' strategy for user-specific data
+            const userReadDb = this.getReadDb('fresh');
             const [userStars, userFavorites] = await Promise.all([
                 // Batch query for user stars
-                this.database
+                userReadDb
                     .select({ appId: schema.stars.appId })
                     .from(schema.stars)
                     .where(and(
@@ -1018,7 +1045,7 @@ export class AppService extends BaseService {
                     )),
                 
                 // Batch query for user favorites
-                this.database
+                userReadDb
                     .select({ appId: schema.favorites.appId })
                     .from(schema.favorites)
                     .where(and(
