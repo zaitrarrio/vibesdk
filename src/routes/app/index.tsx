@@ -246,7 +246,7 @@ export default function AppView() {
 			// 	errorMessage: 'Failed to remix app',
 			// },
 		}),
-		[app, navigate],
+		[app],
 	);
 
 	// Reusable authenticated action handler
@@ -368,9 +368,9 @@ export default function AppView() {
 	]);
 
 	const handleCopyUrl = () => {
-		if (!app?.cloudflareUrl) return;
+		if (!appUrl) return;
 
-		navigator.clipboard.writeText(app.cloudflareUrl);
+		navigator.clipboard.writeText(appUrl);
 		setCopySuccess(true);
 		setTimeout(() => setCopySuccess(false), 2000);
 	};
