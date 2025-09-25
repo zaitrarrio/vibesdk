@@ -11,7 +11,7 @@ interface UseInfiniteScrollResult {
 }
 
 export function useInfiniteScroll({
-  threshold = 100,
+  threshold = 400,
   enabled = true,
   onLoadMore
 }: UseInfiniteScrollOptions = {}): UseInfiniteScrollResult {
@@ -31,12 +31,12 @@ export function useInfiniteScroll({
           // Reset after a brief delay to prevent duplicate calls
           setTimeout(() => {
             isLoadingRef.current = false;
-          }, 500);
+          }, 300);
         }
       },
       {
         rootMargin: `${threshold}px`,
-        threshold: 0.1
+        threshold: 0
       }
     );
 

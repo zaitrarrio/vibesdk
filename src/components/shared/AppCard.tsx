@@ -384,19 +384,20 @@ export const AppCard = React.memo<AppCardProps>(
 		const deploymentStatus = getDeploymentStatusInfo(app);
 
 		const itemVariants = {
-			hidden: { y: 20, opacity: 0 },
+			hidden: { y: 10, opacity: 0 },
 			visible: {
 				y: 0,
 				opacity: 1,
 				transition: {
 					type: 'spring' as const,
-					stiffness: 100,
+					stiffness: 200,
+					damping: 20,
 				},
 			},
 			exit: {
-				y: -20,
+				y: -10,
 				opacity: 0,
-				scale: 0.95,
+				scale: 0.98,
 				transition: {
 					duration: 0.2,
 				},
