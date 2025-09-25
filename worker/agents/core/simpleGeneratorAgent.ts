@@ -1652,7 +1652,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         throw new Error(`Failed to create sandbox instance: ${createResponse?.error || 'Unknown error'}`);
     }
 
-    private async executeDeployment(files: FileOutputType[] = [], redeploy: boolean = false, commitMessage?: string): Promise<PreviewType | null> {
+    private async executeDeployment(files: FileOutputType[] = [], redeploy: boolean = false, commitMessage?: string, retries: number = 3): Promise<PreviewType | null> {
         const { templateDetails, generatedFilesMap } = this.state;
         let { sandboxInstanceId } = this.state;
         let previewURL: string | undefined;
@@ -1764,10 +1764,16 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 ...this.state,
                 sandboxInstanceId: undefined,
             });
+            if (retries > 0) {
+                this.broadcast(WebSocketMessageResponses.DEPLOYMENT_FAILED, {
+                    error: `Error deploying to sandbox service: ${errorMsg}, Will retry...`,
+                });
+                return this.executeDeployment(files, redeploy, commitMessage, retries - 1);
+            }
             this.broadcast(WebSocketMessageResponses.DEPLOYMENT_FAILED, {
-                error: `Error deploying to sandbox service: ${errorMsg}`,
+                error: `Error deploying to sandbox service: ${errorMsg}. Please report an issue if this persists`,
             });
-            return this.deployToSandbox();
+            return null;
         }
     }
 
