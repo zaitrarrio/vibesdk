@@ -1,6 +1,5 @@
 /**
- * App Service
- * Handles all app-related database operations including favorites, views, stars, and forking
+ * App Service - Database operations for apps
  */
 
 import { BaseService } from './BaseService';
@@ -21,28 +20,27 @@ import type {
     PaginationParams
 } from '../types';
 
-// Local type definitions
+// Type definitions
 type WhereCondition = ReturnType<typeof eq> | ReturnType<typeof and> | ReturnType<typeof or> | undefined;
+type RankedAppQueryResult = {
+    app: typeof schema.apps.$inferSelect;
+    userName: string | null;
+    userAvatar: string | null;
+    viewCount: number;
+    starCount: number;
+    forkCount: number;
+    recentViews?: number;
+    recentStars?: number;
+};
 
-/**
- * App with only favorite apps (always true) - Service specific
- */
 interface FavoriteAppResult extends schema.App {
     isFavorite: true;
-    updatedAtFormatted: string;
 }
-
-/**
- * App Service Class
- * Comprehensive app management operations
- */
 export class AppService extends BaseService {
-    
-    // Configuration for ranking algorithms
     private readonly RANKING_WEIGHTS = {
-        VIEWS: 1,    // Lower weight for passive engagement
-        STARS: 3,    // Medium weight for likes/stars  
-        FORKS: 5,    // Higher weight for active contribution
+        VIEWS: 1,
+        STARS: 3,
+        FORKS: 5
     };
 
     /**
@@ -64,7 +62,7 @@ export class AppService extends BaseService {
     // ========================================
 
     /**
-     * Create a new app with full schema data
+     * Create a new app
      */
     async createApp(appData:schema.NewApp): Promise<schema.App> {
         const [app] = await this.database
@@ -93,21 +91,16 @@ export class AppService extends BaseService {
         const whereConditions = this.buildPublicAppConditions(framework, search);
         const whereClause = this.buildWhereConditions(whereConditions);
         const readDb = this.getReadDb('fast');
-        const orderByExpression = this.buildRankingExpression(sort, period, order);
         
-        const basicApps = await readDb
-            .select({
-                app: schema.apps,
-                userName: schema.users.displayName,
-                userAvatar: schema.users.avatarUrl,
-                ...this.getCountSubqueries(),
-            })
-            .from(schema.apps)
-            .leftJoin(schema.users, eq(schema.apps.userId, schema.users.id))
-            .where(whereClause)
-            .orderBy(orderByExpression)
-            .limit(limit)
-            .offset(offset);
+        const basicApps = await this.executeRankedQuery(
+            readDb,
+            whereClause,
+            sort,
+            period,
+            order,
+            limit,
+            offset
+        );
 
         // Get total count for pagination
         const totalCountResult = await readDb
@@ -129,11 +122,11 @@ export class AppService extends BaseService {
             };
         }
 
-        const appIds = basicApps.map(row => row.app.id);
+        const appIds = basicApps.map((row: RankedAppQueryResult) => row.app.id);
 
         const { userStars, userFavorites } = await this.addUserSpecificAppData(appIds, userId);
         
-        const appsWithAnalytics: EnhancedAppData[] = basicApps.map(row => {
+        const appsWithAnalytics: EnhancedAppData[] = basicApps.map((row: RankedAppQueryResult) => {
             const isStarred = userStars.has(row.app.id);
             const isFavorited = userFavorites.has(row.app.id);
             
@@ -486,14 +479,11 @@ export class AppService extends BaseService {
     // ========================================
 
     /**
-     * Get app details with user info and stats for app view controller
-     * Combines app data, user info, and analytics in single optimized query
+     * Get app details with stats
      */
     async getAppDetails(appId: string, userId?: string): Promise<EnhancedAppData | null> {
-        // Use read replica for public app data - high frequency operation
         const readDb = this.getReadDb('fast');
         
-        // Get app with user info using full app selection
         const appResult = await readDb
             .select({
                 app: schema.apps,
@@ -656,15 +646,18 @@ export class AppService extends BaseService {
         ];
 
         const whereClause = this.buildWhereConditions(whereConditions);
-        const orderByExpression = this.buildRankingExpression(sort, period, order);
         
+        // Handle starred sort separately
         if (sort === 'starred') {
             const results = await this.database
                 .select({
                     app: schema.apps,
+                    userName: schema.users.displayName,
+                    userAvatar: schema.users.avatarUrl,
                     ...this.getCountSubqueries()
                 })
                 .from(schema.apps)
+                .leftJoin(schema.users, eq(schema.apps.userId, schema.users.id))
                 .innerJoin(schema.favorites, eq(schema.favorites.appId, schema.apps.id))
                 .where(and(whereClause, eq(schema.favorites.userId, userId)))
                 .orderBy(desc(schema.favorites.createdAt))
@@ -673,41 +666,44 @@ export class AppService extends BaseService {
                 
             return results.map(r => ({
                 ...r.app,
-                userName: null,
-                userAvatar: null,
+                userName: r.userName,
+                userAvatar: r.userAvatar,
                 viewCount: r.viewCount || 0,
                 starCount: r.starCount || 0,
                 forkCount: r.forkCount || 0,
                 likeCount: 0,
                 userStarred: false,
-                userFavorited: true
+                userFavorited: true // These are favorited apps
             }));
         }
 
-        const basicApps = await this.database
-            .select({
-                app: schema.apps,
-                ...this.getCountSubqueries()
-            })
-            .from(schema.apps)
-            .where(whereClause)
-            .orderBy(orderByExpression)
-            .limit(limit)
-            .offset(offset);
+        const basicApps = await this.executeRankedQuery(
+            this.database,
+            whereClause,
+            sort,
+            period as TimePeriod,
+            order,
+            limit,
+            offset
+        );
 
         if (basicApps.length === 0) {
             return [];
         }
-        return basicApps.map(row => ({
+
+        const appIds = basicApps.map((row: RankedAppQueryResult) => row.app.id);
+        const { userStars, userFavorites } = await this.addUserSpecificAppData(appIds, userId);
+        
+        return basicApps.map((row: RankedAppQueryResult) => ({
             ...row.app,
-            userName: null,
-            userAvatar: null,
+            userName: row.userName,
+            userAvatar: row.userAvatar,
             viewCount: row.viewCount || 0,
             starCount: row.starCount || 0,
             forkCount: row.forkCount || 0,
             likeCount: 0,
-            userStarred: false,
-            userFavorited: false
+            userStarred: userStars.has(row.app.id),
+            userFavorited: userFavorites.has(row.app.id)
         }));
     }
 
@@ -742,13 +738,98 @@ export class AppService extends BaseService {
         }
     }
 
-    // ========================================
-    // UTILITY METHODS
-    // ========================================
-
     /**
-     * Get count subqueries for analytics (views, stars, forks)
+     * Execute ranked query with JOINs for performance
      */
+    private async executeRankedQuery(
+        db: ReturnType<typeof this.getReadDb>,
+        whereClause: ReturnType<typeof this.buildWhereConditions>,
+        sort: string,
+        period: TimePeriod,
+        order: string,
+        limit: number,
+        offset: number
+    ): Promise<RankedAppQueryResult[]> {
+        // JOIN-based aggregation for trending/popular
+        if (sort === 'trending' || sort === 'popular') {
+            const periodThreshold = sort === 'trending' ? this.getTimePeriodThreshold(period) : null;
+            const periodUnixTimestamp = periodThreshold ? Math.floor(periodThreshold.getTime() / 1000) : 0;
+            
+            const aggregatedQuery = db
+                .select({
+                    app: schema.apps,
+                    userName: schema.users.displayName,
+                    userAvatar: schema.users.avatarUrl,
+                    viewCount: sql<number>`COALESCE(COUNT(DISTINCT ${schema.appViews.id}), 0)`,
+                    starCount: sql<number>`COALESCE(COUNT(DISTINCT ${schema.stars.id}), 0)`,
+                    forkCount: sql<number>`COALESCE(COUNT(DISTINCT forks.id), 0)`,
+                    // For trending, also get recent counts
+                    ...(sort === 'trending' ? {
+                        recentViews: sql<number>`COALESCE(SUM(CASE WHEN ${schema.appViews.viewedAt} >= ${periodUnixTimestamp} THEN 1 ELSE 0 END), 0)`,
+                        recentStars: sql<number>`COALESCE(SUM(CASE WHEN ${schema.stars.starredAt} >= ${periodUnixTimestamp} THEN 1 ELSE 0 END), 0)`,
+                    } : {}),
+                })
+                .from(schema.apps)
+                .leftJoin(schema.users, eq(schema.apps.userId, schema.users.id))
+                .leftJoin(schema.appViews, eq(schema.apps.id, schema.appViews.appId))
+                .leftJoin(schema.stars, eq(schema.apps.id, schema.stars.appId))
+                .leftJoin(
+                    sql`${schema.apps} AS forks`,
+                    sql`${schema.apps.id} = forks.parent_app_id`
+                )
+                .where(whereClause)
+                .groupBy(schema.apps.id, schema.users.displayName, schema.users.avatarUrl);
+            
+            if (sort === 'popular') {
+                return aggregatedQuery
+                    .orderBy(
+                        sql`(
+                            COALESCE(COUNT(DISTINCT ${schema.appViews.id}), 0) * ${this.RANKING_WEIGHTS.VIEWS} +
+                            COALESCE(COUNT(DISTINCT ${schema.stars.id}), 0) * ${this.RANKING_WEIGHTS.STARS}
+                            /* Forking disabled: + COALESCE(COUNT(DISTINCT forks.id), 0) * 5 */
+                        ) DESC`
+                    )
+                    .limit(limit)
+                    .offset(offset);
+            } else { // trending
+                return aggregatedQuery
+                    .orderBy(
+                        sql`(
+                            /* Activity score within period */
+                            (
+                                COALESCE(SUM(CASE WHEN ${schema.appViews.viewedAt} >= ${periodUnixTimestamp} THEN 1 ELSE 0 END), 0) * ${this.RANKING_WEIGHTS.VIEWS} +
+                                COALESCE(SUM(CASE WHEN ${schema.stars.starredAt} >= ${periodUnixTimestamp} THEN 1 ELSE 0 END), 0) * ${this.RANKING_WEIGHTS.STARS} * 2
+                            ) * 10000000 + 
+                            /* Recency score */
+                            CAST((1000000 / (1.0 + (strftime('%s', 'now') - ${schema.apps.updatedAt}) / 86400.0)) AS INTEGER)
+                        ) DESC`
+                    )
+                    .limit(limit)
+                    .offset(offset);
+            }
+        } else {
+            // Simple query for recent/starred sorts
+            const direction = order === 'asc' ? asc : desc;
+            const orderByExpression = sort === 'starred' 
+                ? sql`(SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id}) DESC`
+                : direction(schema.apps.updatedAt);
+                
+            return db
+                .select({
+                    app: schema.apps,
+                    userName: schema.users.displayName,
+                    userAvatar: schema.users.avatarUrl,
+                    ...this.getCountSubqueries(),
+                })
+                .from(schema.apps)
+                .leftJoin(schema.users, eq(schema.apps.userId, schema.users.id))
+                .where(whereClause)
+                .orderBy(orderByExpression)
+                .limit(limit)
+                .offset(offset);
+        }
+    }
+
     private getCountSubqueries() {
         return {
             viewCount: sql<number>`(SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id})`,
@@ -757,54 +838,6 @@ export class AppService extends BaseService {
         };
     }
 
-    /**
-     * Build ranking expression for ORDER BY clause
-     */
-    private buildRankingExpression(
-        sort: string,
-        period: TimePeriod = 'all',
-        order: string = 'desc'
-    ) {
-        const direction = order === 'asc' ? asc : desc;
-        
-        if (sort === 'popular') {
-            return sql`(
-                (SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id}) * ${this.RANKING_WEIGHTS.VIEWS} +
-                (SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id}) * ${this.RANKING_WEIGHTS.STARS}
-                /* Forking disabled for now:
-                + (SELECT COUNT(*) FROM apps AS forks WHERE parent_app_id = apps.id) * 5
-                */
-            ) DESC`;
-        } else if (sort === 'trending') {
-            const periodThreshold = this.getTimePeriodThreshold(period);
-            const periodUnixTimestamp = Math.floor(periodThreshold.getTime() / 1000);
-            // Trending: Combines recency with engagement
-            // Activity score gets high weight, but recency is important for tiebreaking
-            return sql`(
-                /* Activity score (views + stars) within period */
-                (
-                    (SELECT COUNT(*) FROM ${schema.appViews} WHERE app_id = ${schema.apps.id} AND viewed_at >= ${periodUnixTimestamp}) * ${this.RANKING_WEIGHTS.VIEWS} +
-                    (SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id} AND starred_at >= ${periodUnixTimestamp}) * ${this.RANKING_WEIGHTS.STARS} * 2
-                    /* Forking disabled for now:
-                    + (SELECT COUNT(*) FROM apps AS forks WHERE parent_app_id = apps.id AND created_at >= periodUnixTimestamp) * 5
-                    */
-                ) * 10000000 + 
-                /* Recency score with better granularity (higher = more recent) */
-                /* Using Unix timestamp math: (now - updated_at) / 86400 = days */
-                CAST(
-                    (1000000 / (1.0 + (strftime('%s', 'now') - ${schema.apps.updatedAt}) / 86400.0))
-                AS INTEGER)
-            ) DESC`;
-        } else if (sort === 'starred') {
-            return sql`(SELECT COUNT(*) FROM ${schema.stars} WHERE app_id = ${schema.apps.id}) DESC`;
-        } else {
-            return direction(schema.apps.updatedAt);
-        }
-    }
-
-    /**
-     * Add user-specific data (starred/favorited status) to apps
-     */
     private async addUserSpecificAppData(
         appIds: string[], 
         userId?: string
@@ -880,7 +913,6 @@ export class AppService extends BaseService {
 
     /**
      * Delete an app with ownership verification and cascade delete related records
-     * Returns success/error result for proper error handling
      */
     async deleteApp(appId: string, userId: string): Promise<{ success: boolean; error?: string }> {
         try {

@@ -60,8 +60,8 @@ export class DatabaseService {
 
         const sessionType = strategy === 'fresh' ? 'first-primary' : 'first-unconstrained';
         const session = this.d1.withSession(sessionType);
-        // @ts-expect-error - D1DatabaseSession is compatible with D1Database for Drizzle operations
-        return drizzle(session, { schema });
+        // D1DatabaseSession is compatible with D1Database for Drizzle operations
+        return drizzle(session as unknown as D1Database, { schema });
     }
 
     // ========================================
