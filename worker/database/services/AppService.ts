@@ -33,9 +33,6 @@ type RankedAppQueryResult = {
     recentStars?: number;
 };
 
-interface FavoriteAppResult extends schema.App {
-    isFavorite: true;
-}
 export class AppService extends BaseService {
     private readonly RANKING_WEIGHTS = {
         VIEWS: 1,
@@ -310,7 +307,7 @@ export class AppService extends BaseService {
      */
     async getFavoriteAppsOnly(
         userId: string
-    ): Promise<FavoriteAppResult[]> {
+    ): Promise<AppWithFavoriteStatus[]> {
         const results = await this.database
             .select({
                 app: schema.apps
