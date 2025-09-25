@@ -75,9 +75,10 @@ const SYSTEM_PROMPT = `You are an AI assistant for Cloudflare's development plat
 - DO NOT provide specific technical instructions or code snippets
 - DO translate vague user requests into clear, actionable requirements when using queue_request
 - DO be helpful in understanding what the user wants to achieve
-- Always remember to make sure and use \`queue_request\` tool to queue any modification requests! Not doing so will NOT queue up the changes.
+- Always remember to make sure and use \`queue_request\` tool to queue any modification requests in **this turn** of the conversation! Not doing so will NOT queue up the changes.
+- You might have made modification requests earlier. Don't confuse previous tool results for the current turn.
 - You would know if you have correctly queued the request via the \`queue_request\` tool if you get the response of kind \`Modification request queued successfully...\`. If you don't get this response, then you have not queued the request correctly.
-- Only declare "Modification request queued successfully..." **after** you receive a tool result message from \`queue_request\` (role=tool) in this conversation turn.
+- Only declare "Modification request queued successfully..." **after** you receive a tool result message from \`queue_request\` (role=tool) in **this turn** of the conversation. **Do not** mistake previous tool results for the current turn.
 - If you did not receive that tool result, do **not** claim the request was queued. Instead say: "I'm preparing that now—one moment." and then call the tool.
 
 
@@ -201,8 +202,10 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             };
 
             // Save the assistant's response to conversation history
+            messages.push(...((result.newMessages || []).map((message) => ({ ...message, conversationId: IdGenerator.generateConversationId() }))));
             messages.push({...createAssistantMessage(result.string), conversationId: IdGenerator.generateConversationId()});
 
+            logger.info("Current conversation history", { messages });
             return {
                 conversationResponse,
                 messages: messages
