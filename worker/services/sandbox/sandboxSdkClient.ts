@@ -805,10 +805,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             
             // Allocate single port for both dev server and tunnel
             const allocatedPort = await this.allocateAvailablePort();
-                
-            // Start cloudflared tunnel using the same port as dev server
-            // const tunnelPromise = this.startCloudflaredTunnel(instanceId, allocatedPort);
-                
+
             this.logger.info('Installing dependencies', { instanceId });
             const installResult = await this.executeCommand(instanceId, `bun install`);
             this.logger.info('Dependencies installed', { instanceId });
@@ -816,16 +813,9 @@ export class SandboxSdkClient extends BaseSandboxService {
             if (installResult.exitCode === 0) {
                 // Try to start development server in background
                 try {
-                    // Set local environment variables if provided
-                    // if (localEnvVars) {
-                    //     await this.setLocalEnvVars(instanceId, localEnvVars);
-                    // }
                     // Initialize git repository
                     await this.executeCommand(instanceId, `git init`);
                     this.logger.info('Git repository initialized', { instanceId });
-                    // this.logger.info(`Running setup script for ${instanceId}`);
-                    // const setupResult = await this.executeCommand(instanceId, `[ -f setup.sh ] && bash setup.sh ${projectName}`);
-                    // this.logger.info(`Setup result: STDOUT: ${setupResult.stdout}, STDERR: ${setupResult.stderr}`);
                     // Start dev server on allocated port
                     const processId = await this.startDevServer(instanceId, allocatedPort);
                     this.logger.info('Instance created successfully', { instanceId, processId, port: allocatedPort });
@@ -839,10 +829,15 @@ export class SandboxSdkClient extends BaseSandboxService {
                         previewURL = previewURL.replace(env.CUSTOM_DOMAIN, previewDomain);
                     }
                         
-                    // Wait for tunnel URL (tunnel forwards to same port)
-                    // const tunnelURL = await tunnelPromise;
-                        
                     this.logger.info('Preview URL exposed', { instanceId, previewURL });
+
+                    // In the background, run an iteration of static analysis to build up cache
+                    Promise.allSettled([
+                        this.executeCommand(instanceId, `bun run lint`),
+                        this.executeCommand(instanceId, `bunx tsc -b --incremental --noEmit --pretty false`)
+                    ]).then(() => {
+                        this.logger.info('Static analysis completed', { instanceId });
+                    });
                         
                     return { previewURL, tunnelURL: '', processId, allocatedPort };
                 } catch (error) {
