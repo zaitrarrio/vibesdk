@@ -33,22 +33,14 @@ export class UserService extends BaseService {
         email?: string;
         provider?: { name: string; id: string };
     }): Promise<schema.User | null> {
-        const whereConditions = [];
-        
-        if (options.id) {
-            whereConditions.push(eq(schema.users.id, options.id));
-        }
-        
-        if (options.email) {
-            whereConditions.push(eq(schema.users.email, options.email));
-        }
-        
-        if (options.provider) {
-            whereConditions.push(and(
+        const whereConditions = [
+            options.id ? eq(schema.users.id, options.id) : undefined,
+            options.email ? eq(schema.users.email, options.email) : undefined,
+            options.provider ? and(
                 eq(schema.users.provider, options.provider.name),
                 eq(schema.users.providerId, options.provider.id)
-            ));
-        }
+            ) : undefined
+        ].filter(Boolean); // Remove undefined values
         
         if (whereConditions.length === 0) {
             return null;
