@@ -1879,7 +1879,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 const buffer = await this.readFileAsBase64Buffer(fullPath);
                 fileContents.set(relativePath, buffer);
                 
-                const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+                const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
                 filesAsArrayBuffer.set(relativePath, arrayBuffer);
                 
                 this.logger.info('Asset file processed', { path: relativePath, sizeBytes: buffer.length });

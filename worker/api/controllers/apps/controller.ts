@@ -65,7 +65,7 @@ export class AppController extends BaseController {
             const favoriteApps = await appService.getFavoriteAppsOnly(user.id);
 
             const responseData: AppsListData = {
-                apps: favoriteApps // Already properly typed and formatted by DatabaseService
+                apps: favoriteApps
             };
 
             return AppController.createSuccessResponse(responseData);
