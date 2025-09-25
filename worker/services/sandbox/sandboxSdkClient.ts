@@ -1907,20 +1907,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             throw new Error(`Failed to encode file: ${base64Result.stderr}`);
         }
         
-        const base64Content = base64Result.stdout.trim();
-        const CHUNK_SIZE = 16 * 1024; // 16KB chunks for string processing
-        
-        if (base64Content.length <= CHUNK_SIZE) {
-            return Buffer.from(base64Content, 'base64');
-        }
-        
-        const chunks: Buffer[] = [];
-        for (let i = 0; i < base64Content.length; i += CHUNK_SIZE) {
-            const chunk = base64Content.slice(i, Math.min(i + CHUNK_SIZE, base64Content.length));
-            chunks.push(Buffer.from(chunk, 'base64'));
-        }
-        
-        return Buffer.concat(chunks);
+        return Buffer.from(base64Result.stdout, 'base64');
     }
 
     /**
