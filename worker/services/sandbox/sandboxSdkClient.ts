@@ -46,7 +46,7 @@ import { ResourceProvisioner } from './resourceProvisioner';
 import { TemplateParser } from './templateParser';
 import { ResourceProvisioningResult } from './types';
 import { GitHubService } from '../github/GitHubService';
-import { getPreviewDomain } from 'worker/utils/urls';
+import { getPreviewDomain } from '../../utils/urls';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -1881,22 +1881,13 @@ export class SandboxSdkClient extends BaseSandboxService {
             const relativePath = fullPath.replace(`${assetsPath}/`, '/');
             
             try {
-                const fileResult = await sandbox.readFile(fullPath);
-                if (fileResult.success) {
-                    // Convert string content to Buffer (assuming binary safe encoding)
-                    const buffer = Buffer.from(fileResult.content, 'binary');
-                    fileContents.set(relativePath, buffer);
-                    
-                    // Convert to ArrayBuffer for hash calculation
-                    const arrayBuffer = new ArrayBuffer(buffer.length);
-                    const view = new Uint8Array(arrayBuffer);
-                    for (let i = 0; i < buffer.length; i++) {
-                        view[i] = buffer[i];
-                    }
-                    filesAsArrayBuffer.set(relativePath, arrayBuffer);
-                    
-                    this.logger.info('Asset file processed', { path: relativePath, sizeBytes: buffer.length });
-                }
+                const buffer = await this.readFileAsBase64Buffer(fullPath);
+                fileContents.set(relativePath, buffer);
+                
+                const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+                filesAsArrayBuffer.set(relativePath, arrayBuffer);
+                
+                this.logger.info('Asset file processed', { path: relativePath, sizeBytes: buffer.length });
             } catch (error) {
                 this.logger.warn(`Failed to read asset file ${fullPath}:`, error);
             }
@@ -1908,6 +1899,20 @@ export class SandboxSdkClient extends BaseSandboxService {
         this.logger.info('Asset manifest created', { assetCount });
         
         return { assetsManifest, fileContents };
+    }
+    
+    /**
+     * Read file from sandbox as base64 and convert to Buffer
+     */
+    private async readFileAsBase64Buffer(filePath: string): Promise<Buffer> {
+        const sandbox = this.getSandbox();
+        
+        const base64Result = await sandbox.exec(`base64 -w 0 "${filePath}"`);
+        if (base64Result.exitCode !== 0) {
+            throw new Error(`Failed to encode file: ${base64Result.stderr}`);
+        }
+        
+        return Buffer.from(base64Result.stdout, 'base64');
     }
 
     /**
