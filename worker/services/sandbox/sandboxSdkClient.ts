@@ -1318,6 +1318,10 @@ export class SandboxSdkClient extends BaseSandboxService {
             for (const command of commands) {
                 try {
                     const result = await this.executeCommand(instanceId, command, timeout);
+                    if (result.exitCode === 2 && result.stderr.includes('/bin/sh: 1: cd: can\'t cd to i-')) {
+                        throw new Error(result.stderr);
+                    }
+                    
                     
                     results.push({
                         command,
@@ -1339,7 +1343,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                         this.logger.error('Command execution failed', { command, error });
                     }
                     
-                    this.logger.info('Command executed', { command, exitCode: result.exitCode });
+                    this.logger.info('Command executed', { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr });
                 } catch (error) {
                     this.logger.error('Command execution failed with error', { command, error });
                     results.push({
@@ -1352,7 +1356,6 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
 
             const successCount = results.filter(r => r.success).length;
-
             return {
                 success: true,
                 results,
@@ -1366,7 +1369,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     command: cmd,
                     success: false,
                     output: '',
-                    error: 'Instance error'
+                    error: 'Instance error' 
                 })),
                 error: `Failed to execute commands: ${error instanceof Error ? error.message : 'Unknown error'}`
             };
