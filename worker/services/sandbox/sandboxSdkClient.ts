@@ -170,8 +170,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             const metadata = JSON.parse(metadataFile.content) as InstanceMetadata;
             this.metadataCache.set(instanceId, metadata); // Cache it
             return metadata;
-        } catch {
-            throw new Error('Failed to read instance metadata');
+        } catch (error) {
+            throw new Error(`Failed to read instance metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
@@ -1711,7 +1711,6 @@ export class SandboxSdkClient extends BaseSandboxService {
     // ==========================================
     // DEPLOYMENT
     // ==========================================
-
     async deployToCloudflareWorkers(instanceId: string): Promise<DeploymentResult> {
         try {
             this.logger.info('Starting deployment', { instanceId });
@@ -1772,7 +1771,53 @@ export class SandboxSdkClient extends BaseSandboxService {
             const workerContent = workerFile.content;
             this.logger.info('Worker script loaded', { sizeKB: (workerContent.length / 1024).toFixed(2) });
             
-            // Step 4: Check for assets and process them
+            // Step 3a: Check for additional worker modules (ESM imports)
+            // Process them the same way as assets but as strings for the Map
+            let additionalModules: Map<string, string> | undefined;
+            try {
+                const workerAssetsPath = `${instanceId}/dist/assets`;
+                const workerAssetsResult = await sandbox.exec(`test -d ${workerAssetsPath} && echo "exists" || echo "missing"`);
+                const hasWorkerAssets = workerAssetsResult.exitCode === 0 && workerAssetsResult.stdout.trim() === "exists";
+                
+                if (hasWorkerAssets) {
+                    this.logger.info('Processing additional worker modules', { workerAssetsPath });
+                    
+                    // Find all JS files in the worker assets directory
+                    const findResult = await sandbox.exec(`find ${workerAssetsPath} -type f -name "*.js"`);
+                    if (findResult.exitCode === 0) {
+                        const modulePaths = findResult.stdout.trim().split('\n').filter(path => path);
+                        
+                        if (modulePaths.length > 0) {
+                            additionalModules = new Map<string, string>();
+                            
+                            for (const fullPath of modulePaths) {
+                                const relativePath = fullPath.replace(`${instanceId}/dist/`, '');
+                                
+                                try {
+                                    const buffer = await this.readFileAsBase64Buffer(fullPath);
+                                    const moduleContent = buffer.toString('utf8');
+                                    additionalModules.set(relativePath, moduleContent);
+                                    
+                                    this.logger.info('Worker module loaded', { 
+                                        path: relativePath, 
+                                        sizeKB: (moduleContent.length / 1024).toFixed(2) 
+                                    });
+                                } catch (error) {
+                                    this.logger.warn(`Failed to read worker module ${fullPath}:`, error);
+                                }
+                            }
+                            
+                            if (additionalModules.size > 0) {
+                                this.logger.info('Found additional worker modules', { count: additionalModules.size });
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                this.logger.error('Failed to process additional worker modules:', error);
+            }
+            
+            // Step 4: Check for static assets and process them
             const assetsPath = `${instanceId}/dist/client`;
             let assetsManifest: Record<string, { hash: string; size: number }> | undefined;
             let fileContents: Map<string, Buffer> | undefined;
@@ -1781,12 +1826,12 @@ export class SandboxSdkClient extends BaseSandboxService {
             const hasAssets = assetDirResult.exitCode === 0 && assetDirResult.stdout.trim() === "exists";
             
             if (hasAssets) {
-                this.logger.info('Processing assets', { assetsPath });
+                this.logger.info('Processing static assets', { assetsPath });
                 const assetProcessResult = await this.processAssetsInSandbox(instanceId, assetsPath);
                 assetsManifest = assetProcessResult.assetsManifest;
                 fileContents = assetProcessResult.fileContents;
             } else {
-                this.logger.info('No assets found, deploying worker only');
+                this.logger.info('No static assets found, deploying worker only');
             }
             
             // Step 5: Override config for dispatch deployment
@@ -1816,7 +1861,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                         dispatchNamespace: env.DISPATCH_NAMESPACE as string
                     },
                     fileContents,
-                    undefined, // additionalModules
+                    additionalModules,
                     config.migrations,
                     config.assets
                 );
@@ -1852,9 +1897,9 @@ export class SandboxSdkClient extends BaseSandboxService {
             };
         }
     }
-
+    
     /**
-     * Process assets in sandbox and create manifest for deployment
+     * Process static assets in sandbox and create manifest for deployment
      */
     private async processAssetsInSandbox(_instanceId: string, assetsPath: string): Promise<{
         assetsManifest: Record<string, { hash: string; size: number }>;
@@ -1879,6 +1924,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             const relativePath = fullPath.replace(`${assetsPath}/`, '/');
             
             try {
+                // Use base64 encoding to preserve binary files and Unicode
                 const buffer = await this.readFileAsBase64Buffer(fullPath);
                 fileContents.set(relativePath, buffer);
                 
@@ -1905,6 +1951,7 @@ export class SandboxSdkClient extends BaseSandboxService {
     private async readFileAsBase64Buffer(filePath: string): Promise<Buffer> {
         const sandbox = this.getSandbox();
         
+        // Use base64 with no line wrapping (-w 0) to preserve binary data
         const base64Result = await sandbox.exec(`base64 -w 0 "${filePath}"`);
         if (base64Result.exitCode !== 0) {
             throw new Error(`Failed to encode file: ${base64Result.stderr}`);
@@ -1930,17 +1977,54 @@ export class SandboxSdkClient extends BaseSandboxService {
     // ==========================================
 
     private async createLatestCommit(instanceId: string, commitMessage: string): Promise<string> {
-        // Add and commit changes using the provided or default commit message
-        const addResult = await this.executeCommand(instanceId, `git add .`);
-        if (addResult.exitCode !== 0) {
-            throw new Error(`Git add failed: ${addResult.stderr}`);
+        // Sanitize commit message to prevent shell injection
+        // Remove control characters, limit length, and escape special characters
+        const sanitizedMessage = commitMessage
+            .substring(0, 500) // Limit message length
+            .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+            .replace(/[`$\\]/g, '\\$&') // Escape backticks, dollar signs, and backslashes
+            .replace(/"/g, '\\"') // Escape double quotes
+            .trim() || 'Auto-commit'; // Fallback to default message if empty
+        
+        // Check if there are changes to commit
+        const statusResult = await this.executeCommand(instanceId, `git status --porcelain`);
+        if (statusResult.exitCode !== 0) {
+            this.logger.warn(`Git status check failed: ${statusResult.stderr}`);
+        } else if (!statusResult.stdout.trim()) {
+            this.logger.info('No changes to commit');
+            // Return current HEAD if no changes
+            const hashResult = await this.executeCommand(instanceId, `git rev-parse HEAD`);
+            if (hashResult.exitCode === 0) {
+                return hashResult.stdout.trim();
+            }
+            throw new Error(`No commits found in repository: ${hashResult.stderr}`);
         }
-                
-        const commitResult = await this.executeCommand(instanceId, `git commit -m "${commitMessage.replace(/"/g, '\\"')}"`);
+        
+        // Add all changes (including untracked files)
+        const addResult = await this.executeCommand(instanceId, `git add -A`);
+        if (addResult.exitCode !== 0) {
+            // Try alternative add command if the first fails
+            const altAddResult = await this.executeCommand(instanceId, `git add . 2>/dev/null || git add --all`);
+            if (altAddResult.exitCode !== 0) {
+                throw new Error(`Git add failed: ${addResult.stderr || altAddResult.stderr}`);
+            }
+        }
+        
+        // Commit with sanitized message
+        const commitResult = await this.executeCommand(instanceId, `git commit -m "${sanitizedMessage}" --allow-empty-message`);
         if (commitResult.exitCode !== 0) {
+            // Check if error is due to no changes (shouldn't happen due to earlier check, but be safe)
+            if (commitResult.stdout.includes('nothing to commit') || 
+                commitResult.stderr.includes('nothing to commit')) {
+                this.logger.info('Nothing to commit, working tree clean');
+                const hashResult = await this.executeCommand(instanceId, `git rev-parse HEAD`);
+                if (hashResult.exitCode === 0) {
+                    return hashResult.stdout.trim();
+                }
+            }
             throw new Error(`Git commit failed: ${commitResult.stderr}`);
         }
-                
+        
         // Extract commit hash from the commit result
         const hashResult = await this.executeCommand(instanceId, `git rev-parse HEAD`);
         if (hashResult.exitCode === 0) {
