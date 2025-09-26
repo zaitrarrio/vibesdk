@@ -11,7 +11,7 @@ import { GitHubPushRequest, PreviewType, StaticAnalysisResponse, TemplateDetails
 import {  GitHubExportResult } from '../../services/github/types';
 import { CodeGenState, CurrentDevState, MAX_PHASES, FileState } from './state';
 import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs } from './types';
-import { WebSocketMessageResponses } from '../constants';
+import { PREVIEW_EXPIRED_ERROR, WebSocketMessageResponses } from '../constants';
 import { broadcastToConnections, handleWebSocketClose, handleWebSocketMessage } from './websocket';
 import { createObjectLogger, StructuredLogger } from '../../logger';
 import { ProjectSetupAssistant } from '../assistants/projectsetup';
@@ -1715,6 +1715,10 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         // This is to handle the bug still present in a lot of apps because of an exponential growth of commands
                     }
                     this.getSandboxServiceClient().executeCommands(sandboxInstanceId, cmds);
+                    this.broadcast(WebSocketMessageResponses.COMMAND_EXECUTING, {
+                        message: "Executing setup commands",
+                        commands: cmds,
+                    });
                 }
 
                 // Launch a set interval to check the health of the deployment. If it fails, redeploy
@@ -1831,24 +1835,25 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             const deploymentResult = await this.getSandboxServiceClient().deployToCloudflareWorkers(this.state.sandboxInstanceId);
             this.logger().info('[DeployToCloudflare] Deployment result:', deploymentResult);
-            if (!deploymentResult) {
-                this.logger().error('[DeployToCloudflare] Deployment API call failed');
-                this.broadcast(WebSocketMessageResponses.CLOUDFLARE_DEPLOYMENT_ERROR, {
-                    message: 'Deployment failed: API call returned null',
-                    error: 'Deployment service unavailable'
-                });
-                return null;
-            }
-
             if (!deploymentResult.success) {
                 this.logger().error('Deployment failed', {
                     message: deploymentResult.message,
                     error: deploymentResult.error
                 });
-                this.broadcast(WebSocketMessageResponses.CLOUDFLARE_DEPLOYMENT_ERROR, {
-                    message: `Deployment failed: ${deploymentResult.message}`,
-                    error: deploymentResult.error || 'Unknown deployment error'
-                });
+                if (deploymentResult.error?.includes('Failed to read instance metadata') || deploymentResult.error?.includes(`/bin/sh: 1: cd: can't cd to i-`)) {
+                    this.logger().error('Deployment sandbox died');
+                    // Re-deploy
+                    this.deployToSandbox();
+                    this.broadcast(WebSocketMessageResponses.CLOUDFLARE_DEPLOYMENT_ERROR, {
+                        message: PREVIEW_EXPIRED_ERROR,
+                        error: PREVIEW_EXPIRED_ERROR
+                    });
+                } else {
+                    this.broadcast(WebSocketMessageResponses.CLOUDFLARE_DEPLOYMENT_ERROR, {
+                        message: `Deployment failed: ${deploymentResult.message}`,
+                        error: deploymentResult.error || 'Unknown deployment error'
+                    });
+                }
                 return null;
             }
 
@@ -1893,28 +1898,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         }
     }
 
-    // async analyzeScreenshot(): Promise<ScreenshotAnalysisType | null> {
-    //     const screenshotData = this.state.latestScreenshot;
-    //     if (!screenshotData) {
-    //         this.logger().warn('No screenshot available for analysis');
-    //         return null;
-    //     }
-
-    //     const context = GenerationContext.from(this.state, this.logger());    
-    //     const result = await this.operations.analyzeScreenshot.execute(
-    //         {screenshotData},
-    //         {
-    //             env: this.env,
-    //             agentId: this.getAgentId(),
-    //             context,
-    //             logger: this.logger(),
-    //             inferenceContext: this.state.inferenceContext,
-    //         }
-    //     );
-
-    //     return result || null;
-    // }
-
     async waitForGeneration(): Promise<void> {
         if (this.state.generationPromise) {
             try {
@@ -1947,14 +1930,14 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         typeOrMsg: WebSocketMessageType | string | ArrayBuffer | ArrayBufferView<ArrayBufferLike>, 
         dataOrWithout?: WebSocketMessageData<WebSocketMessageType> | unknown
     ): void {
-        // Send the event to the conversational assistant if its a relevant event
-        if (this.operations.processUserMessage.isProjectUpdateType(typeOrMsg)) {
-            const messages = this.operations.processUserMessage.processProjectUpdates(typeOrMsg, dataOrWithout as WebSocketMessageData<WebSocketMessageType>, this.logger());
-            this.setState({
-                ...this.state,
-                conversationMessages: [...this.state.conversationMessages, ...messages]
-            });
-        }
+        // // Send the event to the conversational assistant if its a relevant event
+        // if (this.operations.processUserMessage.isProjectUpdateType(typeOrMsg)) {
+        //     const messages = this.operations.processUserMessage.processProjectUpdates(typeOrMsg, dataOrWithout as WebSocketMessageData<WebSocketMessageType>, this.logger());
+        //     this.setState({
+        //         ...this.state,
+        //         conversationMessages: [...this.state.conversationMessages, ...messages]
+        //     });
+        // }
         broadcastToConnections(this, typeOrMsg as WebSocketMessageType, dataOrWithout as WebSocketMessageData<WebSocketMessageType>);
     }
 

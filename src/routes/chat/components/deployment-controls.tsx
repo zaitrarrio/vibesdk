@@ -168,7 +168,7 @@ export function DeploymentControls({
 					titleColor: "text-text-primary dark:text-text-primary",
 					subtitleColor: "text-text-tertiary dark:text-text-tertiary",
 					title: "Ready to Deploy",
-					subtitle: "Deploy your application to Cloudflare Workers",
+					subtitle: "It's Free! Deploys to Cloudflare Workers for Platform",
 					buttonDisabled: false,
 					buttonVariant: "primary" as const,
 					buttonClass: "bg-accent text-white border-orange-500 dark:border-orange-600 hover:scale-105"
