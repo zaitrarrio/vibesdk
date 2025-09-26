@@ -59,6 +59,8 @@ interface WranglerConfig {
 	routes?: Array<{
 		pattern: string;
 		custom_domain: boolean;
+        zone_id?: string;
+        zone_name?: string;
 	}>;
 	vars?: {
 		TEMPLATES_REPOSITORY?: string;
@@ -924,6 +926,9 @@ class CloudflareDeploymentManager {
 			}
 
 			const { zoneName, zoneId } = await this.detectZoneForDomain(customDomain, originalCustomDomain);
+			if (!zoneId) {
+				return { zoneName: null, zoneId: null, success: false };
+			}
 			return { zoneName, zoneId, success: true };
 		} catch (error) {
 			console.warn(
@@ -1000,6 +1005,7 @@ class CloudflareDeploymentManager {
 				zone_id?: string;
 				zone_name?: string;
 			}>;
+			const existingWildcardRoute = config.routes?.find(route => !route.custom_domain);
 
 			// Determine which domain and zone to use for wildcard pattern
 			const wildcardDomain = (customPreviewDomain && customPreviewDomain !== '') ? customPreviewDomain : customDomain;
@@ -1010,31 +1016,44 @@ class CloudflareDeploymentManager {
 				? previewZoneName
 				: (zoneDetectionSuccess && zoneName ? zoneName : undefined);
 
+			const wildcardRoute: {
+				pattern: string;
+				custom_domain: boolean;
+				zone_id?: string;
+				zone_name?: string;
+			} = {
+				pattern: `*${wildcardDomain}/*`,
+				custom_domain: false,
+			};
+
 			if (wildcardZoneId) {
 				// Custom domain with zone information for wildcard pattern
 				console.log(`📋 Creating routes with zone information:`);
 				console.log(`   Main Domain: ${customDomain}`);
 				console.log(`   Wildcard Domain: ${wildcardDomain}`);
-				if (wildcardZoneId) {
-					console.log(`   Wildcard Zone ID: ${wildcardZoneId}`);
+				console.log(`   Wildcard Zone ID: ${wildcardZoneId}`);
+				wildcardRoute.zone_id = wildcardZoneId;
+				if (wildcardZoneName) {
+					wildcardRoute.zone_name = wildcardZoneName;
 				}
-
-				expectedRoutes = [
-					{ pattern: customDomain, custom_domain: true },
-					{ 
-						pattern: `*${wildcardDomain}/*`, 
-						custom_domain: false,
-						zone_id: wildcardZoneId,
-						// zone_name: wildcardZoneName
-					},
-				];
 			} else {
-				// If zone detection failed, only use basic custom domain route
-				console.log(`📋 Creating basic custom domain route (zone detection ${zoneDetectionSuccess ? 'skipped' : 'failed'})`);
-				expectedRoutes = [
-					{ pattern: customDomain, custom_domain: true }
-				];
+				const existingZoneId = existingWildcardRoute && existingWildcardRoute.zone_id;
+				const existingZoneName = existingWildcardRoute && existingWildcardRoute.zone_name;
+				if (existingZoneId) {
+					wildcardRoute.zone_id = existingZoneId;
+				}
+				if (existingZoneName) {
+					wildcardRoute.zone_name = existingZoneName;
+				}
+				console.log(
+					`📋 Using fallback wildcard route configuration (zone detection ${zoneDetectionSuccess ? 'returned no zone' : 'failed'})`
+				);
 			}
+
+			expectedRoutes = [
+				{ pattern: customDomain, custom_domain: true },
+				wildcardRoute,
+			];
 
 			// Check if routes need updating
 			let needsUpdate = false;
@@ -1046,12 +1065,26 @@ class CloudflareDeploymentManager {
 			} else {
 				for (let i = 0; i < expectedRoutes.length; i++) {
 					const expected = expectedRoutes[i];
-					const actual = config.routes[i];
+					const actual = config.routes[i] as any;
 
 					if (
 						actual.pattern !== expected.pattern ||
 						actual.custom_domain !== expected.custom_domain
 					) {
+						needsUpdate = true;
+						break;
+					}
+
+					const actualZoneId = (actual && (actual as any).zone_id) ?? null;
+					const expectedZoneId = expected.zone_id ?? null;
+					if (actualZoneId !== expectedZoneId) {
+						needsUpdate = true;
+						break;
+					}
+
+					const actualZoneName = (actual && (actual as any).zone_name) ?? null;
+					const expectedZoneName = expected.zone_name ?? null;
+					if (actualZoneName !== expectedZoneName) {
 						needsUpdate = true;
 						break;
 					}
@@ -1073,10 +1106,14 @@ class CloudflareDeploymentManager {
 
 			// Log the changes
 			const routeDetails = expectedRoutes.map((route, index) => {
-				const routeInfo = route.zone_id 
-					? `(custom_domain: ${route.custom_domain}, zone_id: ${route.zone_id})`
-					: `(custom_domain: ${route.custom_domain})`;
-				return `Route ${index + 1}: ${route.pattern} ${routeInfo}`;
+				const infoParts = [`custom_domain: ${route.custom_domain}`];
+				if (route.zone_id) {
+					infoParts.push(`zone_id: ${route.zone_id}`);
+				}
+				if (route.zone_name) {
+					infoParts.push(`zone_name: ${route.zone_name}`);
+				}
+				return `Route ${index + 1}: ${route.pattern} (${infoParts.join(', ')})`;
 			});
 
 			if (!preserveExistingFlags) {
