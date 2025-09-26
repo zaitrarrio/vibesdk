@@ -127,7 +127,7 @@ export const AGENT_CONFIG: AgentConfig = {
     conversationalResponse: {
         name: AIModels.GEMINI_2_5_FLASH,
         reasoning_effort: 'low',
-        max_tokens: 32000,
+        max_tokens: 4000,
         temperature: 0,
         fallbackModel: AIModels.GEMINI_2_5_PRO,
     },
