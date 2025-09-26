@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '../../../components/primitives/button';
-import { Loader, ExternalLink, Zap, Check } from 'lucide-react';
+import { Loader, ExternalLink, Zap, Check, Globe, Lock, Share2 } from 'lucide-react';
 import clsx from 'clsx';
+import { apiClient } from '../../../lib/api-client';
+import { toast } from 'sonner';
 
 interface DeploymentControlsProps {
 	// Deployment state
@@ -12,6 +14,10 @@ interface DeploymentControlsProps {
 	isRedeployReady: boolean;
 	deploymentError?: string;
 	
+	// App state
+	appId?: string;
+	appVisibility?: 'public' | 'private';
+	
 	// Generation state (kept for compatibility but pause button will not be rendered)
 	isGenerating: boolean;
 	isPaused: boolean;
@@ -20,6 +26,7 @@ interface DeploymentControlsProps {
 	onDeploy: (instanceId: string) => void;
 	onStopGeneration: () => void;
 	onResumeGeneration: () => void;
+	onVisibilityUpdate?: (newVisibility: 'public' | 'private') => void;
 }
 
 // Deployment state enum for better state management
@@ -39,10 +46,16 @@ export function DeploymentControls({
 	instanceId,
 	isRedeployReady,
 	deploymentError,
+	appId,
+	appVisibility = 'private',
 	onDeploy,
+	onVisibilityUpdate,
 }: DeploymentControlsProps) {
 	const [isDeployButtonClicked, setIsDeployButtonClicked] = useState(false);
 	const [copyButtonText, setCopyButtonText] = useState('Copy');
+	const [shareableLinkCopyText, setShareableLinkCopyText] = useState('Copy Link');
+	const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+	const [localVisibility, setLocalVisibility] = useState(appVisibility);
 	const deploymentRef = useRef<HTMLDivElement>(null);
 
 	// Reset deployment button state when deployment completes (success or failure)
@@ -51,6 +64,11 @@ export function DeploymentControls({
 			setIsDeployButtonClicked(false);
 		}
 	}, [isDeploying]);
+
+	// Sync local visibility with prop
+	useEffect(() => {
+		setLocalVisibility(appVisibility);
+	}, [appVisibility]);
 
 	// Determine current deployment state with proper logic
 	const getCurrentDeploymentState = (): DeploymentState => {
@@ -91,6 +109,38 @@ export function DeploymentControls({
 		}
 		
 		onDeploy(instanceId);
+	};
+
+	const handleToggleVisibility = async () => {
+		if (!appId) {
+			toast.error('App ID not found');
+			return;
+		}
+
+		try {
+			setIsUpdatingVisibility(true);
+			const newVisibility = localVisibility === 'private' ? 'public' : 'private';
+
+			const response = await apiClient.updateAppVisibility(appId, newVisibility);
+
+			if (response.success && response.data) {
+				setLocalVisibility(newVisibility);
+				onVisibilityUpdate?.(newVisibility);
+				
+				if (newVisibility === 'public') {
+					toast.success('🎉 Your app is now public! Share the link with anyone.');
+				} else {
+					toast.success('App is now private');
+				}
+			} else {
+				throw new Error(response.error?.message || 'Failed to update visibility');
+			}
+		} catch (error) {
+			console.error('Error updating app visibility:', error);
+			toast.error('Failed to update visibility');
+		} finally {
+			setIsUpdatingVisibility(false);
+		}
 	};
 
 	// State-based styling and content
@@ -237,7 +287,7 @@ export function DeploymentControls({
 				</div>
 			)}
 
-			{/* Deployed Success State - Enhanced with Redeploy functionality */}
+			{/* Deployed Success State - Enhanced with Visibility Toggle */}
 			{currentState === DeploymentState.DEPLOYED && (
 				<div 
 					ref={deploymentRef}
@@ -282,43 +332,107 @@ export function DeploymentControls({
 							</Button>
 						</div>
 					</div>
+
+					{/* Shareable Link - Only shown when app is public */}
+					{localVisibility === 'public' && appId && (
+						<div className="bg-accent/5 border border-accent/20 rounded-md p-3 mb-3">
+							<div className="text-xs text-accent font-medium mb-1 flex items-center gap-1">
+								<Share2 className="w-3 h-3" />
+								Shareable Link:
+							</div>
+							<div className="flex items-center gap-2">
+								<code className="flex-1 text-sm font-mono text-accent bg-accent/5 px-2 py-1 rounded text-ellipsis overflow-hidden">
+									{window.location.origin}/app/{appId}
+								</code>
+								<Button
+									onClick={async () => {
+										const shareableUrl = `${window.location.origin}/app/${appId}`;
+										await navigator.clipboard.writeText(shareableUrl);
+										setShareableLinkCopyText('Copied!');
+										setTimeout(() => setShareableLinkCopyText('Copy Link'), 2000);
+									}}
+									variant="secondary"
+									className="h-7 px-2 text-xs bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 transition-all flex-shrink-0"
+								>
+									{shareableLinkCopyText}
+								</Button>
+							</div>
+						</div>
+					)}
 					
-					{/* Action Buttons - Enhanced styling for better appearance */}
-					<div className="grid grid-cols-2 gap-3">
-						{/* View Live Site Button - Enhanced styling */}
+					{/* Action Buttons - Enhanced with visibility toggle */}
+					<div className={clsx(
+						"grid gap-3",
+						isRedeployReady ? "grid-cols-3" : "grid-cols-2"
+					)}>
+						{/* View Live Site Button */}
 						<Button
 							onClick={() => deploymentUrl && window.open(deploymentUrl, '_blank')}
 							variant="primary"
 							className="h-10 text-sm bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white border-green-600 dark:border-green-700 font-medium shadow-sm hover:shadow-md dark:hover:shadow-green-900/50 transition-all duration-200 hover:scale-[1.02]"
 						>
 							<ExternalLink className="w-4 h-4 mr-2" />
-							View Live Site
+							View Live
 						</Button>
 						
-						{/* Redeploy Button - Enhanced styling and appearance */}
-						<Button
-							onClick={handleDeploy}
-							disabled={!isRedeployReady || isDeploying || isDeployButtonClicked}
-							variant="secondary"
-							className={clsx(
-								"h-10 text-sm font-medium transition-all duration-200 shadow-sm",
-								isRedeployReady && !isDeploying
-									? "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white border-blue-500 dark:border-blue-600 hover:shadow-md dark:hover:shadow-blue-900/50 hover:scale-[1.02]" 
-									: "bg-bg-3 dark:bg-bg-3 text-text-tertiary dark:text-text-tertiary border-muted dark:border-muted cursor-not-allowed"
-							)}
-						>
-							{isDeploying ? (
-								<>
-									<Loader className="w-4 h-4 mr-2 animate-spin" />
-									Redeploying...
-								</>
-							) : (
-								<>
-									<Zap className="w-4 h-4 mr-2" />
-									Redeploy
-								</>
-							)}
-						</Button>
+						{/* Make Public/Private Button - Always visible after deployment */}
+						{appId && (
+							<Button
+								onClick={handleToggleVisibility}
+								disabled={isUpdatingVisibility}
+								variant="secondary"
+								className={clsx(
+									"h-10 text-sm font-medium transition-all duration-200 shadow-sm",
+									localVisibility === 'private'
+										? "bg-accent hover:bg-accent/90 text-white border-accent hover:shadow-md hover:scale-[1.02]"
+										: "bg-bg-3 hover:bg-bg-4 text-text-primary border-border-primary hover:shadow-sm hover:scale-[1.02]"
+								)}
+							>
+								{isUpdatingVisibility ? (
+									<>
+										<Loader className="w-4 h-4 mr-2 animate-spin" />
+										Updating...
+									</>
+								) : localVisibility === 'private' ? (
+									<>
+										<Globe className="w-4 h-4 mr-2" />
+										Make Public
+									</>
+								) : (
+									<>
+										<Lock className="w-4 h-4 mr-2" />
+										Make Private
+									</>
+								)}
+							</Button>
+						)}
+						
+						{/* Redeploy Button - Only shown when changes are made */}
+						{isRedeployReady && (
+							<Button
+								onClick={handleDeploy}
+								disabled={isDeploying || isDeployButtonClicked}
+								variant="secondary"
+								className={clsx(
+									"h-10 text-sm font-medium transition-all duration-200 shadow-sm",
+									!isDeploying
+										? "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white border-blue-500 dark:border-blue-600 hover:shadow-md dark:hover:shadow-blue-900/50 hover:scale-[1.02]" 
+										: "bg-bg-3 dark:bg-bg-3 text-text-tertiary dark:text-text-tertiary border-muted dark:border-muted cursor-not-allowed"
+								)}
+							>
+								{isDeploying ? (
+									<>
+										<Loader className="w-4 h-4 mr-2 animate-spin" />
+										Redeploying...
+									</>
+								) : (
+									<>
+										<Zap className="w-4 h-4 mr-2" />
+										Redeploy
+									</>
+								)}
+							</Button>
+						)}
 					</div>
 				</div>
 			)}

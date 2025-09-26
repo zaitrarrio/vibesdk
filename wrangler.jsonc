@@ -28,7 +28,7 @@
             "name": "API_RATE_LIMITER",
             "type": "ratelimit",
             "namespace_id": "2101",
-            "simple": { "limit": 1000, "period": 60 }
+            "simple": { "limit": 10000, "period": 60 }
         },
         {
             "name": "AUTH_RATE_LIMITER",
@@ -133,9 +133,9 @@
             "custom_domain": true
         },
         {
-            "pattern": "*build.cloudflare.dev/*",
+            "pattern": "*build-preview.cloudflare.dev/*",
             "custom_domain": false,
-            "zone_id": "f14aecaf571802180f79dcba9a8d34c3"
+            "zone_id": "db01fac4261b2604aacad8410443a3e2"
         }
     ],
 	"vars": {

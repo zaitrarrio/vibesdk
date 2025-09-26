@@ -44,6 +44,7 @@ export interface CodeGenState {
     // latestScreenshot?: ScreenshotData; // Store captured screenshot
     shouldBeGenerating: boolean; // Persistent flag indicating generation should be active
     mvpGenerated: boolean;
+    reviewingInitiated: boolean;
     agentMode: 'deterministic' | 'smart';
     sessionId: string;
     hostname: string;

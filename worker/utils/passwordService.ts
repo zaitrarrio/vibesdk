@@ -72,20 +72,4 @@ export class PasswordService {
     validatePassword(password: string, userInfo?: { email?: string; name?: string }): PasswordValidationResult {
         return validatePassword(password, undefined, userInfo);
     }
-    
-    /**
-     * Generate a secure random password
-     */
-    generatePassword(length: number = 16): string {
-        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
-        const values = crypto.getRandomValues(new Uint8Array(length));
-        
-        let password = '';
-        for (let i = 0; i < length; i++) {
-            password += charset[values[i] % charset.length];
-        }
-        
-        return password;
-    }
-    
 }

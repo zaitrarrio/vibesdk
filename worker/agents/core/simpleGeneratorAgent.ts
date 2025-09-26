@@ -226,7 +226,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         currentDevState: CurrentDevState.IDLE,
         phasesCounter: MAX_PHASES,
         mvpGenerated: false,
-        shouldBeGenerating: false
+        shouldBeGenerating: false,
+        reviewingInitiated: false,
     };
 
     async saveToDatabase() {
@@ -383,7 +384,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     getSandboxServiceClient(): BaseSandboxService {
         if (this.sandboxServiceClient === undefined) {
             this.logger().info('Initializing sandbox service client');
-            this.sandboxServiceClient = getSandboxService(this.getSessionId(), this.state.hostname);
+            this.sandboxServiceClient = getSandboxService(this.getSessionId());
         }
         return this.sandboxServiceClient;
     }
@@ -650,7 +651,15 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     async executeReviewCycle(): Promise<CurrentDevState> {
         this.logger().info("Executing REVIEWING state");
 
-        const reviewCycles = 3;
+        const reviewCycles = 2;
+        if (this.state.reviewingInitiated) {
+            this.logger().info("Reviewing already initiated, skipping");
+            return CurrentDevState.IDLE;
+        }
+        this.setState({
+            ...this.state,
+            reviewingInitiated: true
+        });
         
         try {
             this.logger().info("Starting code review and improvement cycle...");
@@ -1619,8 +1628,11 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // Create new deployment
         const templateName = this.state.templateDetails?.name || 'scratch';
         // Generate a unique suffix
+        let prefix = (this.state.blueprint?.projectName || templateName).toLowerCase().replace(/[^a-z0-9]/g, '-');
         const uniqueSuffix = generateId();
-        const projectName = `${this.state.blueprint?.projectName || templateName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueSuffix}`.toLowerCase();
+        // Only use the first 20 characters of the prefix
+        prefix = prefix.slice(0, 20);
+        const projectName = `${prefix}-${uniqueSuffix}`.toLowerCase();
         
         // Generate webhook URL for this agent instance
         const webhookUrl = this.generateWebhookUrl();

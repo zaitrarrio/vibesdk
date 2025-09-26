@@ -443,7 +443,7 @@ export class AppService extends BaseService {
             .from(schema.apps)
             .where(and(
                 eq(schema.apps.id, appId),
-                eq(schema.apps.userId, userId)
+                // eq(schema.apps.userId, userId)
             ))
             .limit(1);
 
@@ -597,7 +597,7 @@ export class AppService extends BaseService {
             .select({ id: schema.stars.id })
             .from(schema.stars)
             .where(and(
-                eq(schema.stars.userId, userId),
+                // eq(schema.stars.userId, userId),
                 eq(schema.stars.appId, appId)
             ))
             .get();

@@ -9,13 +9,13 @@ import { CsrfService } from './services/csrf/CsrfService';
 import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 import { getGlobalConfigurableSettings } from './config';
 import { AuthConfig, setAuthLevel } from './middleware/auth/routeAuth';
-import { initHonoSentry } from './observability/sentry';
+// import { initHonoSentry } from './observability/sentry';
 
 export function createApp(env: Env): Hono<AppEnv> {
     const app = new Hono<AppEnv>();
 
     // Observability: Sentry error reporting & context
-    initHonoSentry(app);
+    // initHonoSentry(app);
 
     // Apply global security middlewares (skip for WebSocket upgrades)
     app.use('*', async (c, next) => {

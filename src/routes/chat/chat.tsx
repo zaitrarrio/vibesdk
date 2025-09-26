@@ -542,9 +542,11 @@ export default function Chat() {
 										isPhase1Complete={isPhase1Complete}
 										isDeploying={isDeploying}
 										deploymentUrl={cloudflareDeploymentUrl}
-										instanceId={chatId}
+										instanceId={chatId || ''}
 										isRedeployReady={isRedeployReady}
 										deploymentError={deploymentError}
+										appId={app?.id || chatId}
+										appVisibility={app?.visibility}
 										isGenerating={
 											isGenerating ||
 											isGeneratingBlueprint
@@ -555,6 +557,12 @@ export default function Chat() {
 										onResumeGeneration={
 											handleResumeGeneration
 										}
+										onVisibilityUpdate={(newVisibility) => {
+											// Update app state if needed
+											if (app) {
+												app.visibility = newVisibility;
+											}
+										}}
 									/>
 								</motion.div>
 							)}

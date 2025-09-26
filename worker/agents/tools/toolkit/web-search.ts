@@ -130,12 +130,43 @@ async function performWebSearch(
     }
 }
 
-const extractTextFromHtml = (html: string): string =>
-    html
-        .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '')
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+const extractTextFromHtml = (html: string): string => {
+    // Multi-pass approach to handle nested/malformed tags
+    let sanitized = html;
+    let previousLength: number;
+    
+    // Keep removing script/style/noscript tags until no more are found
+    do {
+        previousLength = sanitized.length;
+        sanitized = sanitized.replace(
+            /<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi,
+            ''
+        );
+    } while (sanitized.length < previousLength);
+    
+    // Keep removing all HTML tags until no more are found
+    do {
+        previousLength = sanitized.length;
+        sanitized = sanitized.replace(/<[^>]*>/g, ' ');
+    } while (sanitized.length !== previousLength);
+    
+    // Decode HTML entities to prevent encoded script injection
+    sanitized = sanitized
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => 
+            String.fromCharCode(parseInt(hex, 16))
+        )
+        .replace(/&#(\d+);/g, (_, dec) => 
+            String.fromCharCode(parseInt(dec, 10))
+        )
+        .replace(/&amp;/g, '&');
+    
+    // Final cleanup of whitespace
+    return sanitized.replace(/\s+/g, ' ').trim();
+};
 
 async function fetchWebContent(url: string): Promise<string> {
     try {

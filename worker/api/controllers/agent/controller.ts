@@ -107,7 +107,7 @@ export class CodingAgentController extends BaseController {
                 modelConfigsCount: Object.keys(userModelConfigs).length,
             });
 
-            const { sandboxSessionId, templateDetails, selection } = await getTemplateForQuery(env, inferenceContext, query, hostname, this.logger);
+            const { sandboxSessionId, templateDetails, selection } = await getTemplateForQuery(env, inferenceContext, query, this.logger);
 
             const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
             const httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
