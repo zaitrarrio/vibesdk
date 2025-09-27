@@ -21,8 +21,12 @@ GOOGLE_AI_STUDIO_API_KEY=""
 #GITHUB_CLIENT_SECRET=""
 
 # Secrets for various internal services of this platform
-JWT_SECRET="default" 
-WEBHOOK_SECRET="default" 
+JWT_SECRET="" 
+WEBHOOK_SECRET="" 
 
 # AI Gateway URL Override (Leave as-is if not going to set it)
 #CLOUDFLARE_AI_GATEWAY_URL=""
+
+# Cloudflare API Key and Account ID. This is important
+# CLOUDFLARE_API_KEY=""
+# CLOUDFLARE_ACCOUNT_ID=""

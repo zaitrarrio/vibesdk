@@ -59,6 +59,7 @@ interface WranglerConfig {
 	routes?: Array<{
 		pattern: string;
 		custom_domain: boolean;
+        zone_id?: string;
 	}>;
 	vars?: {
 		TEMPLATES_REPOSITORY?: string;
@@ -924,6 +925,9 @@ class CloudflareDeploymentManager {
 			}
 
 			const { zoneName, zoneId } = await this.detectZoneForDomain(customDomain, originalCustomDomain);
+			if (!zoneId) {
+				return { zoneName: null, zoneId: null, success: false };
+			}
 			return { zoneName, zoneId, success: true };
 		} catch (error) {
 			console.warn(
@@ -934,7 +938,7 @@ class CloudflareDeploymentManager {
 		}
 	}
 
-	private async updateCustomDomainRoutes(): Promise<void> {
+	private async updateCustomDomainRoutes(): Promise<string> {
 		const customDomain = this.config.vars?.CUSTOM_DOMAIN || process.env.CUSTOM_DOMAIN;
 		// Check for CUSTOM_PREVIEW_DOMAIN (env var takes priority)
 		const customPreviewDomain = process.env.CUSTOM_PREVIEW_DOMAIN || this.config.vars?.CUSTOM_PREVIEW_DOMAIN;
@@ -958,7 +962,7 @@ class CloudflareDeploymentManager {
 					'- Set workers_dev: true',
 					'- Set preview_urls: true'
 				]);
-				return;
+				return '';
 			}
 
 			console.log(
@@ -973,7 +977,7 @@ class CloudflareDeploymentManager {
 			}
 
 			// Safely detect zone information for main domain
-			const { zoneName, zoneId, success: zoneDetectionSuccess } = await this.safeDetectZoneForDomain(customDomain, originalCustomDomain);
+			const { zoneId, success: zoneDetectionSuccess } = await this.safeDetectZoneForDomain(customDomain, originalCustomDomain);
 
 			// If we have a custom preview domain, detect its zone information for wildcard routes
 			let previewZoneName: string | null = null;
@@ -998,43 +1002,49 @@ class CloudflareDeploymentManager {
 				pattern: string;
 				custom_domain: boolean;
 				zone_id?: string;
-				zone_name?: string;
 			}>;
+			const existingWildcardRoute = config.routes?.find(route => !route.custom_domain);
 
 			// Determine which domain and zone to use for wildcard pattern
 			const wildcardDomain = (customPreviewDomain && customPreviewDomain !== '') ? customPreviewDomain : customDomain;
 			const wildcardZoneId = (customPreviewDomain && previewZoneDetectionSuccess && previewZoneId) 
 				? previewZoneId 
 				: (zoneDetectionSuccess && zoneId ? zoneId : undefined);
-			const wildcardZoneName = (customPreviewDomain && previewZoneDetectionSuccess && previewZoneName)
-				? previewZoneName
-				: (zoneDetectionSuccess && zoneName ? zoneName : undefined);
+
+			const wildcardRoute: {
+				pattern: string;
+				custom_domain: boolean;
+				zone_id?: string;
+			} = {
+				pattern: `*${wildcardDomain}/*`,
+				custom_domain: false,
+			};
 
 			if (wildcardZoneId) {
 				// Custom domain with zone information for wildcard pattern
 				console.log(`📋 Creating routes with zone information:`);
 				console.log(`   Main Domain: ${customDomain}`);
 				console.log(`   Wildcard Domain: ${wildcardDomain}`);
-				if (wildcardZoneId) {
-					console.log(`   Wildcard Zone ID: ${wildcardZoneId}`);
-				}
-
-				expectedRoutes = [
-					{ pattern: customDomain, custom_domain: true },
-					{ 
-						pattern: `*${wildcardDomain}/*`, 
-						custom_domain: false,
-						zone_id: wildcardZoneId,
-						// zone_name: wildcardZoneName
-					},
-				];
+				console.log(`   Wildcard Zone ID: ${wildcardZoneId}`);
+				wildcardRoute.zone_id = wildcardZoneId;
 			} else {
-				// If zone detection failed, only use basic custom domain route
-				console.log(`📋 Creating basic custom domain route (zone detection ${zoneDetectionSuccess ? 'skipped' : 'failed'})`);
-				expectedRoutes = [
-					{ pattern: customDomain, custom_domain: true }
-				];
+				const existingZoneId = existingWildcardRoute && existingWildcardRoute.zone_id;
+				if (existingZoneId) {
+					wildcardRoute.zone_id = existingZoneId;
+                    console.warn(
+                        `📋 Using fallback wildcard route configuration (zone detection ${zoneDetectionSuccess ? 'returned no zone' : 'failed'})`
+                    );
+				} else {
+                    // Fatal error
+                    console.error(`Failed to detect zone for custom domain ${customDomain}. Make sure the domain is properly configured in Cloudflare.`);
+                    throw new Error(`Failed to detect zone for custom domain ${customDomain}`);
+                }
 			}
+
+			expectedRoutes = [
+				{ pattern: customDomain, custom_domain: true },
+				wildcardRoute,
+			];
 
 			// Check if routes need updating
 			let needsUpdate = false;
@@ -1046,12 +1056,19 @@ class CloudflareDeploymentManager {
 			} else {
 				for (let i = 0; i < expectedRoutes.length; i++) {
 					const expected = expectedRoutes[i];
-					const actual = config.routes[i];
+					const actual = config.routes[i] as any;
 
 					if (
 						actual.pattern !== expected.pattern ||
 						actual.custom_domain !== expected.custom_domain
 					) {
+						needsUpdate = true;
+						break;
+					}
+
+					const actualZoneId = (actual && (actual as any).zone_id) ?? null;
+					const expectedZoneId = expected.zone_id ?? null;
+					if (actualZoneId !== expectedZoneId) {
 						needsUpdate = true;
 						break;
 					}
@@ -1062,7 +1079,7 @@ class CloudflareDeploymentManager {
 				console.log(
 					'ℹ️  Routes already match custom domain configuration',
 				);
-				return;
+				return customDomain;
 			}
 
 			// Update wrangler configuration
@@ -1073,10 +1090,11 @@ class CloudflareDeploymentManager {
 
 			// Log the changes
 			const routeDetails = expectedRoutes.map((route, index) => {
-				const routeInfo = route.zone_id 
-					? `(custom_domain: ${route.custom_domain}, zone_id: ${route.zone_id})`
-					: `(custom_domain: ${route.custom_domain})`;
-				return `Route ${index + 1}: ${route.pattern} ${routeInfo}`;
+				const infoParts = [`custom_domain: ${route.custom_domain}`];
+				if (route.zone_id) {
+					infoParts.push(`zone_id: ${route.zone_id}`);
+				}
+				return `Route ${index + 1}: ${route.pattern} (${infoParts.join(', ')})`;
 			});
 
 			if (!preserveExistingFlags) {
@@ -1086,11 +1104,12 @@ class CloudflareDeploymentManager {
 			}
 
 			this.logSuccess('Updated wrangler.jsonc routes:', routeDetails);
+            return customDomain;
 		} catch (error) {
-			console.warn(
+			console.error(
 				`⚠️  Could not update custom domain routes: ${error instanceof Error ? error.message : String(error)}`,
 			);
-			// Non-blocking - continue deployment
+            throw error;
 		}
 	}
 
@@ -1222,8 +1241,8 @@ class CloudflareDeploymentManager {
 			if (sandboxInstanceType === 'enhanced') {
 				// Enhanced configuration as specified
 				userAppInstanceType = {
-					vcpu: 4,
-					memory_mib: 4096,
+					vcpu: 8,
+					memory_mib: 8192,
 					disk_mb: 10240
 				};
 				console.log('   Using enhanced instance type configuration');
@@ -1807,6 +1826,25 @@ class CloudflareDeploymentManager {
 		}
 	}
 
+    /**
+     * Runs database migrations
+     */
+    private async runDatabaseMigrations(): Promise<void> {
+        console.log('Running database migrations...');
+        try {
+            await execSync(
+                'bun run db:generate && bun run db:migrate:remote',
+                {
+                    stdio: 'inherit',
+                    cwd: PROJECT_ROOT,
+                    encoding: 'utf8',
+                }
+            );
+        } catch (error) {
+            console.warn('Database migrations failed:', error instanceof Error ? error.message : String(error));
+        }
+    }
+
 	/**
 	 * Main deployment orchestration method
 	 */
@@ -1816,6 +1854,7 @@ class CloudflareDeploymentManager {
 		);
 
 		const startTime = Date.now();
+        let customDomain: string | null = null;
 
 		try {
 			// Step 1: Early Configuration Updates (must happen before any wrangler commands)
@@ -1825,7 +1864,7 @@ class CloudflareDeploymentManager {
 			this.updatePackageJsonDatabaseCommands();
 
 			console.log('   🔧 Updating wrangler.jsonc custom domain routes');
-			await this.updateCustomDomainRoutes();
+			customDomain = await this.updateCustomDomainRoutes();
 
 			console.log('   🔧 Updating container instance types');
 			this.updateContainerInstanceTypes();
@@ -1911,6 +1950,10 @@ class CloudflareDeploymentManager {
 				this.conflictingVarsForCleanup = null;
 			}
 
+            // Step 8: Run database migrations
+            console.log('\n📋 Step 8: Running database migrations...');
+            await this.runDatabaseMigrations();
+
 			// Deployment complete
 			if (deploymentSucceeded) {
 				const duration = Math.round((Date.now() - startTime) / 1000);
@@ -1918,7 +1961,7 @@ class CloudflareDeploymentManager {
 					`\n🎉 Complete deployment finished successfully in ${duration}s!`,
 				);
 				console.log(
-					'✅ Your Cloudflare Orange Build platform is now live! 🚀',
+					`✅ Your Cloudflare Orange Build platform is now live at https://${customDomain}! 🚀`,
 				);
 			} else {
 				throw new DeploymentError('Deployment failed during wrangler deploy or secret update');
