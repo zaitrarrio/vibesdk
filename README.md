@@ -4,9 +4,12 @@
 
 <div align="center">
 
-**🌟 [Try the Live Demo](https://build.cloudflare.dev) 🌟**
 
-*See VibeSDK Build in action before deploying your own instance*
+## 🚀 Live Demo
+
+**[build.cloudflare.dev](https://build.cloudflare.dev)**
+
+*Explore VibeSDK Build before deploying your own stack.*
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/vibesdk)
 
