@@ -25,6 +25,7 @@ import {
     GitHubPushRequest, GitHubPushResponse, GitHubExportRequest, GitHubExportResponse,
     GetLogsResponse,
     ListInstancesResponse,
+    StoredError,
 } from './sandboxTypes';
 
 import { createObjectLogger } from '../../logger';
@@ -1332,15 +1333,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     });
                     
                     if (result.exitCode !== 0) {
-                        const error: RuntimeError = {
-                            timestamp: new Date(),
-                            message: `Command failed: ${command}`,
-                            stack: result.stderr,
-                            severity: 'error',
-                            source: 'command_execution',
-                            rawOutput: `Command: ${command}\nExit code: ${result.exitCode}\nSTDOUT: ${result.stdout}\nSTDERR: ${result.stderr}`
-                        };
-                        this.logger.error('Command execution failed', { command, error });
+                        this.logger.error('Command execution failed', { command, error: result.stderr });
                     }
                     
                     this.logger.info('Command executed', { command, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr });
@@ -1383,11 +1376,11 @@ export class SandboxSdkClient extends BaseSandboxService {
     async getInstanceErrors(instanceId: string, clear?: boolean): Promise<RuntimeErrorResponse> {
         try {
             let errors: RuntimeError[] = [];
-            const cmd = `timeout 3s monitor-cli errors list -i ${instanceId} --format json`;
+            const cmd = `timeout 3s monitor-cli errors list -i ${instanceId} --format json ${clear ? '--reset' : ''}`;
             const result = await this.executeCommand(instanceId, cmd, 15000);
             
             if (result.exitCode === 0) {
-                let response: any;
+                let response: {success: boolean, errors: StoredError[]};
                 try {
                     response = JSON.parse(result.stdout);
                     this.logger.info('getInstanceErrors', result.stdout);
@@ -1397,23 +1390,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 }
                 if (response.success && response.errors) {
                     // Convert StoredError objects to RuntimeError format
-                    // CLI returns StoredError objects with snake_case field names
-                    errors = response.errors.map((err: Record<string, unknown>) => ({
-                        timestamp: err.last_occurrence || err.created_at,
-                        message: String(err.message || ''),
-                        // stack: err.stack_trace ? String(err.stack_trace) : undefined, // Commented out to save memory
-                        // source: undefined, // Commented out - not needed for now
-                        filePath: err.source_file ? String(err.source_file) : undefined,
-                        lineNumber: typeof err.line_number === 'number' ? err.line_number : undefined,
-                        columnNumber: typeof err.column_number === 'number' ? err.column_number : undefined,
-                        severity: this.mapSeverityToLegacy(String(err.severity || 'error')),
-                        rawOutput: err.raw_output ? String(err.raw_output) : undefined
-                    }));
-
-                    // Auto-clear if requested
-                    if (clear && errors.length > 0) {
-                        this.clearInstanceErrors(instanceId);   // Call in the background
-                    }
+                    errors = response.errors;
 
                     return {
                         success: true,
@@ -2368,21 +2345,5 @@ export class SandboxSdkClient extends BaseSandboxService {
 
         this.logger.info(`Successfully read ${files.length}/${filePaths.length} files for GitHub push`);
         return files;
-    }
-
-    /**
-     * Map enhanced severity levels to legacy format for backward compatibility
-     */
-    private mapSeverityToLegacy(severity: string): 'warning' | 'error' | 'fatal' {
-        switch (severity) {
-            case 'fatal':
-                return 'fatal';
-            case 'error':
-                return 'error';
-            case 'warning':
-            case 'info':
-            default:
-                return 'warning';
-        }
     }
 }

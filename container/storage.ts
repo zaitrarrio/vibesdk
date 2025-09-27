@@ -1,9 +1,10 @@
 import { Database } from 'bun:sqlite';
 import { createHash } from 'crypto';
 import { 
-  StoredError, 
+  SimpleError,
+  StoredError,
+  ProcessInfo,
   StoredLog,
-  ParsedError,
   LogLevel,
   ErrorSummary,
   ErrorStoreOptions,
@@ -52,21 +53,17 @@ export class StorageManager {
       log: { ...DEFAULT_LOG_STORE_OPTIONS, ...options.log } as Required<LogStoreOptions>
     };
 
-    // Ensure data directories exist
     this.ensureDataDirectory(errorDbPath);
     if (errorDbPath !== logDbPath) {
       this.ensureDataDirectory(logDbPath);
     }
 
-    // Initialize databases with optimal settings
     this.errorDb = this.initializeDatabase(errorDbPath);
     this.logDb = errorDbPath === logDbPath ? this.errorDb : this.initializeDatabase(logDbPath);
 
-    // Initialize storage components
     this.errorStorage = new ErrorStorage(this.errorDb, this.options.error);
     this.logStorage = new LogStorage(this.logDb, this.options.log);
 
-    // Setup periodic maintenance
     this.setupMaintenanceTasks();
   }
 
@@ -83,72 +80,86 @@ export class StorageManager {
   private initializeDatabase(dbPath: string): Database {
     const fs = require('fs');
     
-    // Check if database already exists to avoid race conditions during initialization
-    const dbExists = fs.existsSync(dbPath);
-    
-    const db = new Database(dbPath);
-    
-    // Only set pragmas if this is a new database to avoid conflicts
-    if (!dbExists) {
-      try {
-        // Optimal performance settings for container environment
-        db.exec('PRAGMA journal_mode = WAL');
-        db.exec('PRAGMA synchronous = NORMAL');
-        db.exec('PRAGMA cache_size = 10000');
-        db.exec('PRAGMA temp_store = memory');
-      } catch (error) {
-        // If pragma setup fails (due to concurrent access), continue anyway
-        console.warn('Database pragma setup failed (this is okay if database already initialized):', error);
+    try {
+      const dbExists = fs.existsSync(dbPath);
+      
+      const db = new Database(dbPath);
+      
+      if (!dbExists) {
+        try {
+          db.exec('PRAGMA journal_mode = WAL');
+          db.exec('PRAGMA synchronous = NORMAL');
+          db.exec('PRAGMA cache_size = 10000');
+          db.exec('PRAGMA temp_store = memory');
+        } catch (error) {
+          console.warn('Database pragma setup failed (this is okay if database already initialized):', error);
+        }
       }
+      
+      return db;
+    } catch (error) {
+      console.error('Failed to initialize database at', dbPath, error);
+      throw new Error(`Failed to initialize database: ${error}`);
     }
-    
-    return db;
   }
 
   private setupMaintenanceTasks(): void {
-    // Cleanup old records every hour
     setInterval(() => {
-      this.errorStorage.cleanupOldErrors();
-      this.logStorage.cleanupOldLogs();
+      if (this.errorStorage) {
+        // Maintenance tasks if needed
+      }
     }, 60 * 60 * 1000);
   }
 
-  // Error storage methods
-  public storeError(instanceId: string, processId: string, error: ParsedError): Result<boolean> {
-    try {
-      return this.retryOperation(() => this.errorStorage.storeError(instanceId, processId, error));
-    } catch (retryError) {
-      return { success: false, error: retryError instanceof Error ? retryError : new Error(String(retryError)) };
+  private toError(error: unknown, defaultMessage = 'Unknown error'): Error {
+    return error instanceof Error ? error : new Error(String(error) || defaultMessage);
+  }
+
+  /**
+   * Wrapper for retry operations
+   */
+  private retryOperation<T>(operation: () => Result<T>, maxRetries: number = 3): Result<T> {
+    let attempt = 0;
+    let lastResult: Result<T> = operation();
+
+    while (!lastResult.success && attempt < maxRetries - 1) {
+      attempt += 1;
+      lastResult = operation();
     }
+
+    return lastResult;
+  }
+
+  private wrapRetryOperation<T>(operation: () => Result<T>): Result<T> {
+    try {
+      return this.retryOperation(operation);
+    } catch (error) {
+      return { success: false, error: this.toError(error) };
+    }
+  }
+
+  public storeProcessInfo(processInfo: ProcessInfo): Result<boolean> {
+    try {
+      return { success: true, data: true };
+    } catch (error) {
+      return { success: false, error: this.toError(error) };
+    }
+  }
+
+  public storeError(instanceId: string, processId: string, error: SimpleError): Result<boolean> {
+    return this.wrapRetryOperation(() => this.errorStorage.storeError(instanceId, processId, error));
   }
 
   public getErrors(instanceId: string): Result<StoredError[]> {
-    try {
-      return this.retryOperation(() => this.errorStorage.getErrors(instanceId));
-    } catch (retryError) {
-      return { success: false, error: retryError instanceof Error ? retryError : new Error(String(retryError)) };
-    }
+    return this.errorStorage.getErrors(instanceId);
   }
 
   public getErrorSummary(instanceId: string): Result<ErrorSummary> {
-    try {
-      return this.retryOperation(() => this.errorStorage.getErrorSummary(instanceId));
-    } catch (retryError) {
-      return { success: false, error: retryError instanceof Error ? retryError : new Error(String(retryError)) };
-    }
+    return this.errorStorage.getErrorSummary(instanceId);
   }
 
   public clearErrors(instanceId: string): Result<{ clearedCount: number }> {
-    try {
-      return this.retryOperation(() => this.errorStorage.clearErrors(instanceId));
-    } catch (retryError) {
-      return { success: false, error: retryError instanceof Error ? retryError : new Error(String(retryError)) };
-    }
-  }
-
-  // Log storage methods
-  public storeLog(log: ProcessLog): Result<number> {
-    return this.logStorage.storeLog(log);
+    return this.errorStorage.clearErrors(instanceId);
   }
 
   public storeLogs(logs: ProcessLog[]): Result<number[]> {
@@ -158,7 +169,6 @@ export class StorageManager {
   public getLogs(filter: LogFilter = {}): Result<LogRetrievalResponse> {
     return this.logStorage.getLogs(filter);
   }
-
 
   public clearLogs(instanceId: string): Result<{ clearedCount: number }> {
     return this.logStorage.clearLogs(instanceId);
@@ -174,43 +184,6 @@ export class StorageManager {
     return this.logStorage.getLogStats(instanceId);
   }
 
-  /**
-   * Retry operation with exponential backoff for SQLITE_BUSY errors
-   * Uses synchronous retry for immediate operations to maintain performance
-   */
-  private retryOperation<T>(operation: () => T, maxAttempts: number = 3): T {
-    let lastError: Error;
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return operation();
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        
-        // Check if it's a SQLite busy error
-        if (lastError.message.includes('SQLITE_BUSY') || lastError.message.includes('database is locked')) {
-          if (attempt < maxAttempts) {
-            // Use minimal delay for SQLite contention - most resolve quickly
-            const delay = Math.min(10 * Math.pow(2, attempt - 1), 100); // Cap at 100ms
-            const start = Date.now();
-            while (Date.now() - start < delay) {
-              // Minimal busy wait for SQLite - usually resolves in microseconds
-            }
-            continue;
-          }
-        }
-        
-        // If not a busy error, or max attempts reached, throw immediately
-        throw lastError;
-      }
-    }
-    
-    throw lastError!;
-  }
-
-  /**
-   * Unified transaction support for batch operations
-   */
   public transaction<T>(operation: () => T): T {
     // Use error database for transaction coordination
     const transaction = this.errorDb.transaction(operation);
@@ -235,21 +208,33 @@ export class StorageManager {
   }
 }
 
-/**
- * Error storage component with optimized SQLite operations
- */
 class ErrorStorage {
   private db: Database;
   private options: Required<ErrorStoreOptions>;
   
-  // Prepared statements for maximum performance  
+  // Prepared statements
   private insertErrorStmt: ReturnType<Database['query']>;
+  private updateErrorStmt: ReturnType<Database['query']>;
   private selectErrorsStmt: ReturnType<Database['query']>;
   private countErrorsStmt: ReturnType<Database['query']>;
-  private deleteAllErrorsStmt: ReturnType<Database['query']>;
+  private deleteErrorsStmt: ReturnType<Database['query']>;
   private deleteOldErrorsStmt: ReturnType<Database['query']>;
 
+  private errorResult<T>(error: unknown, defaultMessage: string): Result<T> {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error(defaultMessage)
+    };
+  }
+
+  private successResult<T>(data: T): Result<T> {
+    return { success: true, data };
+  }
+
   constructor(db: Database, options: Required<ErrorStoreOptions>) {
+    if (!db) {
+      throw new Error('Database instance is required for ErrorStorage');
+    }
     this.db = db;
     this.options = options;
     this.initializeSchema();
@@ -258,94 +243,129 @@ class ErrorStorage {
 
   private initializeSchema(): void {
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS runtime_errors (
+      CREATE TABLE IF NOT EXISTS simple_errors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         instance_id TEXT NOT NULL,
         process_id TEXT NOT NULL,
-        error_hash TEXT NOT NULL UNIQUE,
-        category TEXT NOT NULL,
-        severity TEXT NOT NULL,
+        error_hash TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        level INTEGER NOT NULL,
         message TEXT NOT NULL,
-        stack_trace TEXT,
-        source_file TEXT,
-        line_number INTEGER,
-        column_number INTEGER,
         raw_output TEXT NOT NULL,
-        first_occurrence TEXT NOT NULL,
-        last_occurrence TEXT NOT NULL,
         occurrence_count INTEGER DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now'))
       );
 
-      CREATE INDEX IF NOT EXISTS idx_instance_errors ON runtime_errors(instance_id);
-      CREATE INDEX IF NOT EXISTS idx_error_hash ON runtime_errors(error_hash);
-      CREATE INDEX IF NOT EXISTS idx_last_occurrence ON runtime_errors(last_occurrence DESC);
-      CREATE INDEX IF NOT EXISTS idx_severity ON runtime_errors(severity);
+      CREATE INDEX IF NOT EXISTS idx_simple_instance ON simple_errors(instance_id);
+      CREATE INDEX IF NOT EXISTS idx_simple_hash ON simple_errors(error_hash);
+      CREATE INDEX IF NOT EXISTS idx_simple_timestamp ON simple_errors(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_simple_level ON simple_errors(level);
     `);
   }
 
   private prepareStatements(): void {
     this.insertErrorStmt = this.db.query(`
-      INSERT INTO runtime_errors (
-        instance_id, process_id, error_hash, category, severity, message,
-        stack_trace, source_file, line_number, column_number, raw_output,
-        first_occurrence, last_occurrence
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(error_hash) DO UPDATE SET
-        last_occurrence = excluded.last_occurrence,
-        occurrence_count = occurrence_count + 1
+      INSERT INTO simple_errors (
+        instance_id, process_id, error_hash, timestamp, level, message, raw_output
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-
+    
+    this.updateErrorStmt = this.db.query(`
+      UPDATE simple_errors 
+      SET occurrence_count = occurrence_count + 1, timestamp = ?
+      WHERE error_hash = ? AND instance_id = ?
+    `);
+    
     this.selectErrorsStmt = this.db.query(`
-      SELECT * FROM runtime_errors 
-      WHERE instance_id = ?
-      ORDER BY last_occurrence DESC
+      WITH deduplicated AS (
+        SELECT 
+          MAX(id) as id,
+          instance_id,
+          process_id,
+          error_hash,
+          MAX(timestamp) as latest_timestamp,
+          level,
+          message,
+          MAX(raw_output) as raw_output,
+          SUM(occurrence_count) AS total_occurrences,
+          MIN(created_at) AS first_seen
+        FROM simple_errors 
+        WHERE instance_id = ?
+        GROUP BY error_hash
+      )
+      SELECT 
+        id,
+        instance_id,
+        process_id,
+        error_hash AS errorHash,
+        latest_timestamp as timestamp,
+        level,
+        message,
+        raw_output AS rawOutput,
+        total_occurrences AS occurrenceCount,
+        first_seen AS createdAt
+      FROM deduplicated
+      ORDER BY latest_timestamp DESC
     `);
-
+    
     this.countErrorsStmt = this.db.query(`
-      SELECT COUNT(*) as count FROM runtime_errors WHERE instance_id = ?
+      SELECT COUNT(*) as count FROM simple_errors WHERE instance_id = ?
     `);
-
-    this.deleteAllErrorsStmt = this.db.query(`
-      DELETE FROM runtime_errors WHERE instance_id = ?
+    
+    this.deleteErrorsStmt = this.db.query(`
+      DELETE FROM simple_errors WHERE instance_id = ?
     `);
-
+    
     this.deleteOldErrorsStmt = this.db.query(`
-      DELETE FROM runtime_errors 
+      DELETE FROM simple_errors 
       WHERE datetime(created_at) < datetime('now', '-' || ? || ' days')
     `);
   }
 
-  public storeError(instanceId: string, processId: string, error: ParsedError): Result<boolean> {
+  public storeError(instanceId: string, processId: string, error: SimpleError): Result<boolean> {
     try {
-      const errorHash = this.generateErrorHash(error);
-      const now = new Date().toISOString();
-
-      this.insertErrorStmt.run(
-        instanceId, processId, errorHash, error.category, error.severity,
-        error.message, error.stackTrace || null, error.sourceFile || null,
-        error.lineNumber || null, error.columnNumber || null, error.rawOutput,
-        now, now
-      );
+        const cleanedMessage = this.cleanMessageForHashing(error.message);
       
-      return { success: true, data: true };
+      const errorHash = createHash(ERROR_HASH_ALGORITHM)
+        .update(cleanedMessage)
+        .update(String(error.level))
+        .digest('hex');
+
+      const existing = this.db.query(`
+        SELECT id, occurrence_count FROM simple_errors 
+        WHERE error_hash = ? AND instance_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+      `).get(errorHash, instanceId) as { id: number; occurrence_count: number } | null;
+
+      if (existing) {
+        this.db.query(`
+          UPDATE simple_errors 
+          SET 
+            occurrence_count = occurrence_count + 1,
+            timestamp = ?,
+            raw_output = ?
+          WHERE id = ?
+        `).run(error.timestamp, error.rawOutput, existing.id);
+      } else {
+        this.insertErrorStmt.run(
+          instanceId, processId, errorHash, error.timestamp, 
+          error.level, error.message, error.rawOutput
+        );
+      }
+      
+      return this.successResult(true);
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error : new Error('Unknown error storing error') 
-      };
+      return this.errorResult<boolean>(error, 'Unknown error storing error');
     }
   }
 
   public getErrors(instanceId: string): Result<StoredError[]> {
     try {
       const errors = this.selectErrorsStmt.all(instanceId) as StoredError[];
-      return { success: true, data: errors };
+      return this.successResult(errors);
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error : new Error('Unknown error retrieving errors') 
-      };
+      return this.errorResult<StoredError[]>(error, 'Unknown error retrieving errors');
     }
   }
 
@@ -358,8 +378,7 @@ class ErrorStorage {
           success: true,
           data: {
             totalErrors: 0,
-            errorsByCategory: {} as Record<string, number>,
-            errorsBySeverity: {} as Record<string, number>,
+            errorsByLevel: {} as Record<number, number>,
             uniqueErrors: 0,
             repeatedErrors: 0,
             latestError: undefined,
@@ -368,32 +387,28 @@ class ErrorStorage {
         };
       }
 
-      const categoryCount: Record<string, number> = {};
-      const severityCount: Record<string, number> = {};
+      const errorsByLevel = {} as Record<number, number>;
+      const uniqueHashes = new Set<string>();
       let totalOccurrences = 0;
-
+      
       for (const error of errors) {
-        categoryCount[error.category] = (categoryCount[error.category] || 0) + 1;
-        severityCount[error.severity] = (severityCount[error.severity] || 0) + 1;
+        errorsByLevel[error.level] = (errorsByLevel[error.level] || 0) + error.occurrenceCount;
+        uniqueHashes.add(error.errorHash);
         totalOccurrences += error.occurrenceCount;
       }
 
       const summary: ErrorSummary = {
         totalErrors: totalOccurrences,
-        uniqueErrors: errors.length,
+        uniqueErrors: uniqueHashes.size,
         repeatedErrors: totalOccurrences - errors.length,
-        errorsByCategory: categoryCount,
-        errorsBySeverity: severityCount,
-        latestError: new Date(errors[0].lastOccurrence),
-        oldestError: new Date(errors[errors.length - 1].firstOccurrence)
+        errorsByLevel,
+        latestError: new Date(errors[0].timestamp),
+        oldestError: new Date(errors[errors.length - 1].timestamp)
       };
 
-      return { success: true, data: summary };
+      return this.successResult(summary);
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error : new Error('Unknown error getting summary') 
-      };
+      return this.errorResult<ErrorSummary>(error, 'Unknown error getting summary');
     }
   }
 
@@ -402,48 +417,41 @@ class ErrorStorage {
       const countResult = this.countErrorsStmt.get(instanceId) as { count: number };
       const clearedCount = countResult?.count || 0;
       
-      this.deleteAllErrorsStmt.run(instanceId);
+      this.deleteErrorsStmt.run(instanceId);
       
-      return { success: true, data: { clearedCount } };
+      return this.successResult({ clearedCount });
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error : new Error('Unknown error clearing errors') 
-      };
+      return this.errorResult<{ clearedCount: number }>(error, 'Unknown error clearing errors');
     }
   }
-
-  public cleanupOldErrors(): Result<number> {
-    try {
-      const result = this.deleteOldErrorsStmt.run(this.options.retentionDays);
-      return { success: true, data: result.changes };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error : new Error('Unknown error cleaning up errors') 
-      };
+  
+  private cleanMessageForHashing(message: string): string {
+    let cleaned = message;
+    
+    cleaned = cleaned.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, 'TIMESTAMP');
+    
+    cleaned = cleaned.replace(/\b\d{13}\b/g, 'UNIX_TIME');
+    
+    cleaned = cleaned.replace(/:\d{4,5}\b/g, ':PORT');
+    
+    cleaned = cleaned.replace(/(:\d+):(\d+)/g, ':LINE:COL');
+    
+    cleaned = cleaned.replace(/\?v=[a-f0-9]+/g, '?v=HASH');
+    
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    if (cleaned.length > 500) {
+      cleaned = cleaned.substring(0, 500);
     }
-  }
-
-  private generateErrorHash(error: ParsedError): string {
-    const hashInput = [
-      error.message.trim(),
-      error.sourceFile || ''
-    ].join('|');
-
-    return createHash(ERROR_HASH_ALGORITHM)
-      .update(hashInput)
-      .digest('hex');
+    
+    return cleaned;
   }
 
   public close(): void {
-    // Database connection is managed by StorageManager
+    // Prepared statements are automatically cleaned up
   }
 }
 
-/**
- * Log storage component with cursor-based pagination and in-memory buffering
- */
 class LogStorage {
   private db: Database;
   private options: Required<LogStoreOptions>;
@@ -563,11 +571,13 @@ class LogStorage {
       const transaction = this.db.transaction(() => {
         for (const log of logs) {
           const result = this.storeLog(log);
-          if (result.success) {
-            sequences.push(result.data);
-          } else {
-            throw result.error;
+          if (!result.success) {
+            if ('error' in result) {
+              throw result.error;
+            }
+            throw new Error('Unknown error storing log');
           }
+          sequences.push(result.data);
         }
       });
 

@@ -13,24 +13,17 @@ import {
   LogLevel,
   StoredError,
   StoredLog,
+  SimpleError,
   Result,
   DEFAULT_MONITORING_OPTIONS,
   DEFAULT_STORAGE_OPTIONS,
   DEFAULT_LOG_STORE_OPTIONS,
-  ErrorSeverity,
-  ErrorCategory,
   getDataDirectory,
   getErrorDbPath,
   getLogDbPath
 } from './types.js';
 
-/**
- * Safe JSON operations with circular reference protection
- */
 class SafeJSON {
-  /**
-   * Safely stringify data with circular reference protection
-   */
   static stringify(data: unknown, space?: number): string {
     try {
       const seen = new WeakSet();
@@ -54,9 +47,6 @@ class SafeJSON {
     }
   }
 
-  /**
-   * Safely parse JSON with fallback
-   */
   static parse(text: string): unknown {
     try {
       return JSON.parse(text);
@@ -71,13 +61,7 @@ class SafeJSON {
   }
 }
 
-/**
- * Safe resource cleanup utilities
- */
 class SafeCleanup {
-  /**
-   * Safely close storage with timeout
-   */
   static async closeStorage(storage: StorageManager | null, timeoutMs: number = 2000): Promise<void> {
     if (!storage) return;
     
@@ -95,13 +79,7 @@ class SafeCleanup {
   }
 }
 
-/**
- * Shared output formatting utilities
- */
 class OutputFormatter {
-  /**
-   * Format output based on specified format type
-   */
   static formatOutput(data: unknown, format: 'json' | 'table' | 'raw' = 'json'): void {
     switch (format) {
       case 'json':
@@ -121,9 +99,6 @@ class OutputFormatter {
     }
   }
 
-  /**
-   * Format error response consistently
-   */
   static formatError(error: string, additionalData?: Record<string, unknown>): void {
     const errorResponse = {
       success: false,
@@ -133,9 +108,6 @@ class OutputFormatter {
     console.log(SafeJSON.stringify(errorResponse, 2));
   }
 
-  /**
-   * Format success response consistently
-   */
   static formatSuccess(message: string, data?: unknown): void {
     const successResponse: Record<string, unknown> = {
       success: true,
@@ -147,36 +119,28 @@ class OutputFormatter {
     console.log(SafeJSON.stringify(successResponse, 2));
   }
 
-  /**
-   * Print errors in table format
-   */
   static printErrorsTable(errors: readonly StoredError[]): void {
     if (errors.length === 0) {
       console.log('No errors found.');
       return;
     }
 
-    console.log('Timestamp'.padEnd(20) + 'Severity'.padEnd(10) + 'Category'.padEnd(12) + 'File'.padEnd(25) + 'Message');
-    console.log('-'.repeat(100));
+    console.log('Timestamp'.padEnd(20) + 'Level'.padEnd(10) + 'Message');
+    console.log('-'.repeat(80));
 
     for (const error of errors) {
-      const timestamp = new Date(error.lastOccurrence).toISOString().slice(0, 16).replace('T', ' ');
-      const severity = error.severity.padEnd(9);
-      const category = error.category.padEnd(11);
-      const file = (error.sourceFile || '').padEnd(24);
-      const message = error.message.length > 40 ? error.message.substring(0, 37) + '...' : error.message;
+      const timestamp = new Date(error.timestamp).toISOString().slice(0, 16).replace('T', ' ');
+      const level = `L${error.level}`.padEnd(9);
+      const message = error.message.length > 50 ? error.message.substring(0, 47) + '...' : error.message;
       
-      console.log(`${timestamp} ${severity} ${category} ${file} ${message}`);
+      console.log(`${timestamp} ${level} ${message}`);
       
       if (error.occurrenceCount > 1) {
-        console.log(''.padEnd(67) + `(occurred ${error.occurrenceCount} times)`);
+        console.log(''.padEnd(30) + `(occurred ${error.occurrenceCount} times)`);
       }
     }
   }
 
-  /**
-   * Print logs in table format
-   */
   static printLogsTable(logs: readonly StoredLog[]): void {
     if (logs.length === 0) {
       console.log('No logs found.');
@@ -198,15 +162,9 @@ class OutputFormatter {
   }
 }
 
-/**
- * Process management commands
- */
 class ProcessCommands {
   private static activeRunners = new Map<string, ProcessRunner>();
 
-  /**
-   * Start process monitoring
-   */
   static async start(options: {
     instanceId: string;
     command: string;
@@ -232,10 +190,16 @@ class ProcessCommands {
       }
 
       // Build configuration
+      const envVars: Record<string, string> = {};
+      if (options.port) {
+        envVars.PORT = options.port;
+      }
+
       const monitoring: MonitoringOptions = {
         ...DEFAULT_MONITORING_OPTIONS,
         maxRestarts: options.maxRestarts ?? DEFAULT_MONITORING_OPTIONS.maxRestarts,
-        restartDelay: options.restartDelay ?? DEFAULT_MONITORING_OPTIONS.restartDelay
+        restartDelay: options.restartDelay ?? DEFAULT_MONITORING_OPTIONS.restartDelay,
+        env: envVars
       };
 
       const errorStorage: ErrorStoreOptionsType = {
@@ -254,9 +218,11 @@ class ProcessCommands {
         command: options.command,
         args: options.args,
         cwd: options.cwd || process.cwd(),
-        env: process.env as Record<string, string>,
         monitoring,
-        storage: errorStorage
+        storage: {
+          error: errorStorage,
+          log: logStorage
+        }
       };
 
       console.log('Starting Process Monitor:');
@@ -266,8 +232,11 @@ class ProcessCommands {
       console.log(`  Max Restarts: ${monitoring.maxRestarts}`);
       console.log(`  Restart Delay: ${monitoring.restartDelay}ms`);
 
-      // Create and start ProcessRunner
-      const runner = new ProcessRunner(config, { error: errorStorage, log: logStorage });
+      // Create and start ProcessRunner with storage options
+      const runner = new ProcessRunner(config, { 
+        error: errorStorage, 
+        log: logStorage 
+      });
       const startResult = await runner.start();
 
       if (!startResult.success) {
@@ -286,9 +255,11 @@ class ProcessCommands {
       // Setup periodic status reporting
       const statusInterval = setInterval(() => {
         const processInfo = runner.getProcessInfo();
-        if (processInfo) {
+        if (processInfo && processInfo.startTime) {
           const uptime = Math.floor((Date.now() - processInfo.startTime.getTime()) / 1000);
           console.log(`[STATUS] Process ${processInfo.id} running for ${uptime}s (restarts: ${processInfo.restartCount})`);
+        } else if (processInfo) {
+          console.log(`[STATUS] Process ${processInfo.id} running (restarts: ${processInfo.restartCount})`);
         }
       }, 60000); // Every minute
 
@@ -328,9 +299,6 @@ class ProcessCommands {
     }
   }
 
-  /**
-   * Stop process monitoring
-   */
   static async stop(options: { instanceId: string; force?: boolean }): Promise<void> {
     try {
       const runner = this.activeRunners.get(options.instanceId);
@@ -356,9 +324,6 @@ class ProcessCommands {
     }
   }
 
-  /**
-   * Get process status
-   */
   static async status(options: { instanceId?: string }): Promise<void> {
     try {
       if (options.instanceId) {
@@ -394,18 +359,16 @@ class ProcessCommands {
   }
 }
 
-/**
- * ProcessRunner class for managing individual processes
- */
 class ProcessRunner {
   private config: ProcessRunnerConfig;
   private storage: StorageManager;
   private monitor?: ProcessMonitor;
   private isRunning = false;
 
-  constructor(config: ProcessRunnerConfig, storageOptions: { error?: ErrorStoreOptionsType; log?: LogStoreOptionsType } = {}) {
+  constructor(config: ProcessRunnerConfig, storageOptions?: { error?: ErrorStoreOptionsType; log?: LogStoreOptionsType }) {
     this.config = config;
-    this.storage = new StorageManager(undefined, undefined, storageOptions);
+      const options = storageOptions || config.storage || {};
+    this.storage = new StorageManager(undefined, undefined, options);
   }
 
   async start(): Promise<Result<ProcessInfo>> {
@@ -420,7 +383,7 @@ class ProcessRunner {
         command: this.config.command,
         args: this.config.args,
         cwd: this.config.cwd,
-        state: 'starting',
+        status: 'starting',
         startTime: new Date(),
         restartCount: 0
       };
@@ -449,14 +412,19 @@ class ProcessRunner {
         return { success: true, data: true };
       }
 
-      const stopResult = await this.monitor.stop(force);
+      const stopResult = await this.monitor.stop();
       this.isRunning = false;
 
-      this.monitor.cleanup();
+      await this.monitor.cleanup();
       this.monitor = undefined;
       this.storage.close();
 
-      return stopResult;
+      // Convert Result<void> to Result<boolean>
+      if (stopResult.success) {
+        return { success: true, data: true };
+      } else {
+        return { success: false, error: stopResult.error };
+      }
     } catch (error) {
       return { 
         success: false, 
@@ -474,8 +442,14 @@ class ProcessRunner {
       return { error: 'Monitor not initialized' };
     }
 
+    const processInfo = this.monitor.getProcessInfo();
     return {
-      ...this.monitor.getStats(),
+      processId: processInfo.id,
+      instanceId: processInfo.instanceId,
+      pid: processInfo.pid,
+      status: processInfo.status,
+      startTime: processInfo.startTime,
+      restartCount: processInfo.restartCount,
       config: {
         instanceId: this.config.instanceId,
         command: this.config.command,
@@ -498,7 +472,7 @@ class ProcessRunner {
 
     this.monitor.on('error_detected', (event) => {
       const { error } = event;
-      console.error(`[${event.timestamp.toISOString()}] Error detected [${error.category}/${error.severity}]: ${error.message}`);
+      console.error(`[${event.timestamp.toISOString()}] Error detected [Level ${error.level}]: ${error.message}`);
     });
 
     this.monitor.on('process_crashed', (event) => {
@@ -510,23 +484,18 @@ class ProcessRunner {
   }
 }
 
-/**
- * Error management commands
- */
 class ErrorCommands {
-  /**
-   * List errors for an instance
-   */
   static async list(options: {
     instanceId: string;
-    categories?: ErrorCategory[];
-    severities?: ErrorSeverity[];
+    minLevel?: number;
+    maxLevel?: number;
     since?: string;
     until?: string;
     limit?: number;
     offset?: number;
     format?: 'json' | 'table' | 'raw';
     dbPath?: string;
+    reset?: boolean;
   }): Promise<void> {
     let storage: StorageManager | null = null;
     
@@ -541,29 +510,29 @@ class ErrorCommands {
       let filteredErrors = result.data;
 
       // Apply filters
-      if (options.categories) {
+      if (options.minLevel !== undefined) {
         filteredErrors = filteredErrors.filter(error => 
-          options.categories!.includes(error.category as ErrorCategory)
+          error.level >= options.minLevel!
         );
       }
       
-      if (options.severities) {
+      if (options.maxLevel !== undefined) {
         filteredErrors = filteredErrors.filter(error => 
-          options.severities!.includes(error.severity as ErrorSeverity)
+          error.level <= options.maxLevel!
         );
       }
 
       if (options.since) {
         const sinceDate = new Date(options.since);
         filteredErrors = filteredErrors.filter(error => 
-          new Date(error.lastOccurrence) >= sinceDate
+          new Date(error.timestamp) >= sinceDate
         );
       }
 
       if (options.until) {
         const untilDate = new Date(options.until);
         filteredErrors = filteredErrors.filter(error => 
-          new Date(error.lastOccurrence) <= untilDate
+          new Date(error.timestamp) <= untilDate
         );
       }
 
@@ -577,16 +546,33 @@ class ErrorCommands {
         errors: paginatedErrors,
         summary: {
           totalErrors: filteredErrors.length,
-          errorsByCategory: this.countByField(filteredErrors, 'category'),
-          errorsBySeverity: this.countByField(filteredErrors, 'severity'),
+          errorsByLevel: this.countByField(filteredErrors, 'level'),
           hasMore: offset + paginatedErrors.length < filteredErrors.length
         }
       };
 
+      let resetInfo: { clearedCount: number } | undefined;
+      if (options.reset) {
+        if (!storage) {
+          throw new Error('Storage not initialized for reset operation');
+        }
+
+        const clearResult = storage.clearErrors(options.instanceId);
+        if (!clearResult.success) {
+          throw clearResult.error;
+        }
+
+        resetInfo = { clearedCount: clearResult.data.clearedCount };
+      }
+
       if (options.format === 'table') {
         OutputFormatter.printErrorsTable(paginatedErrors);
+        if (resetInfo) {
+          console.log(`\nCleared ${resetInfo.clearedCount} stored errors.`);
+        }
       } else {
-        OutputFormatter.formatOutput(response, options.format);
+        const outputPayload = resetInfo ? { ...response, reset: resetInfo } : response;
+        OutputFormatter.formatOutput(outputPayload, options.format);
       }
       
       // Explicit exit after successful execution
@@ -617,9 +603,6 @@ class ErrorCommands {
     }
   }
 
-  /**
-   * Get error statistics
-   */
   static async stats(options: { instanceId: string; dbPath?: string }): Promise<void> {
     const storage = new StorageManager(options.dbPath);
     
@@ -651,9 +634,6 @@ class ErrorCommands {
     }
   }
 
-  /**
-   * Clear errors for an instance
-   */
   static async clear(options: { instanceId: string; confirm: boolean; dbPath?: string }): Promise<void> {
     if (!options.confirm) {
       OutputFormatter.formatError('--confirm flag required to clear errors');
@@ -700,13 +680,7 @@ class ErrorCommands {
   }
 }
 
-/**
- * Log management commands
- */
 class LogCommands {
-  /**
-   * List logs for an instance
-   */
   static async list(options: {
     instanceId: string;
     levels?: LogLevel[];
@@ -763,9 +737,6 @@ class LogCommands {
 
 
 
-  /**
-   * Get all process logs from file with optional reset
-   */
   static async get(options: {
     instanceId: string;
     format?: 'json' | 'raw';
@@ -879,9 +850,6 @@ class LogCommands {
     }
   }
 
-  /**
-   * Get log statistics
-   */
   static async stats(options: { instanceId: string; dbPath?: string }): Promise<void> {
     const storage = new StorageManager(undefined, options.dbPath);
     
@@ -913,9 +881,6 @@ class LogCommands {
     }
   }
 
-  /**
-   * Clear logs for an instance
-   */
   static async clear(options: { instanceId: string; confirm: boolean; dbPath?: string }): Promise<void> {
     if (!options.confirm) {
       OutputFormatter.formatError('--confirm flag required to clear logs');
@@ -953,9 +918,6 @@ class LogCommands {
   }
 }
 
-/**
- * Show comprehensive help
- */
 function showHelp() {
   console.log(`
 Unified Process Monitoring CLI - Comprehensive management for containerized processes
@@ -970,7 +932,7 @@ COMMANDS:
     status                   Get process status
     
   errors                     Error management
-    list                     List runtime errors
+    list                     List runtime errors (optional reset)
     stats                    Get error statistics
     clear                    Clear stored errors
     
@@ -998,9 +960,12 @@ ERROR COMMANDS:
 
   # List recent errors
   bun run cli-tools.ts errors list --instance-id my-app --limit 50
+
+  # List errors and clear them after retrieval
+  bun run cli-tools.ts errors list --instance-id my-app --reset
   
-  # Filter by severity and category
-  bun run cli-tools.ts errors list -i my-app --severities error,fatal --categories runtime
+  # Filter by log level (50=error, 60=fatal)
+  bun run cli-tools.ts errors list -i my-app --min-level 50 --max-level 60
   
   # Get error statistics
   bun run cli-tools.ts errors stats --instance-id my-app
@@ -1053,6 +1018,10 @@ FILTER OPTIONS:
   --limit <number>           Limit number of results (default: 100)
   --offset <number>          Offset for pagination (default: 0)
 
+STATE OPTIONS:
+
+  --reset                    Clear stored data after retrieval where supported
+
 EXAMPLES:
 
   # Complete workflow: start monitoring, check errors, view logs
@@ -1080,9 +1049,6 @@ Database Storage:
 `);
 }
 
-/**
- * Initialize data directory if it doesn't exist
- */
 function initializeDataDirectory(): void {
   const fs = require('fs');
   const dataDir = getDataDirectory();
@@ -1097,9 +1063,6 @@ function initializeDataDirectory(): void {
   }
 }
 
-/**
- * Main CLI function with unified command routing
- */
 async function main() {
   try {
     // Initialize data directory
@@ -1175,9 +1138,6 @@ async function main() {
   }
 }
 
-/**
- * Handle process commands
- */
 async function handleProcessCommand(subcommand: string, args: Record<string, unknown>, remainingArgs: string[]) {
   switch (subcommand) {
     case 'start':
@@ -1226,9 +1186,6 @@ async function handleProcessCommand(subcommand: string, args: Record<string, unk
   }
 }
 
-/**
- * Handle error commands
- */
 async function handleErrorCommand(subcommand: string, args: Record<string, unknown>) {
   switch (subcommand) {
     case 'list':
@@ -1239,14 +1196,15 @@ async function handleErrorCommand(subcommand: string, args: Record<string, unkno
       
       await ErrorCommands.list({
         instanceId: String(args['instance-id']),
-        categories: args.categories ? String(args.categories).split(',') as ErrorCategory[] : undefined,
-        severities: args.severities ? String(args.severities).split(',') as ErrorSeverity[] : undefined,
+        minLevel: args['min-level'] ? parseInt(String(args['min-level'])) : undefined,
+        maxLevel: args['max-level'] ? parseInt(String(args['max-level'])) : undefined,
         since: args.since ? String(args.since) : undefined,
         until: args.until ? String(args.until) : undefined,
         limit: args.limit ? parseInt(String(args.limit)) : undefined,
         offset: args.offset ? parseInt(String(args.offset)) : undefined,
         format: args.format as 'json' | 'table' | 'raw',
-        dbPath: args['db-path'] ? String(args['db-path']) : undefined
+        dbPath: args['db-path'] ? String(args['db-path']) : undefined,
+        reset: Boolean(args.reset)
       });
       break;
       
@@ -1281,9 +1239,6 @@ async function handleErrorCommand(subcommand: string, args: Record<string, unkno
   }
 }
 
-/**
- * Handle log commands
- */
 async function handleLogCommand(subcommand: string, args: Record<string, unknown>) {
   switch (subcommand) {
     case 'list':
