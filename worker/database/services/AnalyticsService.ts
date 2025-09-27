@@ -6,86 +6,12 @@ import { BaseService } from './BaseService';
 import * as schema from '../schema';
 import { eq, count, and, inArray, sql } from 'drizzle-orm';
 import type {
-    AppStats,
     UserStats,
-    EnhancedUserStats,
     UserActivity,
     BatchAppStats
 } from '../types';
 
-/**
- * Comment statistics (service-specific type)
- */
-interface CommentStats {
-    likeCount: number;
-    replyCount: number;
-}
-
 export class AnalyticsService extends BaseService {
-    /**
-     * Get app statistics
-     */
-    async getAppStats(appId: string): Promise<AppStats> {
-        const [viewCount, forkCount, likeCount] = await Promise.all([
-            // Count unique views (by user or session)
-            this.database
-                .select({ count: count() })
-                .from(schema.appViews)
-                .where(eq(schema.appViews.appId, appId))
-                .get(),
-            
-            // Count forks (apps with this as parent)
-            this.database
-                .select({ count: count() })
-                .from(schema.apps)
-                .where(eq(schema.apps.parentAppId, appId))
-                .get(),
-            
-            // Count likes/stars
-            this.database
-                .select({ count: count() })
-                .from(schema.appLikes)
-                .where(eq(schema.appLikes.appId, appId))
-                .get()
-        ]);
-
-        return {
-            viewCount: viewCount?.count ?? 0,
-            forkCount: forkCount?.count ?? 0,
-            likeCount: likeCount?.count ?? 0
-        };
-    }
-
-    /**
-     * Get comment statistics
-     */
-    async getCommentStats(commentId: string): Promise<CommentStats> {
-        const [likeCount, replyCount] = await Promise.all([
-            // Count comment likes
-            this.database
-                .select({ count: count() })
-                .from(schema.commentLikes)
-                .where(eq(schema.commentLikes.commentId, commentId))
-                .get(),
-            
-            // Count replies
-            this.database
-                .select({ count: count() })
-                .from(schema.appComments)
-                .where(
-                    and(
-                        eq(schema.appComments.parentCommentId, commentId),
-                        eq(schema.appComments.isDeleted, false)
-                    )
-                )
-                .get()
-        ]);
-
-        return {
-            likeCount: likeCount?.count ?? 0,
-            replyCount: replyCount?.count ?? 0
-        };
-    }
 
     /**
      * Batch get statistics for multiple entities
@@ -94,10 +20,13 @@ export class AnalyticsService extends BaseService {
     async batchGetAppStats(appIds: string[]): Promise<BatchAppStats> {
         if (appIds.length === 0) return {};
 
+        // Use read replica for batch analytics
+        const readDb = this.getReadDb('fast');
+        
         // Get all stats in parallel using batch queries
         const [views, forks, likes] = await Promise.all([
             // Batch view counts
-            this.database
+            readDb
                 .select({
                     appId: schema.appViews.appId,
                     count: count()
@@ -108,7 +37,7 @@ export class AnalyticsService extends BaseService {
                 .all(),
             
             // Batch fork counts
-            this.database
+            readDb
                 .select({
                     parentAppId: schema.apps.parentAppId,
                     count: count()
@@ -119,7 +48,7 @@ export class AnalyticsService extends BaseService {
                 .all(),
             
             // Batch like counts
-            this.database
+            readDb
                 .select({
                     appId: schema.appLikes.appId,
                     count: count()
@@ -145,74 +74,23 @@ export class AnalyticsService extends BaseService {
     }
 
     /**
-     * Get user statistics
+     * Get user statistics with all metrics
      */
     async getUserStats(userId: string): Promise<UserStats> {
-        const [appCount, publicAppCount, favoriteCount, totalLikesReceived, totalViewsReceived] = await Promise.all([
+        // Use 'fresh' strategy for user dashboard data
+        const readDb = this.getReadDb('fresh');
+        
+        const [appCount, publicAppCount, favoriteCount, totalLikesReceived, totalViewsReceived, streakDays] = await Promise.all([
             // Count user's total apps
-            this.database
+            readDb
                 .select({ count: count() })
                 .from(schema.apps)
-                .where(eq(schema.apps.userId, userId))
-                .get(),
-            
-            // Count user's public apps
-            this.database
-                .select({ count: count() })
-                .from(schema.apps)
-                .where(
-                    and(
-                        eq(schema.apps.userId, userId),
-                        eq(schema.apps.visibility, 'public')
-                    )
-                )
-                .get(),
-            
-            // Count favorites
-            this.database
-                .select({ count: count() })
-                .from(schema.favorites)
-                .where(eq(schema.favorites.userId, userId))
-                .get(),
-            
-            // Count total likes received on user's apps
-            this.database
-                .select({ count: count() })
-                .from(schema.appLikes)
-                .innerJoin(schema.apps, eq(schema.appLikes.appId, schema.apps.id))
-                .where(eq(schema.apps.userId, userId))
-                .get(),
-            
-            // Count total views received on user's apps
-            this.database
-                .select({ count: count() })
-                .from(schema.appViews)
-                .innerJoin(schema.apps, eq(schema.appViews.appId, schema.apps.id))
                 .where(eq(schema.apps.userId, userId))
                 .get()
-        ]);
-
-        return {
-            appCount: appCount?.count ?? 0,
-            publicAppCount: publicAppCount?.count ?? 0,
-            favoriteCount: favoriteCount?.count ?? 0,
-            totalLikesReceived: totalLikesReceived?.count ?? 0,
-            totalViewsReceived: totalViewsReceived?.count ?? 0
-        };
-    }
-
-    /**
-     * Get enhanced user statistics with all metrics for stats controller
-     * Extends basic getUserStats with additional calculations
-     */
-    async getEnhancedUserStats(userId: string): Promise<EnhancedUserStats> {
-        // Get basic stats first
-        const basicStats = await this.getUserStats(userId);
-
-        // Get additional stats in parallel
-        const [publicAppCount, totalLikesReceived, streakDays] = await Promise.all([
+                .then(r => r?.count ?? 0),
+            
             // Count user's public apps
-            this.database
+            readDb
                 .select({ count: count() })
                 .from(schema.apps)
                 .where(
@@ -223,28 +101,48 @@ export class AnalyticsService extends BaseService {
                 )
                 .get()
                 .then(r => r?.count ?? 0),
-
-            // Count total likes received on user's apps
-            this.database
+            
+            // Count favorites
+            readDb
+                .select({ count: count() })
+                .from(schema.favorites)
+                .where(eq(schema.favorites.userId, userId))
+                .get()
+                .then(r => r?.count ?? 0),
+            
+            // Count total likes received on user's apps (using favorites instead of appLikes)
+            readDb
                 .select({ count: count() })
                 .from(schema.favorites)
                 .innerJoin(schema.apps, eq(schema.favorites.appId, schema.apps.id))
                 .where(eq(schema.apps.userId, userId))
                 .get()
                 .then(r => r?.count ?? 0),
-
+            
+            // Count total views received on user's apps
+            readDb
+                .select({ count: count() })
+                .from(schema.appViews)
+                .innerJoin(schema.apps, eq(schema.appViews.appId, schema.apps.id))
+                .where(eq(schema.apps.userId, userId))
+                .get()
+                .then(r => r?.count ?? 0),
+                
             // Calculate user activity streak
             this.calculateUserStreak(userId)
         ]);
 
         return {
-            ...basicStats,
+            appCount,
             publicAppCount,
+            favoriteCount,
             totalLikesReceived,
+            totalViewsReceived,
             streakDays,
             achievements: [] // Placeholder for future achievement system
         };
     }
+
 
     /**
      * Calculate consecutive days of user activity
@@ -300,8 +198,11 @@ export class AnalyticsService extends BaseService {
      * Returns recent activities for user dashboard
      */
     async getUserActivityTimeline(userId: string, limit: number = 20): Promise<UserActivity[]> {
+        // Use 'fresh' strategy for user's activity feed
+        const readDb = this.getReadDb('fresh');
+        
         // Get recent app activities
-        const appActivities = await this.database
+        const appActivities = await readDb
             .select({
                 id: schema.apps.id,
                 title: schema.apps.title,
@@ -315,7 +216,7 @@ export class AnalyticsService extends BaseService {
             .limit(limit);
 
         // Get recent favorites
-        const favoriteActivities = await this.database
+        const favoriteActivities = await readDb
             .select({
                 appId: schema.favorites.appId,
                 appTitle: schema.apps.title,

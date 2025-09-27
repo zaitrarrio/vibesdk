@@ -125,7 +125,7 @@ export type {
 
 export type {
   FavoriteToggleResult,
-  EnhancedUserStats,
+  UserStats,
   UserActivity,
   EncryptedSecret,
   UserModelConfigWithMetadata,
@@ -181,7 +181,7 @@ export interface FileType {
 
 // Streaming response wrapper types for agent session creation
 export interface StreamingResponse {
-  success: true;
+  success: boolean;
   stream: Response;
 }
 

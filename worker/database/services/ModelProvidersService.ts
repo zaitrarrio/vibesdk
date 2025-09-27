@@ -118,7 +118,7 @@ export class ModelProvidersService extends BaseService {
         providerId: string, 
         data: UpdateProviderData
     ): Promise<schema.UserModelProvider | null> {
-        const updateData: any = {
+        const updateData: Partial<typeof schema.userModelProviders.$inferInsert> = {
             ...data,
             updatedAt: new Date()
         };

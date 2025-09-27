@@ -1,19 +1,21 @@
-
 import { BaseController } from '../baseController';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
 import { UserService } from '../../../database/services/UserService';
-import type { AppSortOption, SortOrder, TimePeriod, Visibility } from '../../../database/types';
-import { 
-    UserAppsData, 
-    ProfileUpdateData, 
-} from './types';
+import { AppService } from '../../../database/services/AppService';
+import { Visibility, AppSortOption, SortOrder, TimePeriod } from '../../../database/types';
+import { UserAppsData, ProfileUpdateData } from './types';
+import { createLogger } from '../../../logger';
+
+const logger = createLogger('UserController');
 
 /**
  * User Management Controller for Orange
  * Handles user dashboard, profile management, and app history
  */
 export class UserController extends BaseController {
+    static logger = logger;
+    
     /**
      * Get user's apps with pagination and filtering
      */
@@ -45,12 +47,12 @@ export class UserController extends BaseController {
                 period
             };
 
-            const userService = new UserService(env);
+            const appService = new AppService(env);
             
             // Get user apps with analytics and proper total count
             const [apps, totalCount] = await Promise.all([
-                userService.getUserAppsWithAnalytics(user.id, queryOptions),
-                userService.getUserAppsCount(user.id, queryOptions)
+                appService.getUserAppsWithAnalytics(user.id, queryOptions),
+                appService.getUserAppsCount(user.id, queryOptions)
             ]);
 
             const responseData: UserAppsData = {

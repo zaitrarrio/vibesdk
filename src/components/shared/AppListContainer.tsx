@@ -36,7 +36,7 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
+      staggerChildren: 0.05 // Reduced from 0.1 for faster animation
     }
   }
 };
@@ -171,10 +171,44 @@ export const AppListContainer: React.FC<AppListContainerProps> = ({
       </motion.div>
 
       {infiniteScroll && hasMore && (
-        <div ref={triggerRef} className="h-1" />
+        <div 
+          ref={triggerRef} 
+          className="relative mt-8"
+          style={{ height: loadingMore ? 'auto' : '80px' }}
+        >
+          {loadingMore && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4"
+            >
+              {/* Subtle loading indicator */}
+              <div className="flex items-center justify-center py-4">
+                <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-surface-elevated/60 backdrop-blur-sm border border-border/30">
+                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                  <span className="text-sm text-text-tertiary">Loading more amazing apps...</span>
+                </div>
+              </div>
+              
+              {/* Optional: Skeleton placeholders for smoother experience */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[...Array(4)].map((_, i) => (
+                  <div key={`skeleton-${i}`} className="animate-pulse">
+                    <div className="bg-surface-elevated/30 rounded-2xl p-6 h-[200px]">
+                      <div className="h-4 bg-surface-elevated/50 rounded w-3/4 mb-3"></div>
+                      <div className="h-3 bg-surface-elevated/40 rounded w-full mb-2"></div>
+                      <div className="h-3 bg-surface-elevated/40 rounded w-5/6"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </div>
       )}
 
-      {loadingMore && (
+      {!infiniteScroll && loadingMore && (
         <div className="flex justify-center mt-8">
           <div className="flex items-center gap-2 text-text-tertiary">
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -348,12 +348,12 @@ const claude_thinking_budget_tokens = {
 
 export type InferResponseObject<OutputSchema extends z.AnyZodObject> = {
     object: z.infer<OutputSchema>;
-    toolCalls?: ToolCallResult[];
+    newMessages?: Message[];
 };
 
 export type InferResponseString = {
     string: string;
-    toolCalls?: ToolCallResult[];
+    newMessages?: Message[];
 };
 
 /**
@@ -391,12 +391,14 @@ async function executeToolCalls(openAiToolCalls: ChatCompletionMessageFunctionTo
 }
 export function infer<OutputSchema extends z.AnyZodObject>(
     args: InferArgsStructured,
+    newMessages?: Message[],
 ): Promise<InferResponseObject<OutputSchema>>;
 
-export function infer(args: InferArgsBase): Promise<InferResponseString>;
+export function infer(args: InferArgsBase, newMessages?: Message[]): Promise<InferResponseString>;
 
 export function infer<OutputSchema extends z.AnyZodObject>(
     args: InferWithCustomFormatArgs,
+    newMessages?: Message[],
 ): Promise<InferResponseObject<OutputSchema>>;
 
 /**
@@ -423,7 +425,10 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
     schemaName?: string;
     format?: SchemaFormat;
     formatOptions?: FormatterOptions;
-}): Promise<InferResponseObject<OutputSchema> | InferResponseString> {
+}, newMessages?: Message[]): Promise<InferResponseObject<OutputSchema> | InferResponseString> {
+    if (messages.length > 100) {
+        throw new RateLimitExceededError('There is a limit of 100 messages per inference', RateLimitType.LLM_CALLS);
+    }
     try {
         const authUser: AuthUser = {
             id: metadata.userId,
@@ -458,6 +463,15 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 }
             : {};
 
+        // Optimize messages to reduce token count
+        const optimizedMessages = optimizeInputs(messages);
+        console.log(`Token optimization: Original messages size ~${JSON.stringify(messages).length} chars, optimized size ~${JSON.stringify(optimizedMessages).length} chars`);
+
+        let messagesToPass = [...optimizedMessages];
+        if (newMessages) {
+            messagesToPass.push(...newMessages);
+        }
+
         if (format) {
             if (!schema || !schemaName) {
                 throw new Error('Schema and schemaName are required when using a custom format');
@@ -467,13 +481,13 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 format,
                 formatOptions,
             );
-            const lastMessage = messages[messages.length - 1];
+            const lastMessage = messagesToPass[messagesToPass.length - 1];
 
             // Handle multi-modal content properly
             if (typeof lastMessage.content === 'string') {
                 // Simple string content - append format instructions
-                messages = [
-                    ...messages.slice(0, -1),
+                messagesToPass = [
+                    ...messagesToPass.slice(0, -1),
                     {
                         role: lastMessage.role,
                         content: `${lastMessage.content}\n\n${formatInstructions}`,
@@ -490,8 +504,8 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                     }
                     return item;
                 });
-                messages = [
-                    ...messages.slice(0, -1),
+                messagesToPass = [
+                    ...messagesToPass.slice(0, -1),
                     {
                         role: lastMessage.role,
                         content: updatedContent,
@@ -501,9 +515,6 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
         }
 
         console.log(`Running inference with ${modelName} using structured output with ${format} format, reasoning effort: ${reasoning_effort}, max tokens: ${maxTokens}, temperature: ${temperature}, baseURL: ${baseURL}`);
-        // Optimize messages to reduce token count
-        const optimizedMessages = optimizeInputs(messages);
-        console.log(`Token optimization: Original messages size ~${JSON.stringify(messages).length} chars, optimized size ~${JSON.stringify(optimizedMessages).length} chars`);
 
         const toolsOpts = tools ? { tools, tool_choice: 'auto' as const } : {};
         let response: OpenAI.ChatCompletion | OpenAI.ChatCompletionChunk | Stream<OpenAI.ChatCompletionChunk>;
@@ -514,7 +525,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 ...extraBody,
                 ...toolsOpts,
                 model: modelName,
-                messages: optimizedMessages as OpenAI.ChatCompletionMessageParam[],
+                messages: messagesToPass as OpenAI.ChatCompletionMessageParam[],
                 max_completion_tokens: maxTokens || 150000,
                 stream: stream ? true : false,
                 reasoning_effort,
@@ -626,7 +637,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
             // console.error('No content received from OpenAI', JSON.stringify(response, null, 2));
             // throw new Error('No content received from OpenAI');
             console.warn('No content received from OpenAI', JSON.stringify(response, null, 2));
-            return { string: "", toolCalls: [] };
+            return { string: "", newMessages };
         }
         let executedToolCalls: ToolCallResult[] = [];
         if (tools) {
@@ -637,8 +648,8 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
         if (executedToolCalls.length) {
             console.log(`Tool calls executed:`, JSON.stringify(executedToolCalls, null, 2));
             // Generate a new response with the tool calls executed
-            const newMessages = [
-                ...messages, 
+            newMessages = [
+                ...(newMessages || []),
                 { role: "assistant" as MessageRole, content, tool_calls: toolCalls },
                 ...executedToolCalls.map((result, _) => ({
                     role: "tool" as MessageRole,
@@ -649,10 +660,10 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
             ];
             
             if (schema && schemaName) {
-                return await infer<OutputSchema>({
+                const output = await infer<OutputSchema>({
                     env,
                     metadata,
-                    messages: newMessages,
+                    messages,
                     schema,
                     schemaName,
                     format,
@@ -663,24 +674,26 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                     tools,
                     reasoning_effort,
                     temperature,
-                });
+                }, newMessages);
+                return output;
             } else {
-                return infer({
+                const output = await infer({
                     env,
                     metadata,
-                    messages: newMessages,
+                    messages,
                     modelName,
                     maxTokens,
                     stream,
                     tools,
                     reasoning_effort,
                     temperature,
-                });
+                }, newMessages);
+                return output;
             }
         }
 
         if (!schema) {
-            return { string: content, toolCalls: executedToolCalls };
+            return { string: content, newMessages };
         }
 
         try {
@@ -699,7 +712,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 throw new Error(`Failed to validate AI response against schema: ${result.error.message}`);
             }
 
-            return { object: result.data, toolCalls: executedToolCalls };
+            return { object: result.data, newMessages };
         } catch (parseError) {
             console.error('Error parsing response:', parseError);
             throw new InferError('Failed to parse response', content);

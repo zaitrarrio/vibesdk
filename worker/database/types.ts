@@ -63,12 +63,9 @@ export interface PaginatedResult<T> {
 }
 
 /**
- * Base pagination options for queries
+ * Pagination input parameters (for requests)
  */
-export interface PaginationOptions {
-    limit?: number;
-    offset?: number;
-}
+export type PaginationParams = Partial<Pick<PaginationInfo, 'limit' | 'offset'>>;
 
 // ========================================
 // APP-RELATED TYPES
@@ -92,7 +89,7 @@ export type SortOrder = 'asc' | 'desc';
 /**
  * Base app query options with common filters and pagination
  */
-export interface BaseAppQueryOptions extends PaginationOptions {
+export interface BaseAppQueryOptions extends PaginationParams {
     framework?: string;
     search?: string;
     sort?: AppSortOption;
@@ -156,7 +153,7 @@ export interface AppForForkResult {
 // ========================================
 
 /**
- * User statistics interface
+ * User statistics with all metrics
  */
 export interface UserStats {
     appCount: number;
@@ -164,12 +161,6 @@ export interface UserStats {
     favoriteCount: number;
     totalLikesReceived: number;
     totalViewsReceived: number;
-}
-
-/**
- * Enhanced user statistics with additional metrics
- */
-export interface EnhancedUserStats extends UserStats {
     streakDays: number;
     achievements: string[];
 }

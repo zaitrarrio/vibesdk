@@ -55,6 +55,7 @@ interface UsePaginatedAppsResult extends FilterState {
 export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginatedAppsResult {
   const hasInitialized = useRef(false);
   const currentPageRef = useRef(1);
+  const isLoadingMoreRef = useRef(false);
   
   const [filterState, setFilterState] = useState<FilterState>({
     searchQuery: '',
@@ -85,7 +86,17 @@ export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginated
     return () => clearTimeout(timeoutId);
   }, [filterState.searchQuery]);
 
-  const fetchApps = useCallback(async (append = false, targetPage?: number) => {
+  const fetchAppsInternal = useCallback(async (
+    append: boolean,
+    targetPage: number | undefined,
+    filters: {
+      sortBy: AppSortOption;
+      period: TimePeriod;
+      filterFramework: string;
+      filterVisibility: string;
+      searchQuery: string;
+    }
+  ) => {
     try {
       if (!append) {
         setLoading(true);
@@ -99,11 +110,11 @@ export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginated
       const params = {
         page,
         limit,
-        sort: filterState.sortBy,
-        period: filterState.period,
-        framework: filterState.filterFramework === 'all' ? undefined : filterState.filterFramework,
-        search: debouncedSearchQuery || undefined,
-        visibility: (options.includeVisibility && filterState.filterVisibility !== 'all') ? filterState.filterVisibility : undefined,
+        sort: filters.sortBy,
+        period: filters.period,
+        framework: filters.filterFramework === 'all' ? undefined : filters.filterFramework,
+        search: filters.searchQuery || undefined,
+        visibility: (options.includeVisibility && filters.filterVisibility !== 'all') ? filters.filterVisibility : undefined,
       };
 
       const cleanParams = Object.fromEntries(
@@ -146,22 +157,24 @@ export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginated
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [
-    options.type, 
-    options.includeVisibility,
-    limit,
-    filterState.sortBy,
-    filterState.period,
-    filterState.filterFramework,
-    filterState.filterVisibility,
-    debouncedSearchQuery
-  ]);
+  }, [options.type, options.includeVisibility, limit]);
+
+  // Wrapper that uses current state
+  const fetchApps = useCallback(async (append = false, targetPage?: number) => {
+    return fetchAppsInternal(append, targetPage, {
+      ...filterState,
+      searchQuery: debouncedSearchQuery
+    });
+  }, [fetchAppsInternal, filterState, debouncedSearchQuery]);
 
   const loadMore = useCallback(async () => {
-    if (paginationState.hasMore && !loadingMore) {
+    // Use the current state directly to avoid stale closure
+    if (paginationState.hasMore && !loadingMore && !loading) {
+      isLoadingMoreRef.current = true;
       await fetchApps(true);
+      isLoadingMoreRef.current = false;
     }
-  }, [paginationState.hasMore, loadingMore, fetchApps]);
+  }, [paginationState.hasMore, loadingMore, loading, fetchApps]);
 
   const refetch = useCallback(async () => {
     await fetchApps(false, 1);
@@ -202,33 +215,44 @@ export function usePaginatedApps(options: UsePaginatedAppsOptions): UsePaginated
     setFilterState(prev => ({ ...prev, filterVisibility: visibility }));
   }, []);
 
-  // Initial fetch on mount
+  // Single consolidated effect for fetching apps
   useEffect(() => {
-    if (options.autoFetch !== false && !hasInitialized.current) {
-      hasInitialized.current = true;
-      fetchApps(false, 1);
+    // Skip if autoFetch is disabled and not initialized
+    if (options.autoFetch === false && !hasInitialized.current) {
+      return;
     }
-  }, [fetchApps, options.autoFetch]);
 
-  // Trigger refetch when filters change (sort, period, framework, visibility)
-  useEffect(() => {
-    if (hasInitialized.current) {
-      fetchApps(false, 1);
+    // Skip if we're currently loading more (pagination)
+    if (isLoadingMoreRef.current) {
+      return;
     }
+
+    // Reset pagination when filters change
+    currentPageRef.current = 1;
+
+    // Fetch apps with current filters
+    const performFetch = async () => {
+      await fetchAppsInternal(false, 1, {
+        sortBy: filterState.sortBy,
+        period: filterState.period,
+        filterFramework: filterState.filterFramework,
+        filterVisibility: filterState.filterVisibility,
+        searchQuery: debouncedSearchQuery
+      });
+    };
+
+    performFetch();
+    hasInitialized.current = true;
   }, [
+    // Only re-fetch when actual filter values change
     filterState.sortBy,
     filterState.period,
     filterState.filterFramework,
     filterState.filterVisibility,
-    fetchApps
+    debouncedSearchQuery,
+    fetchAppsInternal,
+    options.autoFetch
   ]);
-
-  // Trigger refetch when debounced search query changes
-  useEffect(() => {
-    if (hasInitialized.current) {
-      fetchApps(false, 1);
-    }
-  }, [debouncedSearchQuery, fetchApps]);
 
   useEffect(() => {
     const unsubscribe = appEvents.on('app-deleted', (event) => {

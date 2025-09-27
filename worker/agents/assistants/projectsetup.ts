@@ -128,7 +128,7 @@ ${error}`);
                 modelName: error? AIModels.GEMINI_2_5_FLASH : undefined,
             });
             if (!results || typeof results !== 'string') {
-                this.logger.info(`Failed to generate setup commands, results: ${results}`);
+                this.logger.info(`Failed to generate setup commands, results: `, { results });
                 return { commands: [] };
             }
 

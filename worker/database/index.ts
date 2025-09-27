@@ -5,7 +5,6 @@
 
 // Core database service and utilities
 export { DatabaseService, createDatabaseService } from './database';
-export type { DatabaseEnv } from './database';
 
 // Domain-specific services
 export { AnalyticsService } from './services/AnalyticsService';
