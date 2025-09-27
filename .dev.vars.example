@@ -20,6 +20,10 @@ GOOGLE_AI_STUDIO_API_KEY=""
 #GITHUB_CLIENT_ID=""
 #GITHUB_CLIENT_SECRET=""
 
+# Github Export OAuth
+# GITHUB_EXPORTER_CLIENT_SECRET=""
+# GITHUB_EXPORTER_CLIENT_ID=""
+
 # Secrets for various internal services of this platform
 JWT_SECRET="" 
 WEBHOOK_SECRET="" 

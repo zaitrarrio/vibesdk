@@ -184,6 +184,16 @@ OAuth configuration is **not** shown on the initial deploy page. If you want use
    GITHUB_CLIENT_SECRET="your-github-client-secret"
    ```
 
+**GitHub Export OAuth Setup:**
+1. Create a separate GitHub OAuth app (e.g., `VibeSDK Export`)—do not reuse the login app above.
+2. Authorization callback URL: `https://your-worker-name.workers.dev/api/export/github/callback` (or your custom domain equivalent).
+3. Add to **both** `.dev.vars` and `.prod.vars`:
+   ```bash
+   GITHUB_EXPORTER_CLIENT_ID="your-export-client-id"
+   GITHUB_EXPORTER_CLIENT_SECRET="your-export-client-secret"
+   ```
+4. Redeploy or restart local development so the new variables take effect.
+
 
 ---
 ## 🎨 How It Works
