@@ -65,6 +65,7 @@ Before clicking "Deploy to Cloudflare", have these ready:
 ### ✅ Prerequisites
 - Cloudflare Workers Paid Plan
 - Workers for Platforms subscription
+- Advanced Certificate Manager (needed when you map a first-level subdomain such as `abc.xyz.com` so Cloudflare can issue the required wildcard certificate for preview apps on `*.abc.xyz.com`)
 
 ### 🔑 Required API Key
 - **Google Gemini API Key** - Get from [ai.google.dev](https://ai.google.dev)
@@ -81,7 +82,18 @@ Once you click "Deploy to Cloudflare", you'll be taken to your Cloudflare dashbo
 - `SECRETS_ENCRYPTION_KEY` - Encryption key for secrets
 - `SANDBOX_INSTANCE_TYPE` - Container performance tier (optional, see section below)
 - `ALLOWED_EMAIL` - Email address of the user allowed to use the app. This is used to verify the user's identity and prevent unauthorized access.
-- `CUSTOM_DOMAIN` - Custom domain for your app that you have configured in Cloudflare (**Required**). This is needed for the app to work.
+- `CUSTOM_DOMAIN` - Custom domain for your app that you have configured in Cloudflare (**Required**). If you use a first-level subdomain such as `abc.xyz.com`, make sure the Advanced Certificate Manager add-on is active on that zone.
+
+### Custom domain DNS setup
+
+To serve preview apps correctly, add the following DNS record in the zone that hosts `CUSTOM_DOMAIN`:
+
+- Type: `CNAME`
+- Name: `*.abc`
+- Target: `abc.xyz.com` (replace with your base custom domain or another appropriate origin)
+- Proxy status: **Proxied** (orange cloud)
+
+Adjust the placeholder `abc`/`xyz` parts to match your domain. DNS propagation can take time—expect it to take up to an hour before previews resolve. This step may be automated in a future release, but it is required today.
 
 ### 🏗️ Sandbox Instance Configuration (Optional)
 
@@ -262,6 +274,16 @@ Cloudflare VibeSDK generates apps in intelligent phases:
 4. **Styling Phase**: Adds CSS and visual design
 5. **Integration Phase**: Connects APIs and external services
 6. **Optimization Phase**: Performance improvements and error fixes
+
+---
+
+## After Deployment
+
+- The "Deploy to Cloudflare" button provisions the worker and also creates a GitHub repository in your account. Clone that repository to work locally.
+- Pushes to the `main` branch trigger automatic deployments; CI/CD is already wired up for you.
+- For a manual deployment, copy `.dev.vars.example` to `.prod.vars`, fill in production-only secrets, and run `bun run deploy`. The deploy script reads from `.prod.vars`.
+
+DNS updates made during setup, including the wildcard CNAME record described above, can take a while to propagate. Wait until the record resolves before testing preview apps.
 
 ---
 

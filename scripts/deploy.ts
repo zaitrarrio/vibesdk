@@ -1831,16 +1831,18 @@ class CloudflareDeploymentManager {
      */
     private async runDatabaseMigrations(): Promise<void> {
         console.log('Running database migrations...');
-        // Execute bun run db:generate && bun run db:migrate:remote
-        await execSync(
-            'bun run db:generate && bun run db:migrate:remote',
-            {
-				stdio: 'pipe',
-				cwd: PROJECT_ROOT,
-				encoding: 'utf8',
-            }
-        )
-        console.log('Database migrations completed successfully!');
+        try {
+            await execSync(
+                'bun run db:generate && bun run db:migrate:remote',
+                {
+                    stdio: 'inherit',
+                    cwd: PROJECT_ROOT,
+                    encoding: 'utf8',
+                }
+            );
+        } catch (error) {
+            console.warn('Database migrations failed:', error instanceof Error ? error.message : String(error));
+        }
     }
 
 	/**
