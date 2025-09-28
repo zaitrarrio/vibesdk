@@ -831,14 +831,6 @@ export class SandboxSdkClient extends BaseSandboxService {
                     }
                         
                     this.logger.info('Preview URL exposed', { instanceId, previewURL });
-
-                    // In the background, run an iteration of static analysis to build up cache
-                    Promise.allSettled([
-                        this.executeCommand(instanceId, `bun run lint`),
-                        this.executeCommand(instanceId, `bunx tsc -b --incremental --noEmit --pretty false`)
-                    ]).then(() => {
-                        this.logger.info('Static analysis completed', { instanceId });
-                    });
                         
                     return { previewURL, tunnelURL: '', processId, allocatedPort };
                 } catch (error) {
