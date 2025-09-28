@@ -19,6 +19,10 @@
 
 </div>
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=cloudflare/vibesdk&type=Date)](https://www.star-history.com/#cloudflare/vibesdk&Date)
+
 ---
 
 ## ✨ What is Cloudflare VibeSDK?
