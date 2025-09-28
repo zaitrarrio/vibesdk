@@ -1,10 +1,40 @@
-import { RuntimeError, RuntimeErrorSchema, StaticAnalysisResponse, TemplateDetails, TemplateFileSchema } from "../services/sandbox/sandboxTypes";
+import { FileTreeNode, RuntimeError, StaticAnalysisResponse, TemplateDetails, TemplateFileSchema } from "../services/sandbox/sandboxTypes";
 import { TemplateRegistry } from "./inferutils/schemaFormatters";
 import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
 import { IssueReport } from "./domain/values/IssueReport";
 import { SCOFFormat } from "./streaming-formats/scof";
 import { MAX_PHASES } from "./core/state";
+
+export function serializeTreeNodes(node: FileTreeNode): string {
+    // The output starts with the root node's name.
+    const outputParts: string[] = [node.path.split('/').pop() || node.path];
+
+    function processChildren(children: FileTreeNode[], prefix: string) {
+        children.forEach((child, index) => {
+            const isLast = index === children.length - 1;
+            const connector = isLast ? '└── ' : '├── ';
+            const displayName = child.path.split('/').pop() || child.path;
+
+            outputParts.push(prefix + connector + displayName);
+
+            // If the child is a directory with its own children, recurse deeper.
+            if (child.type === 'directory' && child.children && child.children.length > 0) {
+                // The prefix for the next level depends on whether the current node
+                // is the last in its list. This determines if we use a vertical line or a space.
+                const childPrefix = prefix + (isLast ? '    ' : '│   ');
+                processChildren(child.children, childPrefix);
+            }
+        });
+    }
+
+    // Start the process if the root node has children.
+    if (node.children && node.children.length > 0) {
+        processChildren(node.children, '');
+    }
+
+    return outputParts.join('\n');
+}
 
 export const PROMPT_UTILS = {
     /**
@@ -30,6 +60,7 @@ export const PROMPT_UTILS = {
                 { files: template.files.filter(f => !f.filePath.includes('package.json')) },
                 z.object({ files: z.array(TemplateFileSchema) })
             );
+            const fileTreeText = serializeTreeNodes(template.fileTree);
             // const indentedFilesText = filesText.replace(/^(?=.)/gm, '\t\t\t\t'); // Indent each line with 4 spaces
             return `
 <TEMPLATE DETAILS>
@@ -46,7 +77,9 @@ ${filesText}
 
 <TEMPLATE_FILE_TREE>
 **Use these files as a reference for the file structure, components and hooks that are present**
-${JSON.stringify(template.fileTree, null, 2)}
+${
+    fileTreeText
+}
 </TEMPLATE_FILE_TREE>
 
 Apart from these files, All SHADCN Components are present in ./src/components/ui/* and can be imported from there, example: import { Button } from "@/components/ui/button";
@@ -93,9 +126,9 @@ and provide a preview url for the application.
         if (errors && errors.length > 0) {
             const errorsSerialized = errors.map(e => {
                 // Use rawOutput if available, otherwise serialize using schema
-                const errorText = e.rawOutput || TemplateRegistry.markdown.serialize(e, RuntimeErrorSchema);
+                const errorText = e.message;
                 // Truncate to 1000 characters to prevent context overflow
-                return errorText.slice(0, 1000);
+                return `<error>${errorText.slice(0, 1000)}</error>`;
             });
             return errorsSerialized.join('\n\n');
         } else {
@@ -963,7 +996,7 @@ export function generalSystemPromptBuilder(
 }
 
 export function issuesPromptFormatter(issues: IssueReport): string {
-    const runtimeErrorsText = issues.runtimeErrors.map((error) => `<error>${error.rawOutput}</error>`).join('\n');
+    const runtimeErrorsText = PROMPT_UTILS.serializeErrors(issues.runtimeErrors);
     const staticAnalysisText = PROMPT_UTILS.serializeStaticAnalysis(issues.staticAnalysis);
     
     return `## ERROR ANALYSIS PRIORITY MATRIX
