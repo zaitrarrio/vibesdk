@@ -51,8 +51,10 @@ function getAllowedOrigins(env: Env): string[] {
     if (env.ENVIRONMENT === 'dev') {
         origins.push('http://localhost:3000');
         origins.push('http://localhost:5173');
+        origins.push('http://localhost:8787');
         origins.push('http://127.0.0.1:3000');
         origins.push('http://127.0.0.1:5173');
+        origins.push('http://127.0.0.1:8787');
     }
     
     return origins;
