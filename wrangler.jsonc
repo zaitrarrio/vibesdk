@@ -63,13 +63,9 @@
 			"class_name": "UserAppSandboxService",
 			"image": "./SandboxDockerfile",
             // Altering max_instances value will have no effect. Please use the MAX_SANDBOX_INSTANCES var instead.
-			"max_instances": 2900,
+			"max_instances": 10,
             // ATTENTION: Altering instance_type value will have no effect. Please use the SANDBOX_INSTANCE_TYPE var instead.
-            "instance_type": {
-                "vcpu": 4,
-                "memory_mib": 4096,
-                "disk_mb": 10240
-            },
+            "instance_type": "dev",
             "rollout_step_percentage": 100
 		}
 	],
@@ -129,11 +125,11 @@
 	],
 	"routes": [
         {
-            "pattern": "build.cloudflare.dev",
+            "pattern": "idp.geekfarmer.dev",
             "custom_domain": true
         },
         {
-            "pattern": "*build-preview.cloudflare.dev/*",
+            "pattern": "*idp.geekfarmer.dev/*",
             "custom_domain": false,
             "zone_id": "db01fac4261b2604aacad8410443a3e2"
         }
