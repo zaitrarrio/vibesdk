@@ -22,6 +22,7 @@ export function getSystemPromptWithProjectContext(
             USER_PROMPT_FORMATTER.PROJECT_CONTEXT(
                 context.getCompletedPhases(),
                 allFiles, 
+                context.getFileTree(),
                 commandsHistory
             )
         ),

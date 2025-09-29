@@ -134,6 +134,11 @@ ${STRATEGIES.FRONTEND_FIRST_PLANNING}
 {{filesText}}
 </TEMPLATE_CORE_FILES>
 
+<TEMPLATE_FILE_TREE>
+**Use these files as a reference for the file structure, components and hooks that are present**
+{{fileTreeText}}
+</TEMPLATE_FILE_TREE>
+
 Preinstalled dependencies:
 {{dependencies}}
 </STARTING TEMPLATE>`;
@@ -263,7 +268,8 @@ export async function generateBlueprint({ env, inferenceContext, query, language
             z.object({ files: z.array(TemplateFileSchema) })
         );
 
-        const systemPrompt = SYSTEM_PROMPT.replace('{{filesText}}', filesText)
+        const fileTreeText = PROMPT_UTILS.serializeTreeNodes(templateDetails.fileTree);
+        const systemPrompt = SYSTEM_PROMPT.replace('{{filesText}}', filesText).replace('{{fileTreeText}}', fileTreeText);
         const systemPromptMessage = createSystemMessage(generalSystemPromptBuilder(systemPrompt, {
             query,
             templateDetails,

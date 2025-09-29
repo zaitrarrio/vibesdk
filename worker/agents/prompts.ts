@@ -6,36 +6,6 @@ import { IssueReport } from "./domain/values/IssueReport";
 import { SCOFFormat } from "./streaming-formats/scof";
 import { MAX_PHASES } from "./core/state";
 
-export function serializeTreeNodes(node: FileTreeNode): string {
-    // The output starts with the root node's name.
-    const outputParts: string[] = [node.path.split('/').pop() || node.path];
-
-    function processChildren(children: FileTreeNode[], prefix: string) {
-        children.forEach((child, index) => {
-            const isLast = index === children.length - 1;
-            const connector = isLast ? '└── ' : '├── ';
-            const displayName = child.path.split('/').pop() || child.path;
-
-            outputParts.push(prefix + connector + displayName);
-
-            // If the child is a directory with its own children, recurse deeper.
-            if (child.type === 'directory' && child.children && child.children.length > 0) {
-                // The prefix for the next level depends on whether the current node
-                // is the last in its list. This determines if we use a vertical line or a space.
-                const childPrefix = prefix + (isLast ? '    ' : '│   ');
-                processChildren(child.children, childPrefix);
-            }
-        });
-    }
-
-    // Start the process if the root node has children.
-    if (node.children && node.children.length > 0) {
-        processChildren(node.children, '');
-    }
-
-    return outputParts.join('\n');
-}
-
 export const PROMPT_UTILS = {
     /**
      * Replace template variables in a prompt string
@@ -53,9 +23,38 @@ export const PROMPT_UTILS = {
         return result;
     },
 
+    serializeTreeNodes(node: FileTreeNode): string {
+        // The output starts with the root node's name.
+        const outputParts: string[] = [node.path.split('/').pop() || node.path];
+    
+        function processChildren(children: FileTreeNode[], prefix: string) {
+            children.forEach((child, index) => {
+                const isLast = index === children.length - 1;
+                const connector = isLast ? '└── ' : '├── ';
+                const displayName = child.path.split('/').pop() || child.path;
+    
+                outputParts.push(prefix + connector + displayName);
+    
+                // If the child is a directory with its own children, recurse deeper.
+                if (child.type === 'directory' && child.children && child.children.length > 0) {
+                    // The prefix for the next level depends on whether the current node
+                    // is the last in its list. This determines if we use a vertical line or a space.
+                    const childPrefix = prefix + (isLast ? '    ' : '│   ');
+                    processChildren(child.children, childPrefix);
+                }
+            });
+        }
+    
+        // Start the process if the root node has children.
+        if (node.children && node.children.length > 0) {
+            processChildren(node.children, '');
+        }
+    
+        return outputParts.join('\n');
+    },
+
     serializeTemplate(template?: TemplateDetails): string {
         if (template) {
-            const fileTreeText = serializeTreeNodes(template.fileTree);
             // const indentedFilesText = filesText.replace(/^(?=.)/gm, '\t\t\t\t'); // Indent each line with 4 spaces
             return `
 <TEMPLATE DETAILS>
@@ -63,13 +62,6 @@ The following are the details (structures and files) of the starting boilerplate
 
 Name: ${template.name}
 Frameworks: ${template.frameworks?.join(', ')}
-
-<TEMPLATE_FILE_TREE>
-**Use these files as a reference for the file structure, components and hooks that are present**
-${
-    fileTreeText
-}
-</TEMPLATE_FILE_TREE>
 
 Apart from these files, All SHADCN Components are present in ./src/components/ui/* and can be imported from there, example: import { Button } from "@/components/ui/button";
 **Please do not rewrite these components, just import them and use them**
@@ -776,15 +768,15 @@ bun add @geist-ui/react@1
     - ✅ **Performance Smooth:** 60fps animations and instant perceived load times`,
     PROJECT_CONTEXT: `Here is everything you will need for the project:
 
-<PROJECT CONTEXT>
+<PROJECT_CONTEXT>
 
-<COMPLETED PHASES>
+<COMPLETED_PHASES>
 
 The following phases have been completed and implemented:
 
 {{phases}}
 
-</COMPLETED PHASES>
+</COMPLETED_PHASES>
 
 <CODEBASE>
 
@@ -794,11 +786,17 @@ Here are all the relevant files in the current codebase:
 
 **THESE DO NOT INCLUDE PREINSTALLED SHADCN COMPONENTS, REDACTED FOR SIMPLICITY. BUT THEY DO EXIST AND YOU CAN USE THEM.**
 
+<FILE_TREE>
+
+{{fileTree}}
+
+</FILE_TREE>
+
 </CODEBASE>
 
 {{commandsHistory}}
 
-</PROJECT CONTEXT>
+</PROJECT_CONTEXT>
 `,
 }
 
@@ -1010,10 +1008,11 @@ ${staticAnalysisText}
 
 
 export const USER_PROMPT_FORMATTER = {
-    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileOutputType[], commandsHistory: string[]) => {
+    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileOutputType[], fileTree: FileTreeNode, commandsHistory: string[]) => {
         const variables: Record<string, string> = {
             phases: TemplateRegistry.markdown.serialize({ phases: phases }, z.object({ phases: z.array(PhaseConceptSchema) })),
             files: PROMPT_UTILS.serializeFiles(files),
+            fileTree: PROMPT_UTILS.serializeTreeNodes(fileTree),
             commandsHistory: commandsHistory.length > 0 ? `<COMMANDS HISTORY>
 
 The following commands have been executed successfully in the project environment so far (These may not include the ones that are currently pending):
