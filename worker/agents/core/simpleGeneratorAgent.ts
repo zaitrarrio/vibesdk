@@ -1761,7 +1761,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } catch (error) {
             this.logger().error("Error deploying to sandbox service:", error);
             const errorMsg = error instanceof Error ? error.message : String(error);
-            if (errorMsg.includes('Network connection lost')) {
+            if (errorMsg.includes('Network connection lost') || errorMsg.includes('Container service disconnected')) {
                 // For this particular error, reset the sandbox sessionId
                 this.resetSessionId();
             }
