@@ -317,7 +317,7 @@ export const DEFAULT_LOG_STORE_OPTIONS: LogStoreOptions = {
 
 // Configurable paths - use environment variables or default to ./data directory
 export const getDataDirectory = (): string => {
-  return process.env.CLI_DATA_DIR || './data';
+  return process.env.CLI_DATA_DIR || './.data';
 };
 
 export const getErrorDbPath = (): string => {
