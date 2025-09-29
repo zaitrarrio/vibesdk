@@ -623,8 +623,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                     clientErrors: this.state.clientReportedErrors
                 };
             } else {
-                currentIssues = await this.fetchAllIssues()
-                this.resetIssues();
+                currentIssues = await this.fetchAllIssues(true)
             }
             
             // Implement the phase
@@ -768,8 +767,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             ]
         });
 
-        const currentIssues = await this.fetchAllIssues();
-        this.resetIssues();
+        const currentIssues = await this.fetchAllIssues(true);
         
         // Run final review and cleanup phase
         await this.implementPhase(phaseConcept, currentIssues);
@@ -1047,8 +1045,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      */
     async reviewCode() {
         const context = GenerationContext.from(this.state, this.logger());
-        const issues = await this.fetchAllIssues();
-        this.resetIssues();
+        const issues = await this.fetchAllIssues(true);
         const issueReport = IssueReport.from(issues);
 
         // Report discovered issues
@@ -1571,9 +1568,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // return undefined;
     }
 
-    async fetchAllIssues(): Promise<AllIssues> {
+    async fetchAllIssues(resetIssues: boolean = false): Promise<AllIssues> {
         const [runtimeErrors, staticAnalysis] = await Promise.all([
-            this.fetchRuntimeErrors(false),
+            this.fetchRuntimeErrors(resetIssues),
             this.runStaticAnalysisCode()
         ]);
         
@@ -1581,15 +1578,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         this.logger().info("Fetched all issues:", JSON.stringify({ runtimeErrors, staticAnalysis, clientErrors }));
         
         return { runtimeErrors, staticAnalysis, clientErrors };
-    }
-
-    async resetIssues() {
-        this.logger().info("Resetting issues");
-        await this.getSandboxServiceClient().clearInstanceErrors(this.state.sandboxInstanceId!);
-        this.setState({
-            ...this.state,
-            clientReportedErrors: []
-        });
     }
 
     async deployToSandbox(files: FileOutputType[] = [], redeploy: boolean = false, commitMessage?: string): Promise<PreviewType | null> {

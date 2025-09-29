@@ -3,7 +3,6 @@ import { RouteContext } from './types/route-context';
 import { AppEnv } from '../types/appenv';
 import { BaseController } from './controllers/baseController';
 import { enforceAuthRequirement } from '../middleware/auth/routeAuth';
-
 /*
 * This is a simple adapter to convert Hono context to our base controller's expected arguments
 */
