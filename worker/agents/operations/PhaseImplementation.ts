@@ -95,10 +95,7 @@ ${STRATEGIES.FRONTEND_FIRST_CODING}
 
 {{template}}`;
 
-const USER_PROMPT = `**IMPLEMENT THE FOLLOWING PROJECT PHASE**
-<CURRENT_PHASE>
-{{phaseText}}
-</CURRENT_PHASE>
+const USER_PROMPT = `**Phase Implementation**
 
 <INSTRUCTIONS & CODE QUALITY STANDARDS>
 These are the instructions and quality standards that must be followed to implement this phase.
@@ -217,9 +214,15 @@ Every single file listed in <CURRENT_PHASE> needs to be implemented in this phas
 
 ${PROMPT_UTILS.COMMON_DEP_DOCUMENTATION}
 
+**IMPLEMENT THE FOLLOWING PROJECT PHASE**
+<CURRENT_PHASE>
+{{phaseText}}
+
 {{issues}}
 
-{{userSuggestions}}`;
+{{userSuggestions}}
+
+</CURRENT_PHASE>`;
 
 const LAST_PHASE_PROMPT = `Finalization and Review phase. 
 Goal: Thoroughly review the entire codebase generated in previous phases. Identify and fix any remaining critical issues (runtime errors, logic flaws, rendering bugs) before deployment.
