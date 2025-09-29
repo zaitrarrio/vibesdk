@@ -54,7 +54,8 @@ import type{
 	OAuthProvider,
     RateLimitErrorResponse,
     CodeGenArgs,
-    AgentPreviewResponse
+    AgentPreviewResponse,
+    PlatformStatusData
 } from '@/api-types';
 import {
     
@@ -390,7 +391,7 @@ class ApiClient {
                 }
 			}
 
-			return { response, data };
+		return { response, data };
 		} catch (error) {
 			if (error instanceof ApiError) {
 				throw error;
@@ -402,6 +403,14 @@ class ApiClient {
 				endpoint,
 			);
 		}
+	}
+
+	// ===============================
+	// Platform Status API Methods
+	// ===============================
+
+	async getPlatformStatus(noToast: boolean = true): Promise<ApiResponse<PlatformStatusData>> {
+		return this.request<PlatformStatusData>('/api/status', undefined, noToast);
 	}
 
 	// ===============================
