@@ -83,6 +83,7 @@
 		"clsx": "^2.1.1",
 		"cmdk": "^1.1.1",
 		"date-fns": "^4.1.0",
+		"diff": "^8.0.2",
 		"dotenv": "^17.2.2",
 		"drizzle-orm": "^0.44.5",
 		"embla-carousel-react": "^8.6.0",
@@ -101,6 +102,7 @@
 		"node-fetch": "^3.3.2",
 		"openai": "^5.23.1",
 		"partysocket": "^1.1.5",
+		"perfect-arrows": "^0.3.7",
 		"react": "^19.1.1",
 		"react-day-picker": "^9.11.0",
 		"react-dom": "^19.1.1",
@@ -157,6 +159,7 @@
 		"useTabs": true
 	},
 	"overrides": {
-		"vite": "npm:rolldown-vite@latest"
+		"vite": "npm:rolldown-vite@latest",
+		"@cloudflare/containers": "^0.0.28"
 	}
 }
