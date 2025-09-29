@@ -2,6 +2,7 @@ import { FileGenerationOutputType, FileOutputType, PhaseConceptType } from '../.
 import type { StructuredLogger } from '../../../logger';
 import { TemplateDetails } from '../../../services/sandbox/sandboxTypes';
 import { applyUnifiedDiff } from '../../../agents/diff-formats';
+import { FileState } from 'worker/agents/core/state';
 
 /**
  * File processing utilities
@@ -91,8 +92,8 @@ export class FileProcessing {
      */
     static getAllFiles(
         templateDetails: TemplateDetails | undefined,
-        generatedFilesMap: Record<string, FileOutputType>
-    ): FileOutputType[] {
+        generatedFilesMap: Record<string, FileState>
+    ): FileState[] {
         const templateFiles = templateDetails?.files.map(file => ({
             filePath: file.filePath,
             fileContents: file.fileContents,
@@ -105,7 +106,13 @@ export class FileProcessing {
         );
         
         return [
-            ...nonOverriddenTemplateFiles,
+            ...nonOverriddenTemplateFiles.map(file => ({
+                ...file,
+                lastDiff: '',
+                lastmodified: Date.now(),
+                unmerged: [],
+                lasthash: '',
+            })),
             ...Object.values(generatedFilesMap)
         ];
     }

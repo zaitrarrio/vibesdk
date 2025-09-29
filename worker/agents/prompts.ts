@@ -4,7 +4,7 @@ import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
 import { IssueReport } from "./domain/values/IssueReport";
 import { SCOFFormat } from "./streaming-formats/scof";
-import { MAX_PHASES } from "./core/state";
+import { FileState, MAX_PHASES } from "./core/state";
 
 export const PROMPT_UTILS = {
     /**
@@ -778,15 +778,23 @@ The following phases have been completed and implemented:
 
 </COMPLETED_PHASES>
 
+<LAST_DIFFS>
+These are the changes that have been made to the codebase since the last phase:
+
+{{lastDiffs}}
+
+</LAST_DIFFS>
+
 <CODEBASE>
 
-Here are all the relevant files in the current codebase:
+Here are all the latest relevant files in the current codebase:
 
 {{files}}
 
 **THESE DO NOT INCLUDE PREINSTALLED SHADCN COMPONENTS, REDACTED FOR SIMPLICITY. BUT THEY DO EXIST AND YOU CAN USE THEM.**
 
 <FILE_TREE>
+**Use these files as a reference for the file structure, components and hooks that are present**
 
 {{fileTree}}
 
@@ -1008,11 +1016,12 @@ ${staticAnalysisText}
 
 
 export const USER_PROMPT_FORMATTER = {
-    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileOutputType[], fileTree: FileTreeNode, commandsHistory: string[]) => {
+    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileState[], fileTree: FileTreeNode, commandsHistory: string[]) => {
         const variables: Record<string, string> = {
             phases: TemplateRegistry.markdown.serialize({ phases: phases }, z.object({ phases: z.array(PhaseConceptSchema) })),
             files: PROMPT_UTILS.serializeFiles(files),
             fileTree: PROMPT_UTILS.serializeTreeNodes(fileTree),
+            lastDiffs: files.map(file => file.lastDiff).join('\n'),
             commandsHistory: commandsHistory.length > 0 ? `<COMMANDS HISTORY>
 
 The following commands have been executed successfully in the project environment so far (These may not include the ones that are currently pending):

@@ -35,16 +35,22 @@ RUN chmod +x /app/container/cli-tools.ts
 # Create symlinks for easier CLI usage
 RUN ln -sf /app/container/cli-tools.ts /usr/local/bin/monitor-cli
 
+# Setup common templates packages cache
+WORKDIR /app/container/packages-cache
+ENV BUN_INSTALL_CACHE_DIR=/app/container/packages-cache
+RUN bun install
+
 # Set proper permissions for data directory
 RUN chmod 755 /app/data
 
 # Set environment variable to indicate Docker container environment
 ENV CONTAINER_ENV=docker
+ENV VITE_LOGGER_TYPE=json 
 
 # Reset workdir
 WORKDIR /app
 
-EXPOSE 3000
+EXPOSE 3000 8000-8999
 
 # Run the same command as the original image
 CMD ["bun", "index.ts"]

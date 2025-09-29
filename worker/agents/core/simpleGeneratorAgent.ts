@@ -1168,8 +1168,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             // Add FileState-specific properties if missing
             migratedFilesMap[key] = {
                 ...migratedFile,
-                last_hash: migratedFile.last_hash || '',
-                last_modified: migratedFile.last_modified || Date.now(),
+                lasthash: migratedFile.lasthash || '',
+                lastmodified: migratedFile.lastmodified || Date.now(),
                 unmerged: migratedFile.unmerged || []
             };
             

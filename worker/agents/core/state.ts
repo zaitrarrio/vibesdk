@@ -7,9 +7,10 @@ import type { ConversationMessage } from '../inferutils/common';
 import type { InferenceContext } from '../inferutils/config.types';
 
 export interface FileState extends FileOutputType {
-    last_hash: string;
-    last_modified: number;
+    lasthash: string;
+    lastmodified: number;
     unmerged: string[];
+    lastDiff: string;
 }
 
 export interface PhaseState extends PhaseConceptType {

@@ -1,6 +1,6 @@
-import { Blueprint, FileOutputType } from '../../schemas';
+import { Blueprint } from '../../schemas';
 import { FileTreeNode, TemplateDetails } from '../../../services/sandbox/sandboxTypes';
-import { CodeGenState, PhaseState } from '../../core/state';
+import { CodeGenState, FileState, PhaseState } from '../../core/state';
 import { DependencyManagement } from '../pure/DependencyManagement';
 import type { StructuredLogger } from '../../../logger';
 import { FileProcessing } from '../pure/FileProcessing';
@@ -15,7 +15,7 @@ export class GenerationContext {
         public readonly blueprint: Blueprint,
         public readonly templateDetails: TemplateDetails,
         public readonly dependencies: Record<string, string>,
-        public readonly allFiles: FileOutputType[],
+        public readonly allFiles: FileState[],
         public readonly generatedPhases: PhaseState[],
         public readonly commandsHistory: string[]
     ) {
