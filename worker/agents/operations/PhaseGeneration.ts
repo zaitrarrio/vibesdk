@@ -180,7 +180,7 @@ export class PhaseGenerationOperation extends AgentOperation<PhaseGenerationInpu
             logger.info(`Generating next phase ${suggestionsInfo}`);
     
             const messages: Message[] = [
-                ...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, false),
+                ...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context),
                 createUserMessage(userPromptFormatter(issues, userSuggestions, isUserSuggestedPhase))
             ];
     

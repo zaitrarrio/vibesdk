@@ -207,7 +207,6 @@ export class CodeReviewOperation extends AgentOperation<CodeReviewInputs, CodeRe
                 blueprint: context.blueprint,
                 templateDetails: context.templateDetails,
                 dependencies: context.dependencies,
-                forCodegen: true
             })),
             createUserMessage(userPromptFormatter(issues, filesContext)),
         ];

@@ -1,4 +1,4 @@
-import { FileTreeNode, RuntimeError, StaticAnalysisResponse, TemplateDetails, TemplateFileSchema } from "../services/sandbox/sandboxTypes";
+import { FileTreeNode, RuntimeError, StaticAnalysisResponse, TemplateDetails } from "../services/sandbox/sandboxTypes";
 import { TemplateRegistry } from "./inferutils/schemaFormatters";
 import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
@@ -53,13 +53,8 @@ export const PROMPT_UTILS = {
         return result;
     },
 
-    serializeTemplate(template?: TemplateDetails, forCodegen: boolean = true): string {
+    serializeTemplate(template?: TemplateDetails): string {
         if (template) {
-            // const filesText = JSON.stringify(tpl.files, null, 2);
-            const filesText = TemplateRegistry.markdown.serialize(
-                { files: template.files.filter(f => !f.filePath.includes('package.json')) },
-                z.object({ files: z.array(TemplateFileSchema) })
-            );
             const fileTreeText = serializeTreeNodes(template.fileTree);
             // const indentedFilesText = filesText.replace(/^(?=.)/gm, '\t\t\t\t'); // Indent each line with 4 spaces
             return `
@@ -68,12 +63,6 @@ The following are the details (structures and files) of the starting boilerplate
 
 Name: ${template.name}
 Frameworks: ${template.frameworks?.join(', ')}
-
-${forCodegen ? `` : `
-<TEMPLATE_CORE_FILES>
-**SHADCN COMPONENTS, Error boundary components and use-toast hook ARE PRESENT AND INSTALLED BUT EXCLUDED FROM THESE FILES DUE TO CONTEXT SPAM**
-${filesText}
-</TEMPLATE_CORE_FILES>`}
 
 <TEMPLATE_FILE_TREE>
 **Use these files as a reference for the file structure, components and hooks that are present**
@@ -956,7 +945,6 @@ export interface GeneralSystemPromptBuilderParams {
     query: string,
     templateDetails: TemplateDetails,
     dependencies: Record<string, string>,
-    forCodegen: boolean,
     blueprint?: Blueprint,
     language?: string,
     frameworks?: string[],
@@ -970,7 +958,7 @@ export function generalSystemPromptBuilder(
     // Base variables always present
     const variables: Record<string, string> = {
         query: params.query,
-        template: PROMPT_UTILS.serializeTemplate(params.templateDetails, params.forCodegen),
+        template: PROMPT_UTILS.serializeTemplate(params.templateDetails),
         dependencies: JSON.stringify(params.dependencies || [])
     };
 

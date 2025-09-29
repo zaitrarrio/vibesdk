@@ -173,7 +173,7 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
         });
 
         try {
-            const systemPrompts = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, false);
+            const systemPrompts = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context);
             const messages = [...pastMessages, {...createUserMessage(userMessage), conversationId: IdGenerator.generateConversationId()}];
 
             let extractedUserResponse = "";

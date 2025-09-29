@@ -356,7 +356,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
         // Notify phase start
         const codeGenerationFormat = new SCOFFormat();
         // Build messages for generation
-        const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, true);
+        const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context);
         messages.push(createUserMessage(userPromptFormatter(phase, issues, userSuggestions) + codeGenerationFormat.formatInstructions()));
     
         // Initialize streaming state
@@ -467,7 +467,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
 
         try {
             let readmePrompt = README_GENERATION_PROMPT;
-            const messages = [...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, true), createUserMessage(readmePrompt)];
+            const messages = [...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context), createUserMessage(readmePrompt)];
 
             const results = await executeInference({
                 env: env,
