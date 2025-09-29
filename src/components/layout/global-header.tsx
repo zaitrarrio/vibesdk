@@ -68,7 +68,8 @@ export function GlobalHeader() {
                 <button
                   type="button"
                   onClick={hasChangeLogs ? () => setIsChangelogOpen(true) : undefined}
-                  className="inline-flex max-w-full items-center gap-2 rounded-full border border-accent/40 bg-bg-4/80 px-3 py-1.5 text-xs text-text-primary shadow-sm backdrop-blur transition-colors hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-accent/30 dark:bg-bg-2/80 md:text-sm"
+                  disabled={!hasChangeLogs}
+                  className={`inline-flex max-w-full items-center gap-2 rounded-full border border-accent/40 bg-bg-4/80 px-3 py-1.5 text-xs text-text-primary shadow-sm backdrop-blur transition-colors hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/40 dark:border-accent/30 dark:bg-bg-2/80 md:text-sm${!hasChangeLogs ? ' opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                   aria-label="Platform updates"
                 >
                   <AlertCircle className="h-4 w-4 text-accent" />
