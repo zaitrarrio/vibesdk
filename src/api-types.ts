@@ -58,6 +58,8 @@ export type {
   AgentAnalyticsResponseData,
 } from 'worker/api/controllers/analytics/types';
 
+export type { PlatformStatusData } from 'worker/api/controllers/status/types';
+
 // Model Config API Types
 export type {
   ModelConfigsData,
