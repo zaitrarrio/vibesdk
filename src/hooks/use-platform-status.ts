@@ -51,8 +51,9 @@ export function usePlatformStatus() {
                         setStatus(defaultStatus);
                     }
                 });
+        } else {
+            setStatus(cachedStatus);
         }
-        setStatus(cachedStatus ?? defaultStatus);
 
         return () => {
             disposed = true;

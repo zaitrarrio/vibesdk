@@ -73,7 +73,7 @@ export function GlobalHeader() {
                 >
                   <AlertCircle className="h-4 w-4 text-accent" />
                   <span className="truncate max-w-[46ch] md:max-w-[60ch]">{status.globalUserMessage}</span>
-                  <ChevronRight className="ml-1 h-4 w-4 text-red-500 dark:text-red-400" />
+                  <ChevronRight className="ml-1 h-4 w-4 text-accent" />
                 </button>
               )}
             </div>
