@@ -18,11 +18,6 @@ async function fetchStatus(): Promise<void> {
             cachedStatus = response.data;
             return;
         }
-
-        if (response.data) {
-            cachedStatus = response.data;
-            return;
-        }
     } catch (error) {
         console.debug('Failed to load platform status', error);
     }
