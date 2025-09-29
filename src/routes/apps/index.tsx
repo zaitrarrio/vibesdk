@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { toggleFavorite } from '@/hooks/use-apps';
 import { usePaginatedApps } from '@/hooks/use-paginated-apps';
@@ -6,9 +6,19 @@ import { AppListContainer } from '@/components/shared/AppListContainer';
 import { AppFiltersForm } from '@/components/shared/AppFiltersForm';
 import { AppSortTabs } from '@/components/shared/AppSortTabs';
 import { VisibilityFilter } from '@/components/shared/VisibilityFilter';
+import type { AppSortOption } from '@/api-types';
 
 export default function AppsPage() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+
+	// Derive initial sort from URL or localStorage, fallback to 'recent'
+	const allowedSorts: AppSortOption[] = ['recent', 'popular', 'trending', 'starred'];
+	const sortParam = searchParams.get('sort') as AppSortOption | null;
+	const savedSort = (typeof localStorage !== 'undefined' ? localStorage.getItem('apps.sort') : null) as AppSortOption | null;
+	const initialSort: AppSortOption = (sortParam && allowedSorts.includes(sortParam))
+		? sortParam
+		: (savedSort && allowedSorts.includes(savedSort) ? savedSort : 'recent');
 
 	const {
 		// Filter state
@@ -39,7 +49,7 @@ export default function AppsPage() {
 		loadMore,
 	} = usePaginatedApps({
 		type: 'user',
-		defaultSort: 'recent',
+		defaultSort: initialSort,
 		includeVisibility: true,
 		limit: 20,
 	});
@@ -100,8 +110,15 @@ export default function AppsPage() {
 
 							<AppSortTabs
 								value={sortBy}
-								onValueChange={handleSortChange}
-								availableSorts={['recent', 'popular', 'trending']}
+								onValueChange={(v) => {
+									handleSortChange(v);
+									// Persist to URL and localStorage
+									try { localStorage.setItem('apps.sort', v); } catch {}
+									const next = new URLSearchParams(searchParams);
+									next.set('sort', v);
+									setSearchParams(next, { replace: true });
+								}}
+								availableSorts={['recent', 'popular', 'trending', 'starred']}
 							/>
 						</div>
 					</div>
