@@ -9,7 +9,7 @@ import { AGENT_CONFIG } from '../inferutils/config';
 
 export interface PhaseGenerationInputs {
     issues: IssueReport;
-    userSuggestions?: string[] | null;
+    userSuggestions?: string[];
     isUserSuggestedPhase?: boolean;
 }
 
@@ -146,10 +146,12 @@ ${suggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n
 If any suggestions conflict with architectural patterns or project goals, prioritize architectural consistency while finding creative ways to address user needs.
 Consider these suggestions when planning the files, components, and features for this phase.
 Try to make small targeted, isolated changes to the codebase to address the user's suggestions unless a complete rework is required.
+
+Explicitly state user's needs and suggestions in relevant files and components. For example, if user provides an image url, explicitly state it as-in in changes required for that file.
 </USER SUGGESTIONS>`;
 };
 
-const userPromptFormatter = (issues: IssueReport, userSuggestions?: string[] | null, isUserSuggestedPhase?: boolean) => {
+const userPromptFormatter = (issues: IssueReport, userSuggestions?: string[], isUserSuggestedPhase?: boolean) => {
     let prompt = NEXT_PHASE_USER_PROMPT
         .replaceAll('{{issues}}', issuesPromptFormatter(issues))
         .replaceAll('{{userSuggestions}}', formatUserSuggestions(userSuggestions));
