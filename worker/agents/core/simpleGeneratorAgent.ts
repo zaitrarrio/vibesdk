@@ -646,7 +646,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             const phasesCounter = this.decrementPhasesCounter();
 
-            if (phaseConcept.lastPhase || phasesCounter <= 0) return {currentDevState: CurrentDevState.FINALIZING, staticAnalysis: staticAnalysis};
+            if ((phaseConcept.lastPhase || phasesCounter <= 0) && this.state.pendingUserInputs.length === 0) return {currentDevState: CurrentDevState.FINALIZING, staticAnalysis: staticAnalysis};
             return {currentDevState: CurrentDevState.PHASE_GENERATING, staticAnalysis: staticAnalysis};
         } catch (error) {
             this.logger().error("Error implementing phase", error);

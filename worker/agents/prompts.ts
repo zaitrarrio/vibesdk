@@ -71,12 +71,12 @@ ${template.description.usage}
 
 <DO NOT TOUCH FILES>
 These files are forbidden to be modified. Do not touch them under any circumstances.
-${template.dontTouchFiles.join('\n')}
+${(template.dontTouchFiles ?? []).join('\n')}
 </DO NOT TOUCH FILES>
 
 <REDACTED FILES>
 These files are redacted. They exist but their contents are hidden for security reasons. Do not touch them under any circumstances.
-${template.redactedFiles.join('\n')}
+${(template.redactedFiles ?? []).join('\n')}
 </REDACTED FILES>
 
 **Websockets and dynamic imports are not supported, so please avoid using them.**
@@ -526,6 +526,7 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
 
     ### **IMPORT VALIDATION EXAMPLES**
     **CRITICAL**: Verify ALL imports before using. Wrong imports = runtime crashes.
+    **When suggesting to import packages, make sure to check if the package actually exists and is correct. If installing it fails multiple times, it is not a valid package.**
 
     **BAD IMPORTS** (cause runtime errors):
     \`\`\`tsx
@@ -590,6 +591,7 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
         - Always suggest a known recent compatible stable major version. If unsure which version might be available, don't specify any version.
         - Example: \`npm install react@18 react-dom@18\`
         - List commands to add dependencies separately, one command per dependency for clarity.
+        - Make sure the packages actually exist and are correct.
     • **Format:** Provide ONLY the raw command(s) without comments, explanations, or step numbers, in the form of a list
     • **Execution:** These run *before* code generation begins.
 
@@ -956,13 +958,13 @@ export function generalSystemPromptBuilder(
     const variables: Record<string, string> = {
         query: params.query,
         template: PROMPT_UTILS.serializeTemplate(params.templateDetails),
-        dependencies: JSON.stringify(params.dependencies || [])
+        dependencies: JSON.stringify(params.dependencies ?? {})
     };
 
     // Optional blueprint variables
     if (params.blueprint) {
         variables.blueprint = TemplateRegistry.markdown.serialize(params.blueprint, BlueprintSchema);
-        variables.blueprintDependencies = params.blueprint.frameworks.join(', ');
+        variables.blueprintDependencies = params.blueprint.frameworks?.join(', ') ?? '';
     }
 
     // Optional language and frameworks
@@ -1008,11 +1010,34 @@ ${staticAnalysisText}
 
 export const USER_PROMPT_FORMATTER = {
     PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileState[], fileTree: FileTreeNode, commandsHistory: string[], serializerType: CodeSerializerType = CodeSerializerType.SIMPLE) => {
+        let lastPhaseFilesDiff = '';
+        try {
+            if (phases.length > 1) {
+                const lastPhase = phases[phases.length - 1];
+                if (lastPhase && lastPhase.files) {
+                    // Get last phase files diff only
+                    const fileMap = new Map<string, FileState>();
+                    files.forEach((file) => fileMap.set(file.filePath, file));
+                    const lastPhaseFiles = lastPhase.files.map((file) => fileMap.get(file.path)).filter((file) => file !== undefined);
+                    lastPhaseFilesDiff = lastPhaseFiles.map((file) => file.lastDiff).join('\n');
+        
+                    // Set lastPhase = false for all phases but the last
+                    phases.forEach((phase) => {
+                        if (phase !== lastPhase) {
+                            phase.lastPhase = false;
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error processing project context:', error);
+        }
+
         const variables: Record<string, string> = {
             phases: TemplateRegistry.markdown.serialize({ phases: phases }, z.object({ phases: z.array(PhaseConceptSchema) })),
             files: PROMPT_UTILS.serializeFiles(files, serializerType),
             fileTree: PROMPT_UTILS.serializeTreeNodes(fileTree),
-            lastDiffs: files.map(file => file.lastDiff).join('\n'),
+            lastDiffs: lastPhaseFilesDiff,
             commandsHistory: commandsHistory.length > 0 ? `<COMMANDS HISTORY>
 
 The following commands have been executed successfully in the project environment so far (These may not include the ones that are currently pending):
