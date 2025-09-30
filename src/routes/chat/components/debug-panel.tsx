@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useMemo, Component } from 'react';
-import { Bug, X, Download, Mail, Maximize2, Minimize2, Clock, BookmarkPlus, Bookmark, Activity, BarChart3, Bell, BellOff } from 'lucide-react';
+import { useState, useRef, useMemo, Component } from 'react';
+import { Bug, X, Download, Mail, Maximize2, Minimize2, Clock, BookmarkPlus, Bookmark, Activity, BarChart3 } from 'lucide-react';
+import { Button } from '../../../components/primitives/button';
 import { captureDebugScreenshot } from '../../../utils/screenshot';
 
 // Custom Error Boundary to prevent debug panel crashes from affecting main site
@@ -93,8 +94,7 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
   const [isGeneratingDump, setIsGeneratingDump] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'analytics'>('list');
   const [bookmarkedMessages, setBookmarkedMessages] = useState<Set<string>>(new Set());
-  const [notifications, setNotifications] = useState(true);
-  const [lastNotificationTime, setLastNotificationTime] = useState(0);
+  // notifications removed per design request
   
   // Helper functions defined first to avoid hoisting issues
   const calculateOperationMetrics = (wsMessages: DebugMessage[]) => {
@@ -372,28 +372,7 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
     }
   }, [messages, isOpen, viewMode, bookmarkedMessages]);
   
-  // Smart notifications for critical events
-  useEffect(() => {
-    if (!notifications) return;
-    
-    const recentErrors = messages.filter(m => 
-      m.type === 'error' && 
-      m.timestamp > lastNotificationTime && 
-      Date.now() - m.timestamp < 5000 // Within last 5 seconds
-    );
-    
-    if (recentErrors.length > 0 && 'Notification' in window) {
-      if (Notification.permission === 'granted') {
-        new Notification('Debug Panel Alert', {
-          body: `${recentErrors.length} new error(s) detected`,
-          icon: '/favicon.ico'
-        });
-      } else if (Notification.permission !== 'denied') {
-        Notification.requestPermission();
-      }
-      setLastNotificationTime(Date.now());
-    }
-  }, [messages, notifications, lastNotificationTime]);
+  // notifications logic removed
   
   // Message bookmarking functionality
   const toggleBookmark = (messageId: string) => {
@@ -558,13 +537,13 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
       {/* Debug Panel */}
       <div
         ref={panelRef}
-        className={`fixed right-0 top-0 h-full bg-bg-3 dark:bg-bg-4 shadow-2xl border-l border-border-primary z-40 transform transition-all duration-300 ease-in-out flex flex-col ${
+        className={`fixed right-0 top-0 h-full bg-bg-3 dark:bg-bg-4 shadow-2xl border-l border-border-primary z-[60] transform transition-all duration-300 ease-in-out flex flex-col ${
           isMaximized ? 'w-[80vw]' : 'w-[600px]'
         } ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border-primary bg-gradient-to-r from-muted to-accent">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Bug className="w-5 h-5 text-text-primary" />
             <h3 className="font-semibold text-text-primary">Debug Console</h3>
             <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
@@ -577,7 +556,7 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {/* View Mode Toggle */}
             <div className="flex bg-bg-3 dark:bg-zinc-800 rounded p-0.5">
               {[
@@ -601,55 +580,46 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
               ))}
             </div>
             
-            {/* Notifications Toggle */}
-            <button
-              onClick={() => setNotifications(!notifications)}
-              className={`p-1.5 rounded transition-all ${
-                notifications
-                  ? 'text-green-600 hover:bg-green-600/10'
-                  : 'text-text-tertiary hover:bg-bg-3'
-              }`}
-              title={notifications ? 'Disable notifications' : 'Enable notifications'}
-            >
-              {notifications ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={downloadDump}
-              disabled={isGeneratingDump}
-              className="text-xs bg-text-secondary text-bg-3 px-3 py-1.5 rounded hover:bg-text-secondary/90 disabled:opacity-50 flex items-center gap-1"
-              title="Download debug dump"
-            >
-              <Download className="w-3 h-3" />
-              {isGeneratingDump ? 'Generating...' : 'Download'}
-            </button>
-            <button
-              onClick={emailDump}
-              disabled={isGeneratingDump}
-              className="text-xs bg-green-500 text-white px-3 py-1.5 rounded hover:bg-green-600 disabled:opacity-50 flex items-center gap-1"
-              title="Email debug dump to developers"
-            >
-              <Mail className="w-3 h-3" />
-              Email
-            </button>
-            <button
-              onClick={() => setIsMaximized(!isMaximized)}
-              className="text-text-tertiary hover:text-text-primary p-1 hover:bg-bg-3 rounded transition-colors"
-              title={isMaximized ? 'Minimize panel' : 'Maximize panel'}
-            >
-              {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={onClear}
-              className="text-xs text-text-tertiary hover:text-text-primary px-2 py-1 hover:bg-bg-3 rounded transition-colors"
-            >
-              Clear
-            </button>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-text-tertiary hover:text-text-primary p-1 hover:bg-bg-3 rounded transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {/* Notifications removed per design */}
+            <div className="flex items-center gap-2 basis-full justify-end pt-2">
+              <Button
+                onClick={downloadDump}
+                disabled={isGeneratingDump}
+                title="Download debug dump"
+              >
+                <Download className="w-4 h-4" />
+                {isGeneratingDump ? 'Generating...' : 'Download'}
+              </Button>
+              <Button
+                onClick={emailDump}
+                disabled={isGeneratingDump}
+                title="Email debug dump to developers"
+              >
+                <Mail className="w-4 h-4" />
+                Email
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0">
+              <button
+                onClick={() => setIsMaximized(!isMaximized)}
+                className="text-text-tertiary hover:text-text-primary p-1 hover:bg-bg-3 rounded transition-colors"
+                title={isMaximized ? 'Minimize panel' : 'Maximize panel'}
+              >
+                {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={onClear}
+                className="text-xs text-text-tertiary hover:text-text-primary px-2 py-1 hover:bg-bg-3 rounded transition-colors"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-text-tertiary hover:text-text-primary p-1 hover:bg-bg-3 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -709,8 +679,8 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
                     onClick={() => setWsFilter(key)}
                     className={`px-2 py-1 text-xs rounded transition-all ${
                       wsFilter === key
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
+                        ? 'bg-purple-600 text-white dark:bg-purple-700'
+                        : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-200 dark:hover:bg-purple-900/40 dark:border-purple-800'
                     }`}
                   >
                     {label} ({count})
@@ -1033,11 +1003,14 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
                 return (
                   <div
                     key={message.id}
-                    className={`border-l-4 rounded-r-lg p-3 transition-all relative ${
-                      message.type === 'error' ? 'border-red-500 bg-red-50' :
-                      message.type === 'warning' ? 'border-yellow-500 bg-yellow-50' :
-                      message.type === 'websocket' ? 'border-purple-500 bg-purple-50' :
-                      'border-blue-500 bg-blue-50'
+                    className={`border-l-4 rounded-r-lg p-3 pr-10 transition-all relative ${
+                      message.type === 'error'
+                        ? 'border-red-500 bg-red-50 dark:bg-red-900/20 dark:border-red-400'
+                        : message.type === 'warning'
+                        ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-400'
+                        : message.type === 'websocket'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-400'
+                        : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
                     } ${bookmarkedMessages.has(message.id) ? 'ring-2 ring-amber-300' : ''}`}
                   >
                     {/* Bookmark Button */}
@@ -1056,13 +1029,13 @@ function DebugPanelCore({ messages, onClear, chatSessionId }: DebugPanelProps) {
                         <BookmarkPlus className="w-4 h-4" />
                       )}
                     </button>
-                    <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-start justify-between gap-2 mb-2 pr-6">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm capitalize">
                           {message.type}
                         </span>
                         {message.messageType && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-mono">
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-mono dark:bg-purple-900/40 dark:text-purple-200 dark:border dark:border-purple-800">
                             {message.messageType}
                           </span>
                         )}

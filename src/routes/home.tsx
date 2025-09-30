@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { ArrowRight } from 'react-feather';
 import { useNavigate } from 'react-router';
+import { useAuth } from '@/contexts/auth-context';
+import { createPortal } from 'react-dom';
 import {
 	AgentModeToggle,
 	type AgentMode,
@@ -167,6 +169,117 @@ export default function Home() {
 					</form>
 				</div>
 			</div>
+
+			{/* Nudge towards Discover */}
+			<DiscoverNudge />
 		</div>
 	);
+}
+
+function DiscoverNudge() {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    const [containerEl, setContainerEl] = useState<HTMLElement | null>(null);
+    const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+    const boxW = 220;
+    const boxH = 48;
+    const gapX = 12; // gap between sidebar and arrow head
+
+    useEffect(() => {
+        if (!user) return;
+        const target = document.getElementById('discover-link');
+        if (!target) return;
+        const container = (target.closest('li[data-slot="sidebar-menu-item"]') as HTMLElement) ?? (target as HTMLElement);
+        setContainerEl(container);
+
+        const compute = () => {
+            const tr = target.getBoundingClientRect();
+            const left = tr.right + gapX;
+            const top = tr.top + tr.height / 2 - boxH / 2;
+            setPos({ left, top });
+        };
+
+        compute();
+        const ro = new ResizeObserver(() => compute());
+        ro.observe(target);
+        window.addEventListener('resize', compute);
+        window.addEventListener('scroll', compute, { passive: true });
+        // Poll during sidebar transitions so the overlay slides with it
+        const interval = setInterval(compute, 100);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', compute);
+            window.removeEventListener('scroll', compute);
+            clearInterval(interval);
+        };
+    }, [user]);
+
+    if (!user || !containerEl) return null;
+
+    // Local overlay box positioned beside the target (computed via fixed left/top)
+
+    // Local arrow from right to left (towards the button). Straight line keeps head perfectly horizontal.
+    const tipX = 8;
+    const tipY = Math.round(boxH / 2);
+    const startX = tipX + 40; // shorter stem
+    const path = `M ${startX},${tipY} L ${tipX},${tipY}`;
+
+    const overlay = (
+        <div
+            className="pointer-events-none fixed z-40 transition-all duration-300 ease-in-out"
+            style={{ left: pos.left, top: pos.top, width: boxW, height: boxH }}
+            aria-hidden={true}
+        >
+            <svg width={boxW} height={boxH} className="overflow-visible">
+                <defs>
+                    <filter id="discover-squiggle" x="-20%" y="-20%" width="140%" height="140%">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="1" seed="3" result="noise" />
+                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="1" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                    <marker id="discover-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                        <path d="M 0 1.2 L 7 4" stroke="var(--color-accent)" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+                        <path d="M 0 6.8 L 7 4" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                    </marker>
+                </defs>
+                {/* Crisp base stroke with arrowhead, no filter so head stays horizontal */}
+                <path
+                    d={path}
+                    stroke="var(--color-accent)"
+                    strokeOpacity={0.88}
+                    strokeWidth={2}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    markerEnd="url(#discover-arrowhead)"
+                />
+                {/* Soft squiggle overlay for hand-drawn feel */}
+                <g filter="url(#discover-squiggle)">
+                    <path
+                        d={path}
+                        stroke="var(--color-accent)"
+                        strokeOpacity={0.35}
+                        strokeWidth={1.2}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeDasharray="8 6 4 9 5 7"
+                        vectorEffect="non-scaling-stroke"
+                    />
+                </g>
+            </svg>
+
+            <button
+                type="button"
+                aria-label="Go to Discover"
+                onClick={() => navigate('/discover')}
+                className="absolute pointer-events-auto select-none px-1 py-0 bg-transparent text-accent hover:opacity-90 transition-opacity"
+                style={{ left: tipX + 58, top: tipY - 18, whiteSpace: 'nowrap', fontFamily: "'Gloria Hallelujah', 'Caveat', cursive", transform: 'rotate(-2deg)' }}
+            >
+                <span className="text-2xl leading-none">Check this out</span>
+            </button>
+        </div>
+    );
+
+    return createPortal(overlay, containerEl);
 }

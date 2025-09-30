@@ -1,62 +1,11 @@
 import { z } from 'zod';
 
 // ==========================================
-// CORE ERROR TYPES
+// COMMON SCHEMAS AND TYPES
 // ==========================================
 
-export const ErrorCategorySchema = z.enum([
-  'compilation',    // TypeScript, build tool errors
-  'runtime',        // JavaScript runtime exceptions, unhandled promises
-  'network',        // Connection failures, timeout errors
-  'filesystem',     // Missing files, permission issues
-  'dependency',     // Missing packages, version conflicts
-  'syntax',         // Parse errors, invalid code
-  'memory',         // Out of memory, heap limit exceeded
-  'environment',    // Missing env vars, configuration issues
-  'unknown'         // Fallback for unmatched patterns
-]);
-export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
-
-export const ErrorSeveritySchema = z.enum([
-  'fatal',     // Process-terminating errors
-  'error',     // Standard errors that break functionality
-  'warning',   // Non-breaking issues that should be addressed
-  'info'       // Informational messages for debugging
-]);
-export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
-
-export interface ErrorPattern {
-  readonly id: string;
-  readonly category: ErrorCategory;
-  readonly severity: ErrorSeverity;
-  readonly regex: RegExp;
-  readonly multiline?: boolean;
-  readonly priority: number;
-  readonly description: string;
-  readonly extractors?: {
-    readonly file?: number;
-    readonly line?: number;
-    readonly column?: number;
-    readonly message?: number;
-  };
-}
-
-export interface ParsedError {
-  readonly category: ErrorCategory;
-  readonly severity: ErrorSeverity;
-  readonly message: string;
-  readonly sourceFile?: string;
-  readonly lineNumber?: number;
-  readonly columnNumber?: number;
-  readonly stackTrace?: string;
-  readonly patternId?: string;
-  readonly rawOutput: string;
-  readonly context?: Record<string, unknown>;
-}
-
-// ==========================================
-// CORE LOG TYPES
-// ==========================================
+export const StreamTypeSchema = z.enum(['stdout', 'stderr']);
+export type StreamType = z.infer<typeof StreamTypeSchema>;
 
 export const LogLevelSchema = z.enum([
   'debug',    // Detailed diagnostic information
@@ -67,50 +16,61 @@ export const LogLevelSchema = z.enum([
 ]);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
+// ==========================================
+// SIMPLIFIED ERROR TYPE FOR JSON LOGS
+// ==========================================
+
+export const SimpleErrorSchema = z.object({
+  timestamp: z.string(),     // ISO timestamp
+  level: z.number(),          // Pino log level (50=error, 60=fatal)
+  message: z.string(),        // The 'msg' field from JSON log
+  rawOutput: z.string()       // The complete raw JSON log line
+});
+export type SimpleError = z.infer<typeof SimpleErrorSchema>;
+
+// ==========================================
+// LOG TYPES
+// ==========================================
+
 export interface LogLine {
   readonly content: string;
   readonly timestamp: Date;
-  readonly stream: 'stdout' | 'stderr';
+  readonly stream: StreamType;
   readonly processId: string;
 }
 
 // ==========================================
-// STORAGE SCHEMAS
+// STORAGE SCHEMAS - Extend base types
 // ==========================================
 
-export const StoredErrorSchema = z.object({
+// StoredError extends SimpleError with storage-specific fields
+export const StoredErrorSchema = SimpleErrorSchema.extend({
   id: z.number(),
   instanceId: z.string(),
   processId: z.string(),
   errorHash: z.string(),
-  category: ErrorCategorySchema,
-  severity: ErrorSeveritySchema,
-  message: z.string(),
-  stackTrace: z.string().nullable(),
-  sourceFile: z.string().nullable(),
-  lineNumber: z.number().nullable(),
-  columnNumber: z.number().nullable(),
-  rawOutput: z.string(),
-  context: z.string().nullable(),
-  firstOccurrence: z.string(),
-  lastOccurrence: z.string(),
   occurrenceCount: z.number(),
   createdAt: z.string()
 });
 export type StoredError = z.infer<typeof StoredErrorSchema>;
 
-export const StoredLogSchema = z.object({
+// Base fields shared by stored entities
+const StoredEntityBaseSchema = z.object({
   id: z.number(),
   instanceId: z.string(),
   processId: z.string(),
+  timestamp: z.string(),
+  createdAt: z.string()
+});
+
+// StoredLog extends base with log-specific fields
+export const StoredLogSchema = StoredEntityBaseSchema.extend({
   level: LogLevelSchema,
   message: z.string(),
-  timestamp: z.string(),
-  stream: z.enum(['stdout', 'stderr']),
+  stream: StreamTypeSchema,
   source: z.string().optional(),
   metadata: z.string().nullable(),
-  sequence: z.number(),
-  createdAt: z.string()
+  sequence: z.number()
 });
 export type StoredLog = z.infer<typeof StoredLogSchema>;
 
@@ -132,11 +92,12 @@ export interface ProcessInfo {
   readonly id: string;
   readonly instanceId: string;
   readonly command: string;
-  readonly args: readonly string[];
+  readonly args?: readonly string[];
   readonly cwd: string;
-  readonly pid?: number;
-  readonly state: ProcessState;
-  readonly startTime: Date;
+  pid?: number;
+  readonly env?: Record<string, string>;
+  readonly startTime?: Date;
+  readonly status?: ProcessState;
   readonly endTime?: Date;
   readonly exitCode?: number;
   readonly restartCount: number;
@@ -144,25 +105,31 @@ export interface ProcessInfo {
 }
 
 export interface MonitoringOptions {
-  readonly restartOnCrash?: boolean;
+  readonly autoRestart?: boolean;
   readonly maxRestarts?: number;
   readonly restartDelay?: number;
-  readonly killTimeout?: number;
-  readonly errorBufferSize?: number;
   readonly healthCheckInterval?: number;
+  readonly errorBufferSize?: number;
+  readonly enableMetrics?: boolean;
+  readonly env?: Record<string, string>;
+  readonly killTimeout?: number;
 }
 
 // ==========================================
 // STORAGE OPTIONS
 // ==========================================
 
-export interface ErrorStoreOptions {
-  readonly maxErrors?: number;
-  readonly retentionDays?: number;
-  readonly vacuumInterval?: number;
+// Base storage options shared by error and log stores
+interface BaseStoreOptions {
+  readonly vacuumInterval?: number;  // Hours between cleanup runs
 }
 
-export interface LogStoreOptions {
+export interface ErrorStoreOptions extends BaseStoreOptions {
+  readonly maxErrors?: number;
+  readonly retentionDays?: number;
+}
+
+export interface LogStoreOptions extends BaseStoreOptions {
   readonly maxLogs?: number;
   readonly retentionHours?: number;
   readonly bufferSize?: number;
@@ -172,29 +139,26 @@ export interface LogStoreOptions {
 // FILTER & CURSOR TYPES
 // ==========================================
 
-export interface ErrorFilter {
+// Base filter options shared by all filters
+interface BaseFilter {
   readonly instanceId?: string;
-  readonly categories?: readonly ErrorCategory[];
-  readonly severities?: readonly ErrorSeverity[];
   readonly since?: Date;
   readonly until?: Date;
   readonly limit?: number;
   readonly offset?: number;
-  readonly includeRaw?: boolean;
-  readonly sortBy?: 'createdAt' | 'lastOccurrence' | 'occurrenceCount';
   readonly sortOrder?: 'asc' | 'desc';
 }
 
-export interface LogFilter {
-  readonly instanceId?: string;
+export interface ErrorFilter extends BaseFilter {
+  readonly level?: number;
+  readonly includeRaw?: boolean;
+  readonly sortBy?: 'timestamp' | 'occurrenceCount';
+}
+
+export interface LogFilter extends BaseFilter {
   readonly levels?: readonly LogLevel[];
-  readonly streams?: readonly ('stdout' | 'stderr')[];
-  readonly since?: Date;
-  readonly until?: Date;
-  readonly limit?: number;
-  readonly offset?: number;
+  readonly streams?: readonly StreamType[];
   readonly includeMetadata?: boolean;
-  readonly sortOrder?: 'asc' | 'desc';
   readonly afterSequence?: number;
 }
 
@@ -210,8 +174,7 @@ export interface LogCursor {
 
 export interface ErrorSummary {
   readonly totalErrors: number;
-  readonly errorsByCategory: Record<ErrorCategory, number>;
-  readonly errorsBySeverity: Record<ErrorSeverity, number>;
+  readonly errorsByLevel: Record<number, number>;
   readonly latestError?: Date;
   readonly oldestError?: Date;
   readonly uniqueErrors: number;
@@ -231,60 +194,92 @@ export interface LogRetrievalResponse {
 // MONITORING EVENTS
 // ==========================================
 
-export const MonitoringEventSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('process_started'),
-    processId: z.string(),
-    instanceId: z.string(),
-    pid: z.number(),
-    command: z.string(),
-    timestamp: z.date()
-  }),
-  z.object({
-    type: z.literal('process_stopped'),
-    processId: z.string(),
-    instanceId: z.string(),
-    exitCode: z.number().nullable(),
-    reason: z.string(),
-    timestamp: z.date()
-  }),
-  z.object({
-    type: z.literal('error_detected'),
-    processId: z.string(),
-    instanceId: z.string(),
-    error: z.object({
-      category: ErrorCategorySchema,
-      severity: ErrorSeveritySchema,
-      message: z.string(),
-      hash: z.string(),
-      isNewError: z.boolean()
-    }),
-    timestamp: z.date()
-  }),
-  z.object({
-    type: z.literal('process_crashed'),
-    processId: z.string(),
-    instanceId: z.string(),
-    exitCode: z.number().nullable(),
-    signal: z.string().nullable(),
-    willRestart: z.boolean(),
-    timestamp: z.date()
-  })
-]);
-export type MonitoringEvent = z.infer<typeof MonitoringEventSchema>;
-
+export type MonitoringEvent = 
+  | {
+      type: 'process_started';
+      processId: string;
+      instanceId: string;
+      pid?: number;
+      command?: string;
+      timestamp: Date;
+    }
+  | {
+      type: 'process_stopped';
+      processId: string;
+      instanceId: string;
+      exitCode?: number | null;
+      reason?: string;
+      timestamp: Date;
+    }
+  | {
+      type: 'process_exited';
+      processId: string;
+      instanceId: string;
+      code: number | null;
+      signal: NodeJS.Signals | null;
+      timestamp: Date;
+    }
+  | {
+      type: 'process_error';
+      processId: string;
+      instanceId: string;
+      error: string;
+      timestamp: Date;
+    }
+  | {
+      type: 'error_detected';
+      processId: string;
+      instanceId: string;
+      error: SimpleError;
+      timestamp: Date;
+    }
+  | {
+      type: 'process_crashed';
+      processId: string;
+      instanceId: string;
+      exitCode?: number | null;
+      signal?: string | null;
+      willRestart?: boolean;
+      timestamp: Date;
+    }
+  | {
+      type: 'restart_failed';
+      processId: string;
+      instanceId: string;
+      attempt: number;
+      error?: string;
+      timestamp: Date;
+    }
+  | {
+      type: 'health_check_failed';
+      processId: string;
+      instanceId: string;
+      lastActivity: Date;
+      timestamp: Date;
+    }
+  | {
+      type: 'state_changed';
+      processId: string;
+      instanceId: string;
+      oldState: ProcessState;
+      newState: ProcessState;
+      timestamp: Date;
+    };
 // ==========================================
 // CONFIGURATION TYPES
 // ==========================================
 
+// Combines ProcessInfo with monitoring and storage config
 export interface ProcessRunnerConfig {
   readonly instanceId: string;
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd: string;
-  readonly env: Record<string, string>;
-  readonly monitoring: MonitoringOptions;
-  readonly storage: ErrorStoreOptions;
+  readonly monitoring?: MonitoringOptions;
+  readonly storage?: {
+    readonly error?: ErrorStoreOptions;
+    readonly log?: LogStoreOptions;
+  };
 }
 
 // ==========================================
@@ -300,12 +295,12 @@ export type Result<T, E = Error> =
 // ==========================================
 
 export const DEFAULT_MONITORING_OPTIONS: MonitoringOptions = {
-  restartOnCrash: true,
-  maxRestarts: 3,
+  autoRestart: true,
+  maxRestarts: 6,
   restartDelay: 1000,
-  killTimeout: 10000,
-  errorBufferSize: 100,
-  healthCheckInterval: 30000
+  errorBufferSize: 300,
+  healthCheckInterval: 10000,
+  enableMetrics: false
 } as const;
 
 export const DEFAULT_STORAGE_OPTIONS: ErrorStoreOptions = {
@@ -322,7 +317,7 @@ export const DEFAULT_LOG_STORE_OPTIONS: LogStoreOptions = {
 
 // Configurable paths - use environment variables or default to ./data directory
 export const getDataDirectory = (): string => {
-  return process.env.CLI_DATA_DIR || './data';
+  return process.env.CLI_DATA_DIR || './.data';
 };
 
 export const getErrorDbPath = (): string => {

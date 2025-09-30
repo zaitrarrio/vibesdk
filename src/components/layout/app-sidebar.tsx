@@ -154,7 +154,7 @@ export function AppSidebar() {
 		'apps',
 		'boards',
 	]);
-	const { state } = useSidebar();
+	const { state, setOpen } = useSidebar();
 	const isCollapsed = state === 'collapsed';
 
 	// Fetch real data from API
@@ -227,9 +227,13 @@ export function AppSidebar() {
 															? 'justify-center bg-accent'
 															: 'justify-start bg-accent',
 													)}
-													onClick={() =>
-														navigate('/')
-													}
+													onClick={() => {
+														// Collapse sidebar when starting a new build
+														if (!isCollapsed) {
+															setOpen(false);
+														}
+														navigate('/');
+													}}
 												>
 													<Plus className="h-4 w-4 text-neutral-50" />
 													{!isCollapsed && (
@@ -568,6 +572,7 @@ export function AppSidebar() {
 						<SidebarMenu>
 							<SidebarMenuItem>
 								<SidebarMenuButton
+									id="discover-link"
 									onClick={() => navigate('/discover')}
 									tooltip="Discover"
 									className="group hover:opacity-80 hover:cursor-pointer hover:bg-bg-1/50 transition-all duration-200"

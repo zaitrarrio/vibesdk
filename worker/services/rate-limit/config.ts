@@ -77,7 +77,7 @@ export const DEFAULT_RATE_LIMIT_SETTINGS: RateLimitSettings = {
 		enabled: true,
 		store: RateLimitStore.DURABLE_OBJECT,
 		limit: 100,
-		period: 10 * 60, // 10 minutes
+		period: 30 * 60, // 30 minutes
 		excludeBYOKUsers: true,
 	},
 };

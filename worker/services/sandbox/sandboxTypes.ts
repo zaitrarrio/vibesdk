@@ -39,20 +39,33 @@ export const TemplateDetailsSchema = z.object({
 })
 export type TemplateDetails = z.infer<typeof TemplateDetailsSchema>
 
-// --- Instance Details ---
+// ==========================================
+// RUNTIME ERROR SCHEMAS
+// ==========================================
 
-export const RuntimeErrorSchema = z.object({
-    timestamp: z.union([z.string(), z.date()]),
-    message: z.string(),
-    stack: z.string().optional(),
-    source: z.string().optional(),
-    filePath: z.string().optional(),
-    lineNumber: z.number().optional(),
-    columnNumber: z.number().optional(),
-    severity: z.enum(['warning', 'error', 'fatal']),
-    rawOutput: z.string().optional(),
-})
+export const SimpleErrorSchema = z.object({
+  timestamp: z.string(),     // ISO timestamp
+  level: z.number(),          // Pino log level (50=error, 60=fatal)
+  message: z.string(),        // The 'msg' field from JSON log
+  rawOutput: z.string()       // The complete raw JSON log line
+});
+export type SimpleError = z.infer<typeof SimpleErrorSchema>;
+
+// StoredError extends SimpleError with storage-specific fields
+export const StoredErrorSchema = SimpleErrorSchema.extend({
+  id: z.number(),
+  instanceId: z.string(),
+  processId: z.string(),
+  errorHash: z.string(),
+  occurrenceCount: z.number(),
+  createdAt: z.string()
+});
+export type StoredError = z.infer<typeof StoredErrorSchema>;
+
+export const RuntimeErrorSchema = SimpleErrorSchema
 export type RuntimeError = z.infer<typeof RuntimeErrorSchema>
+
+// --- Instance Details ---
 
 export const InstanceDetailsSchema = z.object({
     runId: z.string(),

@@ -168,8 +168,8 @@ OAuth configuration is **not** shown on the initial deploy page. If you want use
 1. [Google Cloud Console](https://console.cloud.google.com) → Create Project
 2. Enable **Google+ API** 
 3. Create **OAuth 2.0 Client ID**
-4. Add authorized origins: `https://your-worker-name.workers.dev`
-5. Add redirect URI: `https://your-worker-name.workers.dev/api/auth/google/callback`
+4. Add authorized origins: `https://your-custom-domain.`
+5. Add redirect URI: `https://your-worker-name.workers.dev/api/auth/callback/google`
 6. Add to **both** `.dev.vars` (for local development) and `.prod.vars` (for deployment):
    ```bash
    GOOGLE_CLIENT_ID="your-google-client-id"

@@ -10,8 +10,8 @@ import {
 import { GitHubPushRequest, PreviewType, StaticAnalysisResponse, TemplateDetails } from '../../services/sandbox/sandboxTypes';
 import {  GitHubExportResult } from '../../services/github/types';
 import { CodeGenState, CurrentDevState, MAX_PHASES, FileState } from './state';
-import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs } from './types';
-import { PREVIEW_EXPIRED_ERROR, WebSocketMessageResponses } from '../constants';
+import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs, PhaseExecutionResult } from './types';
+import { MAX_DEPLOYMENT_RETRIES, PREVIEW_EXPIRED_ERROR, WebSocketMessageResponses } from '../constants';
 import { broadcastToConnections, handleWebSocketClose, handleWebSocketMessage } from './websocket';
 import { createObjectLogger, StructuredLogger } from '../../logger';
 import { ProjectSetupAssistant } from '../assistants/projectsetup';
@@ -483,6 +483,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         }
 
         let staticAnalysisCache: StaticAnalysisResponse | undefined;
+        let userSuggestions: string[] | undefined;
 
         // Store review cycles for later use
         this.setState({
@@ -491,7 +492,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         });
 
         try {
-            let executionResults: {currentDevState: CurrentDevState, staticAnalysis?: StaticAnalysisResponse, result?: PhaseConceptType};
+            let executionResults: PhaseExecutionResult;
             // State machine loop - continues until IDLE state
             while (currentDevState !== CurrentDevState.IDLE) {
                 this.logger().info(`[generateAllFiles] Executing state: ${currentDevState}`);
@@ -501,9 +502,10 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         currentDevState = executionResults.currentDevState;
                         phaseConcept = executionResults.result;
                         staticAnalysisCache = executionResults.staticAnalysis;
+                        userSuggestions = executionResults.userSuggestions;
                         break;
                     case CurrentDevState.PHASE_IMPLEMENTING:
-                        executionResults = await this.executePhaseImplementation(phaseConcept, staticAnalysisCache);
+                        executionResults = await this.executePhaseImplementation(phaseConcept, staticAnalysisCache, userSuggestions);
                         currentDevState = executionResults.currentDevState;
                         staticAnalysisCache = executionResults.staticAnalysis;
                         break;
@@ -547,7 +549,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     /**
      * Execute phase generation state - generate next phase with user suggestions
      */
-    async executePhaseGeneration(): Promise<{currentDevState: CurrentDevState, result?:  PhaseConceptType, staticAnalysis?: StaticAnalysisResponse}> {
+    async executePhaseGeneration(): Promise<PhaseExecutionResult> {
         this.logger().info("Executing PHASE_GENERATING state");
         try {
             const currentIssues = await this.fetchAllIssues();
@@ -572,7 +574,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             return {
                 currentDevState: CurrentDevState.PHASE_IMPLEMENTING,
                 result: nextPhase,
-                staticAnalysis: currentIssues.staticAnalysis
+                staticAnalysis: currentIssues.staticAnalysis,
+                userSuggestions: userSuggestions
             };
         } catch (error) {
             this.logger().error("Error generating phase", error);
@@ -592,7 +595,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     /**
      * Execute phase implementation state - implement current phase
      */
-    async executePhaseImplementation(phaseConcept?: PhaseConceptType, staticAnalysis?: StaticAnalysisResponse): Promise<{currentDevState: CurrentDevState, staticAnalysis?: StaticAnalysisResponse}> {
+    async executePhaseImplementation(phaseConcept?: PhaseConceptType, staticAnalysis?: StaticAnalysisResponse, userSuggestions?: string[]): Promise<{currentDevState: CurrentDevState, staticAnalysis?: StaticAnalysisResponse}> {
         try {
             this.logger().info("Executing PHASE_IMPLEMENTING state");
     
@@ -623,12 +626,11 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                     clientErrors: this.state.clientReportedErrors
                 };
             } else {
-                currentIssues = await this.fetchAllIssues()
-                this.resetIssues();
+                currentIssues = await this.fetchAllIssues(true)
             }
             
             // Implement the phase
-            await this.implementPhase(phaseConcept, currentIssues);
+            await this.implementPhase(phaseConcept, currentIssues, userSuggestions);
     
             this.logger().info(`Phase ${phaseConcept.name} completed, generating next phase`);
 
@@ -768,8 +770,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             ]
         });
 
-        const currentIssues = await this.fetchAllIssues();
-        this.resetIssues();
+        const currentIssues = await this.fetchAllIssues(true);
         
         // Run final review and cleanup phase
         await this.implementPhase(phaseConcept, currentIssues);
@@ -841,7 +842,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                     completed: false
                 }
             ],
-            pendingUserInputs: []
         });
         // Notify phase generation complete
         this.broadcast(WebSocketMessageResponses.PHASE_GENERATED, {
@@ -856,7 +856,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      * Implement a single phase of code generation
      * Streams file generation with real-time updates and incorporates technical instructions
      */
-    async implementPhase(phase: PhaseConceptType, currentIssues: AllIssues, streamChunks: boolean = true): Promise<PhaseImplementationSchemaType> {
+    async implementPhase(phase: PhaseConceptType, currentIssues: AllIssues, userSuggestions?: string[], streamChunks: boolean = true): Promise<PhaseImplementationSchemaType> {
         const context = GenerationContext.from(this.state, this.logger());
         const issues = IssueReport.from(currentIssues);
         
@@ -879,6 +879,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         filePurpose: filePurpose
                     });
                 },
+                userSuggestions,
                 shouldAutoFix: this.state.inferenceContext.enableRealtimeCodeFix,
                 fileChunkGeneratedCallback: streamChunks ? (filePath: string, chunk: string, format: 'full_content' | 'unified_diff') => {
                     this.broadcast(WebSocketMessageResponses.FILE_CHUNK_GENERATED, {
@@ -967,7 +968,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         const updatedPhases = previousPhases.map(p => p.name === phase.name ? {...p, completed: true} : p);
         this.setState({
             ...this.state,
-            generatedPhases: updatedPhases
+            generatedPhases: updatedPhases,
+            pendingUserInputs: []   // Reset pending user inputs in phase implementation so we can use it in this operation as well
         });
 
         this.logger().info("Completed phases:", JSON.stringify(updatedPhases, null, 2));
@@ -1047,8 +1049,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      */
     async reviewCode() {
         const context = GenerationContext.from(this.state, this.logger());
-        const issues = await this.fetchAllIssues();
-        this.resetIssues();
+        const issues = await this.fetchAllIssues(true);
         const issueReport = IssueReport.from(issues);
 
         // Report discovered issues
@@ -1167,8 +1168,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             // Add FileState-specific properties if missing
             migratedFilesMap[key] = {
                 ...migratedFile,
-                last_hash: migratedFile.last_hash || '',
-                last_modified: migratedFile.last_modified || Date.now(),
+                lasthash: migratedFile.lasthash || '',
+                lastmodified: migratedFile.lastmodified || Date.now(),
                 unmerged: migratedFile.unmerged || []
             };
             
@@ -1571,9 +1572,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         // return undefined;
     }
 
-    async fetchAllIssues(): Promise<AllIssues> {
+    async fetchAllIssues(resetIssues: boolean = false): Promise<AllIssues> {
         const [runtimeErrors, staticAnalysis] = await Promise.all([
-            this.fetchRuntimeErrors(false),
+            this.fetchRuntimeErrors(resetIssues),
             this.runStaticAnalysisCode()
         ]);
         
@@ -1581,15 +1582,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         this.logger().info("Fetched all issues:", JSON.stringify({ runtimeErrors, staticAnalysis, clientErrors }));
         
         return { runtimeErrors, staticAnalysis, clientErrors };
-    }
-
-    async resetIssues() {
-        this.logger().info("Resetting issues");
-        await this.getSandboxServiceClient().clearInstanceErrors(this.state.sandboxInstanceId!);
-        this.setState({
-            ...this.state,
-            clientReportedErrors: []
-        });
     }
 
     async deployToSandbox(files: FileOutputType[] = [], redeploy: boolean = false, commitMessage?: string): Promise<PreviewType | null> {
@@ -1653,7 +1645,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         throw new Error(`Failed to create sandbox instance: ${createResponse?.error || 'Unknown error'}`);
     }
 
-    private async executeDeployment(files: FileOutputType[] = [], redeploy: boolean = false, commitMessage?: string, retries: number = 3): Promise<PreviewType | null> {
+    private async executeDeployment(files: FileOutputType[] = [], redeploy: boolean = false, commitMessage?: string, retries: number = MAX_DEPLOYMENT_RETRIES): Promise<PreviewType | null> {
         const { templateDetails, generatedFilesMap } = this.state;
         let { sandboxInstanceId } = this.state;
         let previewURL: string | undefined;
@@ -1769,7 +1761,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         } catch (error) {
             this.logger().error("Error deploying to sandbox service:", error);
             const errorMsg = error instanceof Error ? error.message : String(error);
-            if (errorMsg.includes('Network connection lost')) {
+            if (errorMsg.includes('Network connection lost') || errorMsg.includes('Container service disconnected')) {
                 // For this particular error, reset the sandbox sessionId
                 this.resetSessionId();
             }
@@ -1782,6 +1774,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 this.broadcast(WebSocketMessageResponses.DEPLOYMENT_FAILED, {
                     error: `Error deploying to sandbox service: ${errorMsg}, Will retry...`,
                 });
+                // Wait for exponential backoff
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, MAX_DEPLOYMENT_RETRIES - retries) * 1000));
                 return this.executeDeployment(files, redeploy, commitMessage, retries - 1);
             }
             this.broadcast(WebSocketMessageResponses.DEPLOYMENT_FAILED, {
@@ -2327,6 +2321,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             });
 
             const context = GenerationContext.from(this.state, this.logger());
+            // Just fetch runtime errors
+            const errors = await this.fetchRuntimeErrors(false);
 
             // Process the user message using conversational assistant
             const conversationalResponse = await this.operations.processUserMessage.execute(
@@ -2345,7 +2341,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                             isStreaming,
                             tool,
                         });
-                    }
+                    },
+                    errors
                 }, 
                 { env: this.env, agentId: this.getAgentId(), context, logger: this.logger(), inferenceContext: this.state.inferenceContext }
             );

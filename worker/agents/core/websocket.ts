@@ -98,7 +98,7 @@ export function handleWebSocketMessage(agent: SimpleCodeGeneratorAgent, connecti
                 // Deploy current state for preview
                 logger.info('Deploying for preview');
                 agent.deployToSandbox().then((deploymentResult) => {
-                    logger.info('Preview deployed successfully!, deploymentResult: ', deploymentResult);
+                    logger.info(`Preview deployed successfully!, deploymentResult: ${deploymentResult}`);
                 }).catch((error: unknown) => {
                     logger.error('Error during preview deployment:', error);
                 });

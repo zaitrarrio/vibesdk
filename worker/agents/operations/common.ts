@@ -8,7 +8,6 @@ import { generalSystemPromptBuilder, USER_PROMPT_FORMATTER } from "../prompts";
 export function getSystemPromptWithProjectContext(
     systemPrompt: string,
     context: GenerationContext,
-    forCodeGen: boolean
 ): Message[] {
     const { query, blueprint, templateDetails, dependencies, allFiles, commandsHistory } = context;
 
@@ -18,12 +17,12 @@ export function getSystemPromptWithProjectContext(
             blueprint,
             templateDetails,
             dependencies,
-            forCodegen: forCodeGen,
         })), 
         createUserMessage(
             USER_PROMPT_FORMATTER.PROJECT_CONTEXT(
                 context.getCompletedPhases(),
                 allFiles, 
+                context.getFileTree(),
                 commandsHistory
             )
         ),

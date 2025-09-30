@@ -1,10 +1,10 @@
-import { RuntimeError, RuntimeErrorSchema, StaticAnalysisResponse, TemplateDetails, TemplateFileSchema } from "../services/sandbox/sandboxTypes";
+import { FileTreeNode, RuntimeError, StaticAnalysisResponse, TemplateDetails } from "../services/sandbox/sandboxTypes";
 import { TemplateRegistry } from "./inferutils/schemaFormatters";
 import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
 import { IssueReport } from "./domain/values/IssueReport";
 import { SCOFFormat } from "./streaming-formats/scof";
-import { MAX_PHASES } from "./core/state";
+import { FileState, MAX_PHASES } from "./core/state";
 
 export const PROMPT_UTILS = {
     /**
@@ -23,13 +23,38 @@ export const PROMPT_UTILS = {
         return result;
     },
 
-    serializeTemplate(template?: TemplateDetails, forCodegen: boolean = true): string {
+    serializeTreeNodes(node: FileTreeNode): string {
+        // The output starts with the root node's name.
+        const outputParts: string[] = [node.path.split('/').pop() || node.path];
+    
+        function processChildren(children: FileTreeNode[], prefix: string) {
+            children.forEach((child, index) => {
+                const isLast = index === children.length - 1;
+                const connector = isLast ? '└── ' : '├── ';
+                const displayName = child.path.split('/').pop() || child.path;
+    
+                outputParts.push(prefix + connector + displayName);
+    
+                // If the child is a directory with its own children, recurse deeper.
+                if (child.type === 'directory' && child.children && child.children.length > 0) {
+                    // The prefix for the next level depends on whether the current node
+                    // is the last in its list. This determines if we use a vertical line or a space.
+                    const childPrefix = prefix + (isLast ? '    ' : '│   ');
+                    processChildren(child.children, childPrefix);
+                }
+            });
+        }
+    
+        // Start the process if the root node has children.
+        if (node.children && node.children.length > 0) {
+            processChildren(node.children, '');
+        }
+    
+        return outputParts.join('\n');
+    },
+
+    serializeTemplate(template?: TemplateDetails): string {
         if (template) {
-            // const filesText = JSON.stringify(tpl.files, null, 2);
-            const filesText = TemplateRegistry.markdown.serialize(
-                { files: template.files.filter(f => !f.filePath.includes('package.json')) },
-                z.object({ files: z.array(TemplateFileSchema) })
-            );
             // const indentedFilesText = filesText.replace(/^(?=.)/gm, '\t\t\t\t'); // Indent each line with 4 spaces
             return `
 <TEMPLATE DETAILS>
@@ -37,17 +62,6 @@ The following are the details (structures and files) of the starting boilerplate
 
 Name: ${template.name}
 Frameworks: ${template.frameworks?.join(', ')}
-
-${forCodegen ? `` : `
-<TEMPLATE_CORE_FILES>
-**SHADCN COMPONENTS, Error boundary components and use-toast hook ARE PRESENT AND INSTALLED BUT EXCLUDED FROM THESE FILES DUE TO CONTEXT SPAM**
-${filesText}
-</TEMPLATE_CORE_FILES>`}
-
-<TEMPLATE_FILE_TREE>
-**Use these files as a reference for the file structure, components and hooks that are present**
-${JSON.stringify(template.fileTree, null, 2)}
-</TEMPLATE_FILE_TREE>
 
 Apart from these files, All SHADCN Components are present in ./src/components/ui/* and can be imported from there, example: import { Button } from "@/components/ui/button";
 **Please do not rewrite these components, just import them and use them**
@@ -93,9 +107,9 @@ and provide a preview url for the application.
         if (errors && errors.length > 0) {
             const errorsSerialized = errors.map(e => {
                 // Use rawOutput if available, otherwise serialize using schema
-                const errorText = e.rawOutput || TemplateRegistry.markdown.serialize(e, RuntimeErrorSchema);
+                const errorText = e.message;
                 // Truncate to 1000 characters to prevent context overflow
-                return errorText.slice(0, 1000);
+                return `<error>${errorText.slice(0, 1000)}</error>`;
             });
             return errorsSerialized.join('\n\n');
         } else {
@@ -754,29 +768,43 @@ bun add @geist-ui/react@1
     - ✅ **Performance Smooth:** 60fps animations and instant perceived load times`,
     PROJECT_CONTEXT: `Here is everything you will need for the project:
 
-<PROJECT CONTEXT>
+<PROJECT_CONTEXT>
 
-<COMPLETED PHASES>
+<COMPLETED_PHASES>
 
 The following phases have been completed and implemented:
 
 {{phases}}
 
-</COMPLETED PHASES>
+</COMPLETED_PHASES>
+
+<LAST_DIFFS>
+These are the changes that have been made to the codebase since the last phase:
+
+{{lastDiffs}}
+
+</LAST_DIFFS>
 
 <CODEBASE>
 
-Here are all the relevant files in the current codebase:
+Here are all the latest relevant files in the current codebase:
 
 {{files}}
 
 **THESE DO NOT INCLUDE PREINSTALLED SHADCN COMPONENTS, REDACTED FOR SIMPLICITY. BUT THEY DO EXIST AND YOU CAN USE THEM.**
 
+<FILE_TREE>
+**Use these files as a reference for the file structure, components and hooks that are present**
+
+{{fileTree}}
+
+</FILE_TREE>
+
 </CODEBASE>
 
 {{commandsHistory}}
 
-</PROJECT CONTEXT>
+</PROJECT_CONTEXT>
 `,
 }
 
@@ -923,7 +951,6 @@ export interface GeneralSystemPromptBuilderParams {
     query: string,
     templateDetails: TemplateDetails,
     dependencies: Record<string, string>,
-    forCodegen: boolean,
     blueprint?: Blueprint,
     language?: string,
     frameworks?: string[],
@@ -937,7 +964,7 @@ export function generalSystemPromptBuilder(
     // Base variables always present
     const variables: Record<string, string> = {
         query: params.query,
-        template: PROMPT_UTILS.serializeTemplate(params.templateDetails, params.forCodegen),
+        template: PROMPT_UTILS.serializeTemplate(params.templateDetails),
         dependencies: JSON.stringify(params.dependencies || [])
     };
 
@@ -963,7 +990,7 @@ export function generalSystemPromptBuilder(
 }
 
 export function issuesPromptFormatter(issues: IssueReport): string {
-    const runtimeErrorsText = issues.runtimeErrors.map((error) => `<error>${error.rawOutput}</error>`).join('\n');
+    const runtimeErrorsText = PROMPT_UTILS.serializeErrors(issues.runtimeErrors);
     const staticAnalysisText = PROMPT_UTILS.serializeStaticAnalysis(issues.staticAnalysis);
     
     return `## ERROR ANALYSIS PRIORITY MATRIX
@@ -989,10 +1016,12 @@ ${staticAnalysisText}
 
 
 export const USER_PROMPT_FORMATTER = {
-    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileOutputType[], commandsHistory: string[]) => {
+    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileState[], fileTree: FileTreeNode, commandsHistory: string[]) => {
         const variables: Record<string, string> = {
             phases: TemplateRegistry.markdown.serialize({ phases: phases }, z.object({ phases: z.array(PhaseConceptSchema) })),
             files: PROMPT_UTILS.serializeFiles(files),
+            fileTree: PROMPT_UTILS.serializeTreeNodes(fileTree),
+            lastDiffs: files.map(file => file.lastDiff).join('\n'),
             commandsHistory: commandsHistory.length > 0 ? `<COMMANDS HISTORY>
 
 The following commands have been executed successfully in the project environment so far (These may not include the ones that are currently pending):

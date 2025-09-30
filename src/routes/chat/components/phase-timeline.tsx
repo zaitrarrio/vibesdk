@@ -487,34 +487,53 @@ export function PhaseTimeline({
 							whileTap={{ scale: 0.98 }}
 						>
 							{/* Collapsed Header */}
-							<motion.div
-								className="px-4 py-3 flex items-center gap-3"
-								initial={{ opacity: 0.8 }}
-								animate={{ opacity: 1 }}
-								exit={{ opacity: 0.8 }}
-								transition={commonTransitions.fast}
-							>
-								<div className="flex-shrink-0">
-									{collapsedBarInfo.icon}
-								</div>
-								<div className="flex-1 min-w-0">
-									<div className="text-sm font-medium text-text-primary truncate">
-										{collapsedBarInfo.text}
-									</div>
-									{collapsedBarInfo.subtitle && (
-										<div className="text-xs text-text-secondary truncate">
-											{collapsedBarInfo.subtitle}
-										</div>
-									)}
-								</div>
-								{collapsedBarInfo.badge && (
-									<div className="flex-shrink-0">
-										<span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full">
-											{collapsedBarInfo.badge}
-										</span>
-									</div>
-								)}
-							</motion.div>
+                            <motion.div
+                                className="px-4 py-3 flex items-center gap-3"
+                                initial={{ opacity: 0.8 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0.8 }}
+                                transition={commonTransitions.fast}
+                            >
+                                <div className="flex-shrink-0">
+                                    {collapsedBarInfo.icon}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-text-primary truncate">
+                                        {collapsedBarInfo.text}
+                                    </div>
+                                    {collapsedBarInfo.subtitle && (
+                                        <div className="text-xs text-text-secondary truncate">
+                                            {collapsedBarInfo.subtitle}
+                                        </div>
+                                    )}
+                                </div>
+                                {collapsedBarInfo.badge && (
+                                    <div className="flex-shrink-0">
+                                        <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full">
+                                            {collapsedBarInfo.badge}
+                                        </span>
+                                    </div>
+                                )}
+                                {chatId && handleDeployToCloudflare && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeployToCloudflare(chatId);
+                                        }}
+                                        disabled={!!isDeploying}
+                                        className="ml-2 flex items-center gap-1.5 px-2.5 py-1 bg-accent hover:bg-accent/90 disabled:bg-accent/50 text-white rounded-full text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                                        title={isDeploying ? 'Deploying...' : 'Deploy to Cloudflare'}
+                                        aria-label={isDeploying ? 'Deploying' : 'Deploy to Cloudflare'}
+                                    >
+                                        {isDeploying ? (
+                                            <StatusLoader size="sm" color="accent" />
+                                        ) : (
+                                            <Zap className="w-3 h-3" />
+                                        )}
+                                        <span className="hidden sm:inline">{isDeploying ? 'Deploying...' : 'Deploy'}</span>
+                                    </button>
+                                )}
+                            </motion.div>
 
 							{/* Expanded Content */}
 							<AnimatePresence>

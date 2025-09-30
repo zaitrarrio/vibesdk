@@ -100,7 +100,6 @@ export class ProjectSetupAssistant extends Assistant<Env> {
             blueprint,
             templateDetails: template,
             dependencies: template.deps,
-            forCodegen: false
         }))]);
         this.query = query;
         this.logger = createObjectLogger(this, 'ProjectSetupAssistant')
