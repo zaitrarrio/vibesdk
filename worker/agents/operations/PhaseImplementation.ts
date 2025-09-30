@@ -322,9 +322,7 @@ Please incorporate these suggestions **on priority** in the implementation of th
 **Client Feedback & Suggestions**:
 ${suggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n')}
 
-**IMPORTANT**: These suggestions should be considered alongside the project's natural progression. If the project is mostly finished, just focus on implementing the suggestions.
-If any suggestions conflict with architectural patterns or project goals, prioritize architectural consistency while finding creative ways to address user needs.
-Consider these suggestions when planning the files, components, and features for this phase.
+**IMPORTANT**: Give the above suggestions higher precedance and make sure they are accounted for properly, elegantly and in a non-hackish way. 
 Try to make small targeted, isolated changes to the codebase to address the user's suggestions unless a complete rework is required.
 </USER SUGGESTIONS>`;
 };
