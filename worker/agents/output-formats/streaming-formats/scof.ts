@@ -1,7 +1,7 @@
 import { CodeGenerationFormat, CodeGenerationStreamingState, ParsingState } from './base';
-import { FileGenerationOutputType } from "../schemas";
+import { FileGenerationOutputType } from "../../schemas";
 import { applyDiff } from '../diff-formats/udiff';
-import { extractCommands } from '../utils/common';
+import { extractCommands } from '../../utils/common';
 
 // SCOF-specific parsing state with comprehensive tracking
 export interface SCOFParsingState extends ParsingState {
@@ -556,7 +556,7 @@ export class SCOFFormat extends CodeGenerationFormat {
         
         for (const file of files) {
             if (file.format === 'unified_diff') {
-                output += `# Applying diff to file: ${file.filePath}\n`;
+                output += `# Patch for file: ${file.filePath}\n`;
                 output += formatAsComment(file.filePurpose);
                 output += `cat << 'EOF' | patch ${file.filePath}\n`;
                 output += file.fileContents;
@@ -566,7 +566,7 @@ export class SCOFFormat extends CodeGenerationFormat {
                 output += 'EOF\n\n';
             } else {
                 // Default to full_content format
-                output += `# Creating new file: ${file.filePath}\n`;
+                output += `# File content for: ${file.filePath}\n`;
                 output += formatAsComment(file.filePurpose);
                 output += `cat > ${file.filePath} << 'EOF'\n`;
                 output += file.fileContents;

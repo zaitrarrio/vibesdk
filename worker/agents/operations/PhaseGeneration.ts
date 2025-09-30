@@ -142,11 +142,8 @@ Please incorporate these suggestions **on priority** into your phase planning:
 **Client Feedback & Suggestions**:
 ${suggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n')}
 
-**IMPORTANT**: These suggestions should be considered alongside the project's natural progression. If the project is mostly finished, just focus on implementing the suggestions.
-If any suggestions conflict with architectural patterns or project goals, prioritize architectural consistency while finding creative ways to address user needs.
-Consider these suggestions when planning the files, components, and features for this phase.
-Try to make small targeted, isolated changes to the codebase to address the user's suggestions unless a complete rework is required.
-
+**IMPORTANT**: Give the above suggestions highest precedence and make sure they are accounted for properly, elegantly and in a non-hackish way. 
+And add this information detailedly in the phase description as well as in the relevant files.
 Explicitly state user's needs and suggestions in relevant files and components. For example, if user provides an image url, explicitly state it as-in in changes required for that file.
 </USER SUGGESTIONS>`;
 };

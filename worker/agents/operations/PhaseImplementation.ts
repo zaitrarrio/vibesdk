@@ -3,14 +3,15 @@ import { IssueReport } from '../domain/values/IssueReport';
 import { createUserMessage } from '../inferutils/common';
 import { executeInference } from '../inferutils/infer';
 import { issuesPromptFormatter, PROMPT_UTILS, STRATEGIES } from '../prompts';
-import { CodeGenerationStreamingState } from '../streaming-formats/base';
+import { CodeGenerationStreamingState } from '../output-formats/streaming-formats/base';
 import { FileProcessing } from '../domain/pure/FileProcessing';
 // import { RealtimeCodeFixer } from '../assistants/realtimeCodeFixer';
 import { AgentOperation, getSystemPromptWithProjectContext, OperationOptions } from '../operations/common';
-import { SCOFFormat, SCOFParsingState } from '../streaming-formats/scof';
+import { SCOFFormat, SCOFParsingState } from '../output-formats/streaming-formats/scof';
 import { TemplateRegistry } from '../inferutils/schemaFormatters';
 import { IsRealtimeCodeFixerEnabled, RealtimeCodeFixer } from '../assistants/realtimeCodeFixer';
 import { AGENT_CONFIG } from '../inferutils/config';
+import { CodeSerializerType } from '../utils/codeSerializers';
 
 export interface PhaseImplementationInputs {
     phase: PhaseConceptType
@@ -321,9 +322,7 @@ Please incorporate these suggestions **on priority** in the implementation of th
 **Client Feedback & Suggestions**:
 ${suggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n')}
 
-**IMPORTANT**: These suggestions should be considered alongside the project's natural progression. If the project is mostly finished, just focus on implementing the suggestions.
-If any suggestions conflict with architectural patterns or project goals, prioritize architectural consistency while finding creative ways to address user needs.
-Consider these suggestions when planning the files, components, and features for this phase.
+**IMPORTANT**: Give the above suggestions higher precedance and make sure they are accounted for properly, elegantly and in a non-hackish way. 
 Try to make small targeted, isolated changes to the codebase to address the user's suggestions unless a complete rework is required.
 </USER SUGGESTIONS>`;
 };
@@ -359,7 +358,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
         // Notify phase start
         const codeGenerationFormat = new SCOFFormat();
         // Build messages for generation
-        const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context);
+        const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, CodeSerializerType.SCOF);
         messages.push(createUserMessage(userPromptFormatter(phase, issues, userSuggestions) + codeGenerationFormat.formatInstructions()));
     
         // Initialize streaming state
@@ -470,7 +469,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
 
         try {
             let readmePrompt = README_GENERATION_PROMPT;
-            const messages = [...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context), createUserMessage(readmePrompt)];
+            const messages = [...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, CodeSerializerType.SCOF), createUserMessage(readmePrompt)];
 
             const results = await executeInference({
                 env: env,
