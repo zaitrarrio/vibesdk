@@ -508,6 +508,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         executionResults = await this.executePhaseImplementation(phaseConcept, staticAnalysisCache, userSuggestions);
                         currentDevState = executionResults.currentDevState;
                         staticAnalysisCache = executionResults.staticAnalysis;
+                        userSuggestions = undefined;
                         break;
                     case CurrentDevState.REVIEWING:
                         currentDevState = await this.executeReviewCycle();
@@ -556,6 +557,15 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             
             // Generate next phase with user suggestions if available
             const userSuggestions = this.state.pendingUserInputs.length > 0 ? this.state.pendingUserInputs : undefined;
+
+            if (userSuggestions && userSuggestions.length > 0) {
+                // Only reset pending user inputs if user suggestions were read
+                this.logger().info("Resetting pending user inputs", { userSuggestions });
+                this.setState({
+                    ...this.state,
+                    pendingUserInputs: []
+                });
+            }
             const nextPhase = await this.generateNextPhase(currentIssues, userSuggestions);
                 
             if (!nextPhase) {
@@ -969,7 +979,6 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         this.setState({
             ...this.state,
             generatedPhases: updatedPhases,
-            pendingUserInputs: []   // Reset pending user inputs in phase implementation so we can use it in this operation as well
         });
 
         this.logger().info("Completed phases:", JSON.stringify(updatedPhases, null, 2));
