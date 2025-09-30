@@ -9,7 +9,7 @@ export enum CodeSerializerType {
 export type CodeSerializer = (files: FileOutputType[]) => string;
 
 function detectLanguage(filePath: string): string {
-    const extension = filePath.split('.').pop();
+    const extension = filePath.split('.').pop() ?? '';
     switch (extension) {
         case 'js':
             return 'javascript';
