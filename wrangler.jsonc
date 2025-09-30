@@ -70,7 +70,7 @@
                 "memory_mib": 4096,
                 "disk_mb": 6144
             },
-            "rollout_step_percentage": 20
+            "rollout_step_percentage": 100
 		}
 	],
 	"d1_databases": [
@@ -112,9 +112,9 @@
             "remote": true
         }
     ],
-    "placement": {
-      "mode": "smart"
-    },
+    // "placement": {
+    //   "mode": "smart"
+    // },
 	"migrations": [
 		{
 			"new_sqlite_classes": [

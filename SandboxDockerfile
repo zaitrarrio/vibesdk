@@ -40,7 +40,7 @@ ENV VITE_LOGGER_TYPE=json
 # Reset workdir
 WORKDIR /app
 
-EXPOSE 3000 8000-8999
+EXPOSE 3000
 
 # Run the same command as the original image
 CMD ["bun", "index.ts"]
