@@ -142,7 +142,7 @@ Please incorporate these suggestions **on priority** into your phase planning:
 **Client Feedback & Suggestions**:
 ${suggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n')}
 
-**IMPORTANT**: Give the above suggestions highest precedance and make sure they are accounted for properly, elegantly and in a non-hackish way. 
+**IMPORTANT**: Give the above suggestions highest precedence and make sure they are accounted for properly, elegantly and in a non-hackish way. 
 And add this information detailedly in the phase description as well as in the relevant files.
 Explicitly state user's needs and suggestions in relevant files and components. For example, if user provides an image url, explicitly state it as-in in changes required for that file.
 </USER SUGGESTIONS>`;
