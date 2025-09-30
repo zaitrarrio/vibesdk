@@ -12,6 +12,8 @@ import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { toolWebSearchDefinition } from "../tools/toolkit/web-search";
 import { toolWeatherDefinition } from "../tools/toolkit/weather";
 import { ToolDefinition } from "../tools/types";
+import { PROMPT_UTILS } from "../prompts";
+import { RuntimeError } from "worker/services/sandbox/sandboxTypes";
 
 // Constants
 const CHUNK_SIZE = 64;
@@ -25,6 +27,7 @@ export interface UserConversationInputs {
         isStreaming: boolean,
         tool?: { name: string; status: 'start' | 'success' | 'error'; args?: Record<string, unknown> }
     ) => void;
+    errors: RuntimeError[];
 }
 
 export interface UserConversationOutputs {
@@ -128,6 +131,9 @@ You can also execute multiple tools in a sequence, for example, to search the we
 ## Original Project query:
 {{query}}
 
+## Project runtime errors (if any):
+{{errors}}
+
 Remember: You're here to help users build great applications through natural conversation and the tools at your disposal. Communicate with the AI coding team transparently and clearly. For big changes, request them (via queue_request tool) to implement changes in multiple phases.`;
 
 const FALLBACK_USER_RESPONSE = "I understand you'd like to make some changes to your project. Let me make sure this is incorporated in the next phase of development.";
@@ -167,13 +173,14 @@ export function buildEditAppTool(stateMutator: (modificationRequest: string) => 
 export class UserConversationProcessor extends AgentOperation<UserConversationInputs, UserConversationOutputs> {
     async execute(inputs: UserConversationInputs, options: OperationOptions): Promise<UserConversationOutputs> {
         const { env, logger, context } = options;
-        const { userMessage, pastMessages } = inputs;
+        const { userMessage, pastMessages, errors } = inputs;
         logger.info("Processing user message", { 
             messageLength: inputs.userMessage.length,
         });
 
         try {
-            const systemPrompts = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context);
+            const systemPrompt = SYSTEM_PROMPT.replace("{{errors}}", PROMPT_UTILS.serializeErrors(errors));
+            const systemPromptMessages = getSystemPromptWithProjectContext(systemPrompt, context);
             const messages = [...pastMessages, {...createUserMessage(userMessage), conversationId: IdGenerator.generateConversationId()}];
 
             let extractedUserResponse = "";
@@ -217,7 +224,7 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
             // Don't save the system prompts so that every time new initial prompts can be generated with latest project context
             const result = await executeInference({
                 env: env,
-                messages: [...systemPrompts, ...messages],
+                messages: [...systemPromptMessages, ...messages],
                 agentActionName: "conversationalResponse",
                 context: options.inferenceContext,
                 tools, // Enable tools for the conversational AI

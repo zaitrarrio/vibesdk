@@ -1375,7 +1375,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 let response: {success: boolean, errors: StoredError[]};
                 try {
                     response = JSON.parse(result.stdout);
-                    this.logger.info('getInstanceErrors', result.stdout);
+                    this.logger.info(`getInstanceErrors - ${response.errors.length ? 'errors found' : ''}: ${result.stdout}`);
                 } catch (parseError) {
                     this.logger.warn('Failed to parse CLI output as JSON', { stdout: result.stdout });
                     throw new Error('Invalid JSON response from CLI tools');

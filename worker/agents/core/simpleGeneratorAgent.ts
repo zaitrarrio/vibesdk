@@ -2321,6 +2321,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             });
 
             const context = GenerationContext.from(this.state, this.logger());
+            // Just fetch runtime errors
+            const errors = await this.fetchRuntimeErrors(false);
 
             // Process the user message using conversational assistant
             const conversationalResponse = await this.operations.processUserMessage.execute(
@@ -2339,7 +2341,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                             isStreaming,
                             tool,
                         });
-                    }
+                    },
+                    errors
                 }, 
                 { env: this.env, agentId: this.getAgentId(), context, logger: this.logger(), inferenceContext: this.state.inferenceContext }
             );
