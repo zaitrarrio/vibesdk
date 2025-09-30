@@ -87,10 +87,6 @@ ${PROMPT_UTILS.REACT_RENDER_LOOP_PREVENTION}
 "{{query}}"
 </CLIENT REQUEST>
 
-<BLUEPRINT>
-{{blueprint}}
-</BLUEPRINT>
-
 <DEPENDENCIES>
 These are the dependencies that came installed in the environment:
 {{dependencies}}
@@ -99,6 +95,8 @@ If anything else is used in the project, make sure it is installed in the enviro
 </DEPENDENCIES>
 
 {{template}}`;
+
+// Open question: Do we need to pass blueprint to code reviewer?
 
 const USER_PROMPT = `
 <REPORTED_ISSUES>
@@ -209,7 +207,6 @@ export class CodeReviewOperation extends AgentOperation<CodeReviewInputs, CodeRe
                 blueprint: context.blueprint,
                 templateDetails: context.templateDetails,
                 dependencies: context.dependencies,
-                forCodegen: true
             })),
             createUserMessage(userPromptFormatter(issues, filesContext)),
         ];

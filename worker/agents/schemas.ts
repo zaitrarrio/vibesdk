@@ -19,13 +19,12 @@ export const FileOutputSchema = z.object({
 export const FileConceptSchema = z.object({
     path: z.string().describe('Path to the file relative to the project root. File name should be valid and not contain any special characters apart from hyphen, underscore and dot.'),
     purpose: z.string().describe('Very short, Breif, Concise, to the point description, purpose and expected contents of this file including its role in the architecture, data and code flow details'),
-    changes: z.string().nullable().describe('Concise and brief description of the changes to be made to the file, if it\'s not a new file'),
-    // scratchSpacee: z.string().describe('Scratch space for thinking, problem solving or notes. Use this space to write down any thoughts or ideas that come to mind for making the file'),
+    changes: z.string().nullable().describe('Specific, directed changes to be made to the file, if it\'s not a new file'),
 })
 
 export const PhaseConceptSchema = z.object({
     name: z.string().describe('Name of the phase (Utility, api, frontend, etc)'),
-    description: z.string().describe('Concise description of the phase'),
+    description: z.string().describe('Concise, descriptive, directed description of the phase'),
     files: z.array(FileConceptSchema).describe('Files that need to be written in this stage (new or modified existing), including paths and purposes of each source/code file.'),
     lastPhase: z.boolean().describe('Whether this is the last phase to be implemented. If true, no next phase is required and the process will end here'),
 })

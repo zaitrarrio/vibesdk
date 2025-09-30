@@ -68,7 +68,7 @@
             "instance_type": {
                 "vcpu": 4,
                 "memory_mib": 4096,
-                "disk_mb": 10240
+                "disk_mb": 6144
             },
             "rollout_step_percentage": 100
 		}
@@ -112,6 +112,9 @@
             "remote": true
         }
     ],
+    // "placement": {
+    //   "mode": "smart"
+    // },
 	"migrations": [
 		{
 			"new_sqlite_classes": [

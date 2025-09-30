@@ -1,3 +1,4 @@
+import * as Diff from 'diff';
 import { IFileManager } from '../interfaces/IFileManager';
 import { IStateManager } from '../interfaces/IStateManager';
 import { FileOutputType } from '../../schemas';
@@ -29,37 +30,39 @@ export class FileManager implements IFileManager {
     }
 
     saveGeneratedFile(file: FileOutputType): void {
-        const state = this.stateManager.getState();
-        this.stateManager.setState({
-            ...state,
-            generatedFilesMap: {
-                ...state.generatedFilesMap,
-                [file.filePath]: {
-                    ...file,
-                    last_hash: '',
-                    last_modified: Date.now(),
-                    unmerged: []
-                }
-            }
-        });
+        this.saveGeneratedFiles([file]);
     }
 
     saveGeneratedFiles(files: FileOutputType[]): void {
         const state = this.stateManager.getState();
-        const newFilesMap = { ...state.generatedFilesMap };
+        const filesMap = { ...state.generatedFilesMap };
         
         for (const file of files) {
-            newFilesMap[file.filePath] = {
+            let lastDiff = '';
+            const oldFile = filesMap[file.filePath];
+            if (oldFile) {
+                try {
+                    // Generate diff of old file and new file
+                    lastDiff = Diff.createPatch(file.filePath, oldFile.fileContents, file.fileContents);
+                    if (lastDiff) {
+                        console.log(`Generated diff for file ${file.filePath}:`, lastDiff);
+                    }
+                } catch (error) {
+                    console.error(`Failed to generate diff for file ${file.filePath}:`, error);
+                }
+            }
+            filesMap[file.filePath] = {
                 ...file,
-                last_hash: '',
-                last_modified: Date.now(),
-                unmerged: []
+                lasthash: '',
+                lastmodified: Date.now(),
+                unmerged: [],
+                lastDiff
             };
         }
         
         this.stateManager.setState({
             ...state,
-            generatedFilesMap: newFilesMap
+            generatedFilesMap: filesMap
         });
     }
 

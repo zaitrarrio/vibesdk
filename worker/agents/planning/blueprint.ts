@@ -1,10 +1,12 @@
-import { TemplateDetails } from '../../services/sandbox/sandboxTypes'; // Import the type
+import { TemplateDetails, TemplateFileSchema } from '../../services/sandbox/sandboxTypes'; // Import the type
 import { STRATEGIES, PROMPT_UTILS, generalSystemPromptBuilder } from '../prompts';
 import { executeInference } from '../inferutils/infer';
 import { Blueprint, BlueprintSchema, TemplateSelection } from '../schemas';
 import { createLogger } from '../../logger';
 import { createSystemMessage, createUserMessage } from '../inferutils/common';
 import { InferenceContext } from '../inferutils/config.types';
+import { TemplateRegistry } from '../inferutils/schemaFormatters';
+import z from 'zod';
 
 const logger = createLogger('Blueprint');
 
@@ -127,6 +129,16 @@ ${STRATEGIES.FRONTEND_FIRST_PLANNING}
 <STARTING TEMPLATE>
 {{template}}
 
+<TEMPLATE_CORE_FILES>
+**SHADCN COMPONENTS, Error boundary components and use-toast hook ARE PRESENT AND INSTALLED BUT EXCLUDED FROM THESE FILES DUE TO CONTEXT SPAM**
+{{filesText}}
+</TEMPLATE_CORE_FILES>
+
+<TEMPLATE_FILE_TREE>
+**Use these files as a reference for the file structure, components and hooks that are present**
+{{fileTreeText}}
+</TEMPLATE_FILE_TREE>
+
 Preinstalled dependencies:
 {{dependencies}}
 </STARTING TEMPLATE>`;
@@ -222,6 +234,7 @@ Preinstalled dependencies:
 // - User request and use case specific instructions must be carefully understood and explicitly integrated.
 // `;
 
+
 export interface BlueprintGenerationArgs {
     env: Env;
     inferenceContext: InferenceContext;
@@ -250,19 +263,25 @@ export async function generateBlueprint({ env, inferenceContext, query, language
         // Build the SYSTEM prompt for blueprint generation
         // ---------------------------------------------------------------------------
 
-        const systemPrompt = createSystemMessage(generalSystemPromptBuilder(SYSTEM_PROMPT, {
+        const filesText = TemplateRegistry.markdown.serialize(
+            { files: templateDetails.files.filter(f => !f.filePath.includes('package.json')) },
+            z.object({ files: z.array(TemplateFileSchema) })
+        );
+
+        const fileTreeText = PROMPT_UTILS.serializeTreeNodes(templateDetails.fileTree);
+        const systemPrompt = SYSTEM_PROMPT.replace('{{filesText}}', filesText).replace('{{fileTreeText}}', fileTreeText);
+        const systemPromptMessage = createSystemMessage(generalSystemPromptBuilder(systemPrompt, {
             query,
             templateDetails,
             frameworks,
             templateMetaInfo,
-            forCodegen: false,
             blueprint: undefined,
             language,
             dependencies: templateDetails.deps,
         }));
 
         const messages = [
-            systemPrompt,
+            systemPromptMessage,
             createUserMessage(`CLIENT REQUEST: "${query}"`)
         ];
 

@@ -99,7 +99,7 @@ export class RemoteSandboxServiceClient extends BaseSandboxService{
             const validation = schema.safeParse(responseData);
 
             if (!validation.success) {
-                this.logger.error('Failed to validate response', validation.error.errors, { url });
+                this.logger.error('Failed to validate response from runner service', validation.error.errors, { url, responseData });
                 return {
                     success: false,
                     error: "Failed to validate response"

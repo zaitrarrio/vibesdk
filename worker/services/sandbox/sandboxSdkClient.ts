@@ -591,7 +591,7 @@ export class SandboxSdkClient extends BaseSandboxService {
         try {
             // Use CLI tools for enhanced monitoring instead of direct process start
             const process = await this.getSandbox().startProcess(
-                `monitor-cli process start --instance-id ${instanceId} --port ${port} -- bun run dev`, 
+                `VITE_LOGGER_TYPE=json monitor-cli process start --instance-id ${instanceId} --port ${port} -- bun run dev`, 
                 { cwd: instanceId }
             );
             this.logger.info('Development server started', { instanceId, processId: process.id });
@@ -1375,7 +1375,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 let response: {success: boolean, errors: StoredError[]};
                 try {
                     response = JSON.parse(result.stdout);
-                    this.logger.info('getInstanceErrors', result.stdout);
+                    this.logger.info(`getInstanceErrors - ${response.errors.length ? 'errors found' : ''}: ${result.stdout}`);
                 } catch (parseError) {
                     this.logger.warn('Failed to parse CLI output as JSON', { stdout: result.stdout });
                     throw new Error('Invalid JSON response from CLI tools');
