@@ -1,7 +1,7 @@
 import { CodeGenerationFormat, CodeGenerationStreamingState, ParsingState } from './base';
-import { FileGenerationOutputType } from "../schemas";
+import { FileGenerationOutputType } from "../../schemas";
 import { applyDiff } from '../diff-formats/udiff';
-import { extractCommands } from '../utils/common';
+import { extractCommands } from '../../utils/common';
 
 // SCOF-specific parsing state with comprehensive tracking
 export interface SCOFParsingState extends ParsingState {

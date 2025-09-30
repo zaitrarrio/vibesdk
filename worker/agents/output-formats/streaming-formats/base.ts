@@ -3,7 +3,7 @@
 //     fileContents: string;
 // }
 
-import { FileGenerationOutputType } from "../schemas";
+import { FileGenerationOutputType } from "../../schemas";
 
 // export interface FileObject extends CompleteFileObject {
 //     format: 'full_content' | 'unified_diff';

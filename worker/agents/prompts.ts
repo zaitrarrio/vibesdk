@@ -3,7 +3,7 @@ import { TemplateRegistry } from "./inferutils/schemaFormatters";
 import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
 import { IssueReport } from "./domain/values/IssueReport";
-import { SCOFFormat } from "./streaming-formats/scof";
+import { SCOFFormat } from "./output-formats/streaming-formats/scof";
 import { FileState, MAX_PHASES } from "./core/state";
 
 export const PROMPT_UTILS = {
@@ -149,10 +149,6 @@ ${typecheckOutput}`;
     },
 
     serializeFiles(files: FileOutputType[]): string {
-        // TemplateRegistry.markdown.serialize({ files: files }, z.object({ files: z.array(FileOutputSchema) }))
-        // return files.map(file => {
-        //     return `File: ${file.filePath}\nPurpose: ${file.filePurpose}\nContents: ${file.fileContents}`;
-        // }).join('\n');
         // Use scof format
         return new SCOFFormat().serialize(files.map(file => {
             return {

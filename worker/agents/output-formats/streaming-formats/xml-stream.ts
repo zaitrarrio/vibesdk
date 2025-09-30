@@ -5,7 +5,7 @@
  */
 
 import { CodeGenerationFormat, CodeGenerationStreamingState, ParsingState } from './base';
-import { FileGenerationOutputType } from "../schemas";
+import { FileGenerationOutputType } from "../../schemas";
 
 // XML parsing state
 export interface XmlParsingState extends ParsingState {
