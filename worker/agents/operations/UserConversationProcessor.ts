@@ -14,6 +14,7 @@ import { toolWeatherDefinition } from "../tools/toolkit/weather";
 import { ToolDefinition } from "../tools/types";
 import { PROMPT_UTILS } from "../prompts";
 import { RuntimeError } from "worker/services/sandbox/sandboxTypes";
+import { CodeSerializerType } from "../utils/codeSerializers";
 
 // Constants
 const CHUNK_SIZE = 64;
@@ -180,7 +181,7 @@ export class UserConversationProcessor extends AgentOperation<UserConversationIn
 
         try {
             const systemPrompt = SYSTEM_PROMPT.replace("{{errors}}", PROMPT_UTILS.serializeErrors(errors));
-            const systemPromptMessages = getSystemPromptWithProjectContext(systemPrompt, context);
+            const systemPromptMessages = getSystemPromptWithProjectContext(systemPrompt, context, CodeSerializerType.SIMPLE);
             const messages = [...pastMessages, {...createUserMessage(userMessage), conversationId: IdGenerator.generateConversationId()}];
 
             let extractedUserResponse = "";

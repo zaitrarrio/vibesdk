@@ -5,6 +5,7 @@ import { AgentOperation, OperationOptions } from '../operations/common';
 import { FileOutputType, PhaseConceptType } from '../schemas';
 import { SCOFFormat } from '../output-formats/streaming-formats/scof';
 import { CodeIssue } from '../../services/sandbox/sandboxTypes';
+import { CodeSerializerType } from '../utils/codeSerializers';
 
 export interface FastCodeFixerInputs {
     query: string;
@@ -65,7 +66,7 @@ const userPromptFormatter = (query: string, issues: CodeIssue[], allFiles: FileO
     const prompt = PROMPT_UTILS.replaceTemplateVariables(USER_PROMPT, {
         query,
         issues: issues.length > 0 ? JSON.stringify(issues, null, 2) : 'No specific issues reported - perform general code review',
-        codebase: PROMPT_UTILS.serializeFiles(allFiles)
+        codebase: PROMPT_UTILS.serializeFiles(allFiles, CodeSerializerType.SIMPLE)
     });
     return PROMPT_UTILS.verifyPrompt(prompt);
 }

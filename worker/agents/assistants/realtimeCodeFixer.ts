@@ -1,6 +1,7 @@
 import { TemplateDetails } from "../../services/sandbox/sandboxTypes";
 import { createAssistantMessage, createSystemMessage, createUserMessage } from "../inferutils/common";
 import { FileOutputType, PhaseConceptType } from "../schemas";
+import { CodeSerializerType } from "../utils/codeSerializers";
 import { createObjectLogger } from "../../logger";
 import { executeInference } from "../inferutils/infer";
 import { PROMPT_UTILS } from "../prompts";
@@ -174,7 +175,7 @@ Just reply with the corrected SEARCH/REPLACE blocks in this format:
 const userPromptFormatter = (user_prompt: string, query: string, file: FileOutputType, previousFiles?: FileOutputType[], currentPhase?: PhaseConceptType, issues?: string[]) => {
     const variables: Record<string, string> = {
         query,
-        previousFiles: previousFiles ? PROMPT_UTILS.serializeFiles(previousFiles) : '',
+        previousFiles: previousFiles ? PROMPT_UTILS.serializeFiles(previousFiles, CodeSerializerType.SIMPLE) : '',
         filePath: file.filePath,
         filePurpose: file.filePurpose,
         fileContents: file.fileContents,

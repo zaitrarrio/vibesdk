@@ -3,8 +3,8 @@ import { TemplateRegistry } from "./inferutils/schemaFormatters";
 import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
 import { IssueReport } from "./domain/values/IssueReport";
-import { SCOFFormat } from "./output-formats/streaming-formats/scof";
 import { FileState, MAX_PHASES } from "./core/state";
+import { CODE_SERIALIZERS, CodeSerializerType } from "./utils/codeSerializers";
 
 export const PROMPT_UTILS = {
     /**
@@ -148,14 +148,9 @@ ${typecheckOutput}`;
         return prompt;
     },
 
-    serializeFiles(files: FileOutputType[]): string {
+    serializeFiles(files: FileOutputType[], serializerType: CodeSerializerType): string {
         // Use scof format
-        return new SCOFFormat().serialize(files.map(file => {
-            return {
-                ...file,
-                format: 'full_content'
-            }
-        }));
+        return CODE_SERIALIZERS[serializerType](files);
     },
 
     REACT_RENDER_LOOP_PREVENTION: `<REACT_RENDER_LOOP_PREVENTION>
@@ -1012,10 +1007,10 @@ ${staticAnalysisText}
 
 
 export const USER_PROMPT_FORMATTER = {
-    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileState[], fileTree: FileTreeNode, commandsHistory: string[]) => {
+    PROJECT_CONTEXT: (phases: PhaseConceptType[], files: FileState[], fileTree: FileTreeNode, commandsHistory: string[], serializerType: CodeSerializerType = CodeSerializerType.SIMPLE) => {
         const variables: Record<string, string> = {
             phases: TemplateRegistry.markdown.serialize({ phases: phases }, z.object({ phases: z.array(PhaseConceptSchema) })),
-            files: PROMPT_UTILS.serializeFiles(files),
+            files: PROMPT_UTILS.serializeFiles(files, serializerType),
             fileTree: PROMPT_UTILS.serializeTreeNodes(fileTree),
             lastDiffs: files.map(file => file.lastDiff).join('\n'),
             commandsHistory: commandsHistory.length > 0 ? `<COMMANDS HISTORY>

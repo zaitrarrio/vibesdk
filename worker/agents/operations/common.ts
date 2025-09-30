@@ -4,10 +4,12 @@ import { Message } from "../inferutils/common";
 import { InferenceContext } from "../inferutils/config.types";
 import { createUserMessage, createSystemMessage, createAssistantMessage } from "../inferutils/common";
 import { generalSystemPromptBuilder, USER_PROMPT_FORMATTER } from "../prompts";
+import { CodeSerializerType } from "../utils/codeSerializers";
 
 export function getSystemPromptWithProjectContext(
     systemPrompt: string,
     context: GenerationContext,
+    serializerType: CodeSerializerType = CodeSerializerType.SIMPLE
 ): Message[] {
     const { query, blueprint, templateDetails, dependencies, allFiles, commandsHistory } = context;
 
@@ -23,7 +25,8 @@ export function getSystemPromptWithProjectContext(
                 context.getCompletedPhases(),
                 allFiles, 
                 context.getFileTree(),
-                commandsHistory
+                commandsHistory,
+                serializerType  
             )
         ),
         createAssistantMessage(`I have thoroughly gone through the whole codebase and understood the current implementation and project requirements. We can continue.`)

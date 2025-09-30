@@ -11,6 +11,7 @@ import { SCOFFormat, SCOFParsingState } from '../output-formats/streaming-format
 import { TemplateRegistry } from '../inferutils/schemaFormatters';
 import { IsRealtimeCodeFixerEnabled, RealtimeCodeFixer } from '../assistants/realtimeCodeFixer';
 import { AGENT_CONFIG } from '../inferutils/config';
+import { CodeSerializerType } from '../utils/codeSerializers';
 
 export interface PhaseImplementationInputs {
     phase: PhaseConceptType
@@ -359,7 +360,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
         // Notify phase start
         const codeGenerationFormat = new SCOFFormat();
         // Build messages for generation
-        const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context);
+        const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, CodeSerializerType.SCOF);
         messages.push(createUserMessage(userPromptFormatter(phase, issues, userSuggestions) + codeGenerationFormat.formatInstructions()));
     
         // Initialize streaming state
@@ -470,7 +471,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
 
         try {
             let readmePrompt = README_GENERATION_PROMPT;
-            const messages = [...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context), createUserMessage(readmePrompt)];
+            const messages = [...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, CodeSerializerType.SCOF), createUserMessage(readmePrompt)];
 
             const results = await executeInference({
                 env: env,
