@@ -72,7 +72,7 @@ export const AGENT_CONFIG: AgentConfig = {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
         max_tokens: 2000,
         fallbackModel: AIModels.GEMINI_2_5_FLASH,
-        temperature: 0.8,
+        temperature: 0.6,
     },
     blueprint: {
         name: AIModels.GEMINI_2_5_PRO,

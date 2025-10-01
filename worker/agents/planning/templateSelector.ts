@@ -5,6 +5,7 @@ import { executeInference } from '../inferutils/infer';
 import { InferenceContext } from '../inferutils/config.types';
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { TemplateSelection, TemplateSelectionSchema } from '../../agents/schemas';
+import { generateSecureToken } from 'worker/utils/cryptoUtils';
 
 const logger = createLogger('TemplateSelector');
 interface SelectTemplateArgs {
@@ -90,7 +91,9 @@ ${templateDescriptions}
 3. Appropriate style for the project type. Try to come up with unique styles that might look nice and unique. Be creative about your choices.
 4. Descriptive project name
 
-Analyze each template's features, frameworks, and architecture to make the best match.`;
+Analyze each template's features, frameworks, and architecture to make the best match.
+
+ENTROPY SEED: ${generateSecureToken(64)} - for unique results`;
 
         const messages = [
             { role: "system" as MessageRole, content: systemPrompt },
