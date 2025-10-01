@@ -245,6 +245,7 @@ export class RateLimitService {
 				this.logger.warn('LLM calls rate limit exceeded', {
 					identifier,
 					key,
+                    config
 				});
 				captureSecurityEvent('rate_limit_exceeded', {
 					limitType: RateLimitType.LLM_CALLS,
