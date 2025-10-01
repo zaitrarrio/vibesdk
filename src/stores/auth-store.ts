@@ -1,13 +1,12 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { apiClient, ApiError } from '@/lib/api-client';
 import type { AuthSession, AuthUser } from '@/api-types';
 
 // Token refresh interval - refresh every 10 minutes
 const TOKEN_REFRESH_INTERVAL = 60 * 60 * 1000; // 1 hour (check less frequently since tokens last 24h)
 
+// Pure state interface - no actions
 interface AuthState {
-  // State
   user: AuthUser | null;
   token: string | null;
   session: AuthSession | null;
@@ -20,22 +19,10 @@ interface AuthState {
   } | null;
   hasOAuth: boolean;
   requiresEmailAuth: boolean;
-  
-  // Computed state
-  isAuthenticated: boolean;
-  
-  // Actions
-  login: (provider: 'google' | 'github', redirectUrl?: string) => void;
-  loginWithEmail: (credentials: { email: string; password: string }) => Promise<void>;
-  register: (data: { email: string; password: string; name?: string }) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-  clearError: () => void;
-  setIntendedUrl: (url: string) => void;
-  getIntendedUrl: () => string | null;
-  clearIntendedUrl: () => void;
-  
-  // Internal actions
+}
+
+// Actions interface - separate from state
+interface AuthActions {
   setUser: (user: AuthUser | null) => void;
   setToken: (token: string | null) => void;
   setSession: (session: AuthSession | null) => void;
@@ -44,9 +31,7 @@ interface AuthState {
   setAuthProviders: (providers: { google: boolean; github: boolean; email: boolean }) => void;
   setHasOAuth: (hasOAuth: boolean) => void;
   setRequiresEmailAuth: (requires: boolean) => void;
-  
-  // Initialize auth state
-  initialize: () => Promise<void>;
+  clearError: () => void;
 }
 
 // Redirect URL management
@@ -88,6 +73,8 @@ const setupTokenRefresh = () => {
   // Set up session validation timer - less frequent since cookies handle refresh
   refreshTimer = setInterval(async () => {
     try {
+      // Import here to avoid circular dependencies
+      const { apiClient } = await import('@/lib/api-client');
       const response = await apiClient.getProfile(true);
 
       if (!response.success) {
@@ -106,7 +93,8 @@ const setupTokenRefresh = () => {
   }, TOKEN_REFRESH_INTERVAL);
 };
 
-export const useAuthStore = create<AuthState>()(
+// Pure Zustand store - only state and basic setters
+export const useAuthStore = create<AuthState & AuthActions>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
     user: null,
@@ -118,123 +106,7 @@ export const useAuthStore = create<AuthState>()(
     hasOAuth: false,
     requiresEmailAuth: true,
     
-    // Computed state
-    get isAuthenticated() {
-      return !!get().user;
-    },
-    
-    // Actions
-    login: (provider: 'google' | 'github', redirectUrl?: string) => {
-      // Store intended redirect URL if provided, otherwise use current location
-      const intendedUrl = redirectUrl || window.location.pathname + window.location.search;
-      setIntendedUrl(intendedUrl);
-      
-      // Build OAuth URL with redirect parameter
-      const oauthUrl = new URL(`/api/auth/oauth/${provider}`, window.location.origin);
-      oauthUrl.searchParams.set('redirect_url', intendedUrl);
-      
-      // Redirect to OAuth provider
-      window.location.href = oauthUrl.toString();
-    },
-    
-    loginWithEmail: async (credentials: { email: string; password: string }) => {
-      const { setError, setIsLoading, setUser, setToken, setSession } = get();
-      
-      setError(null);
-      setIsLoading(true);
-
-      try {
-        const response = await apiClient.loginWithEmail(credentials);
-
-        if (response.success && response.data) {
-          setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
-          setToken(null); // Using cookies for authentication
-          setSession({
-            userId: response.data.user.id,
-            email: response.data.user.email,
-            sessionId: response.data.sessionId,
-            expiresAt: response.data.expiresAt,
-          });
-          setupTokenRefresh();
-        }
-      } catch (error) {
-        console.error('Login error:', error);
-        if (error instanceof ApiError) {
-          setError(error.message);
-        } else {
-          setError('Connection error. Please try again.');
-        }
-        throw error; // Re-throw to inform caller
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    
-    register: async (data: { email: string; password: string; name?: string }) => {
-      const { setError, setIsLoading, setUser, setToken, setSession } = get();
-      
-      setError(null);
-      setIsLoading(true);
-
-      try {
-        const response = await apiClient.register(data);
-
-        if (response.success && response.data) {
-          setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
-          setToken(null); // Using cookies for authentication
-          setSession({
-            userId: response.data.user.id,
-            email: response.data.user.email,
-            sessionId: response.data.sessionId,
-            expiresAt: response.data.expiresAt,
-          });
-          setupTokenRefresh();
-        }
-      } catch (error) {
-        console.error('Registration error:', error);
-        if (error instanceof ApiError) {
-          setError(error.message);
-        } else {
-          setError('Connection error. Please try again.');
-        }
-        throw error; // Re-throw to inform caller
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    
-    logout: async () => {
-      const { setUser, setToken, setSession } = get();
-      
-      try {
-        await apiClient.logout();
-      } catch (error) {
-        console.error('Logout error:', error);
-      } finally {
-        // Clear state regardless of API response
-        setUser(null);
-        setToken(null);
-        setSession(null);
-        if (refreshTimer) {
-          clearInterval(refreshTimer);
-          refreshTimer = null;
-        }
-      }
-    },
-    
-    refreshUser: async () => {
-      await get().initialize();
-    },
-    
-    clearError: () => {
-      set({ error: null });
-    },
-    
-    setIntendedUrl,
-    getIntendedUrl,
-    clearIntendedUrl,
-    
-    // Internal actions
+    // Pure actions - only state updates
     setUser: (user) => set({ user }),
     setToken: (token) => set({ token }),
     setSession: (session) => set({ session }),
@@ -243,64 +115,36 @@ export const useAuthStore = create<AuthState>()(
     setAuthProviders: (authProviders) => set({ authProviders }),
     setHasOAuth: (hasOAuth) => set({ hasOAuth }),
     setRequiresEmailAuth: (requiresEmailAuth) => set({ requiresEmailAuth }),
-    
-    // Initialize auth state
-    initialize: async () => {
-      const { setUser, setToken, setSession, setIsLoading, setAuthProviders, setHasOAuth, setRequiresEmailAuth } = get();
-      
-      try {
-        // Fetch auth providers configuration
-        try {
-          const response = await apiClient.getAuthProviders();
-          if (response.success && response.data) {
-            setAuthProviders(response.data.providers);
-            setHasOAuth(response.data.hasOAuth);
-            setRequiresEmailAuth(response.data.requiresEmailAuth);
-          }
-        } catch (error) {
-          console.warn('Failed to fetch auth providers:', error);
-          // Fallback to defaults
-          setAuthProviders({ google: false, github: false, email: true });
-          setHasOAuth(false);
-          setRequiresEmailAuth(true);
-        }
-
-        // Check authentication status
-        try {
-          const response = await apiClient.getProfile(true);
-          
-          if (response.success && response.data?.user) {
-            setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
-            setToken(null); // Profile endpoint doesn't return token, cookies are used
-            setSession({
-              userId: response.data.user.id,
-              email: response.data.user.email,
-              sessionId: response.data.sessionId || response.data.user.id,
-              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours expiry
-            });
-            
-            // Setup token refresh
-            setupTokenRefresh();
-          } else {
-            setUser(null);
-            setToken(null);
-            setSession(null);
-          }
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          setUser(null);
-          setToken(null);
-          setSession(null);
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    },
+    clearError: () => set({ error: null }),
   }))
 );
 
-// Initialize auth state on store creation
-useAuthStore.getState().initialize();
+// Computed selectors
+export const useAuthSelectors = () => {
+  const user = useAuthStore((state) => state.user);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const error = useAuthStore((state) => state.error);
+  const authProviders = useAuthStore((state) => state.authProviders);
+  const hasOAuth = useAuthStore((state) => state.hasOAuth);
+  const requiresEmailAuth = useAuthStore((state) => state.requiresEmailAuth);
+  
+  return {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    error,
+    authProviders,
+    hasOAuth,
+    requiresEmailAuth,
+  };
+};
+
+// Redirect URL helpers
+export const useAuthRedirect = () => ({
+  setIntendedUrl,
+  getIntendedUrl,
+  clearIntendedUrl,
+});
 
 // Cleanup on page unload
 if (typeof window !== 'undefined') {

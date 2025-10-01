@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
-import { useTheme } from '../../hooks/use-theme';
+import { useThemeSelectors } from '../../stores/theme-store';
 
 import 'monaco-editor/esm/vs/editor/editor.all.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
@@ -169,7 +169,7 @@ export const MonacoEditor = memo<MonacoEditorProps>(function MonacoEditor({
 	const editor = useRef<monaco.editor.IStandaloneCodeEditor>(undefined);
 	const prevValue = useRef<string>(createOptions.value || '');
 	const stickyScroll = useRef(true);
-	const { theme } = useTheme();
+	const { theme } = useThemeSelectors();
 
 
 	useEffect(() => {

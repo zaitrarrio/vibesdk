@@ -1,13 +1,15 @@
 import { useEffect } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useAppSelectors } from '@/stores/app-store';
+import { useAppActions } from '@/hooks/use-app-actions';
 
 export function useApp(appId: string | undefined) {
-  const { app, loading, error, fetchApp, setAppId } = useAppStore();
+  const { app, loading, error } = useAppSelectors();
+  const { fetchApp, changeAppId } = useAppActions();
   
   // Update app ID when it changes
   useEffect(() => {
-    setAppId(appId || null);
-  }, [appId, setAppId]);
+    changeAppId(appId || null);
+  }, [appId, changeAppId]);
   
   return { app, loading, error, refetch: () => appId && fetchApp(appId) };
 }
