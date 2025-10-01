@@ -35,7 +35,8 @@ export class ModelTestService extends BaseService {
                 maxTokens: Math.min(modelConfig.max_tokens || 100, 100), // Limit to 100 tokens for test
                 temperature: modelConfig.temperature || 0.1,
                 reasoning_effort: modelConfig.reasoning_effort,
-                userApiKeys: userApiKeys
+                userApiKeys,
+                actionKey: 'testModelConfig',
             });
 
             const endTime = Date.now();
@@ -114,6 +115,7 @@ export class ModelTestService extends BaseService {
                 modelName: testModel,
                 maxTokens: 10,
                 temperature: 0,
+                actionKey: 'testModelConfig',
                 userApiKeys: Object.fromEntries(testApiKeys)
             });
 

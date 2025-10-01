@@ -496,6 +496,7 @@ ${block.error}
                 reasoning_effort: 'low',
                 temperature: 0.0,
                 maxTokens: 10000,
+                actionKey:'realtimeCodeFixer',
                 messages,
             });
 

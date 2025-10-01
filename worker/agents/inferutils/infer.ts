@@ -112,6 +112,7 @@ export async function executeInference<T extends z.AnyZodObject>(   {
                 messages,
                 schema,
                 schemaName: agentActionName,
+                actionKey: agentActionName,
                 format,
                 maxTokens,
                 modelName: useCheaperModel ? AIModels.GEMINI_2_5_FLASH : modelName,
@@ -130,6 +131,7 @@ export async function executeInference<T extends z.AnyZodObject>(   {
                 modelName: useCheaperModel ? AIModels.GEMINI_2_5_FLASH: modelName,
                 tools,
                 stream,
+                actionKey: agentActionName,
                 reasoning_effort: useCheaperModel ? undefined : reasoning_effort,
                 temperature,
             });

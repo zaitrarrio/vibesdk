@@ -15,11 +15,11 @@ import {
 } from 'openai/resources.mjs';
 import { Message, MessageContent, MessageRole } from './common';
 import { ToolCallResult, ToolDefinition } from '../tools/types';
-import { AIModels, InferenceMetadata } from './config.types';
+import { AgentActionKey, AIModels, InferenceMetadata } from './config.types';
 // import { SecretsService } from '../../database';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { AuthUser } from '../../types/auth-types';
-import { getGlobalConfigurableSettings } from '../../config';
+import { getUserConfigurableSettings } from '../../config';
 import { SecurityError, RateLimitExceededError } from 'shared/types/errors';
 import { executeToolWithDefinition } from '../tools/customTools';
 import { RateLimitType } from 'worker/services/rate-limit/config';
@@ -306,6 +306,7 @@ export async function getConfigurationForModel(
 type InferArgsBase = {
     env: Env;
     metadata: InferenceMetadata;
+    actionKey: AgentActionKey  | 'testModelConfig';
     messages: Message[];
     maxTokens?: number;
     modelName: AIModels | string;
@@ -412,6 +413,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
     messages,
     schema,
     schemaName,
+    actionKey,
     format,
     formatOptions,
     maxTokens,
@@ -438,9 +440,9 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
             avatarUrl: undefined
         };
 
-        const globalConfig = await getGlobalConfigurableSettings(env)
+        const userConfig = await getUserConfigurableSettings(env, metadata.userId)
         // Maybe in the future can expand using config object for other stuff like global model configs?
-        await RateLimitService.enforceLLMCallsRateLimit(env, globalConfig.security.rateLimit, authUser)
+        await RateLimitService.enforceLLMCallsRateLimit(env, userConfig.security.rateLimit, authUser)
 
         const { apiKey, baseURL, defaultHeaders } = await getConfigurationForModel(modelName, env, metadata.userId);
         console.log(`baseUrl: ${baseURL}, modelName: ${modelName}`);
@@ -536,6 +538,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                         chatId: metadata.agentId,
                         userId: metadata.userId,
                         schemaName,
+                        actionKey,
                     })
                 }
             });
@@ -668,6 +671,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                     schemaName,
                     format,
                     formatOptions,
+                    actionKey,
                     modelName,
                     maxTokens,
                     stream,
@@ -683,6 +687,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                     messages,
                     modelName,
                     maxTokens,
+                    actionKey,
                     stream,
                     tools,
                     reasoning_effort,
