@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { useAuth } from '../contexts/auth-context';
+import { useAuth } from '../hooks/use-auth';
 import { useAuthModal } from '../components/auth/AuthModalProvider';
 import { AuthUser } from '@/api-types';
 

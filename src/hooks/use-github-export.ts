@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { WebSocket } from 'partysocket';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/hooks/use-auth';
 import { apiClient } from '@/lib/api-client';
 import type {
     AuthUser,

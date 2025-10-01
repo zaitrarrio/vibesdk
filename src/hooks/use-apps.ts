@@ -1,7 +1,7 @@
 import { apiClient, ApiError } from '@/lib/api-client';
 import type { AppWithFavoriteStatus } from '@/api-types';
 import { useAuthGuard } from './useAuthGuard';
-import { useAppsData } from '@/contexts/apps-data-context';
+import { useAppsStore } from '@/stores/apps-store';
 
 interface AppHookState<T> {
   apps: T[];
@@ -12,7 +12,7 @@ interface AppHookState<T> {
 
 
 export function useApps(): AppHookState<AppWithFavoriteStatus> {
-  const { allApps, loading, error, refetchAllApps } = useAppsData();
+  const { allApps, loading, error, refetchAllApps } = useAppsStore();
   
   return {
     apps: allApps,
@@ -23,7 +23,7 @@ export function useApps(): AppHookState<AppWithFavoriteStatus> {
 }
 
 export function useRecentApps() {
-  const { recentApps, moreRecentAvailable, loading, error, refetchAllApps } = useAppsData();
+  const { recentApps, moreRecentAvailable, loading, error, refetchAllApps } = useAppsStore();
   
   return { 
     apps: recentApps, 
@@ -35,7 +35,7 @@ export function useRecentApps() {
 }
 
 export function useFavoriteApps(): AppHookState<AppWithFavoriteStatus> {
-  const { favoriteApps, loading, error, refetchFavoriteApps } = useAppsData();
+  const { favoriteApps, loading, error, refetchFavoriteApps } = useAppsStore();
   
   return {
     apps: favoriteApps,

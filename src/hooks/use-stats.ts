@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/hooks/use-auth';
 import { apiClient } from '@/lib/api-client';
 import type { UserStats, UserActivity } from '@/api-types';
 

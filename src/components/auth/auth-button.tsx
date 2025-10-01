@@ -8,7 +8,7 @@ import { LogIn, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-import { useAuth } from '../../contexts/auth-context';
+import { useAuth } from '../../hooks/use-auth';
 import { LoginModal } from './login-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {

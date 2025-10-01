@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { ArrowRight } from 'react-feather';
 import { useNavigate } from 'react-router';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/hooks/use-auth';
 import {
 	AgentModeToggle,
 	type AgentMode,

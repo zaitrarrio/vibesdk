@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuthStore } from '@/stores/auth-store';
 // import { useTheme } from '@/contexts/theme-context';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -65,7 +65,7 @@ import CerebrasLogo from '@/assets/provider-logos/cerebras.svg?react';
 import CloudflareLogo from '@/assets/provider-logos/cloudflare.svg?react';
 
 export default function SettingsPage() {
-	const { user } = useAuth();
+	const { user } = useAuthStore();
 	// Active sessions state
 	const [activeSessions, setActiveSessions] = useState<
 		ActiveSessionsData & { loading: boolean }

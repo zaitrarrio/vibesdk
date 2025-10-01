@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
-import { useTheme } from '../../contexts/theme-context';
+import { useTheme } from '../../hooks/use-theme';
 
 import 'monaco-editor/esm/vs/editor/editor.all.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
