@@ -1,7 +1,8 @@
 import { apiClient, ApiError } from '@/lib/api-client';
 import type { AppWithFavoriteStatus } from '@/api-types';
 import { useAuthGuard } from './useAuthGuard';
-import { useAppsStore } from '@/stores/apps-store';
+import { useAppsSelectors } from '@/stores/apps-store';
+import { useAppsActions } from '@/hooks/use-apps-actions';
 
 interface AppHookState<T> {
   apps: T[];
@@ -12,36 +13,39 @@ interface AppHookState<T> {
 
 
 export function useApps(): AppHookState<AppWithFavoriteStatus> {
-  const { allApps, loading, error, refetchAllApps } = useAppsStore();
+  const { allApps, loading, error } = useAppsSelectors();
+  const { fetchAllApps } = useAppsActions();
   
   return {
     apps: allApps,
     loading: loading.allApps,
     error: error.allApps,
-    refetch: refetchAllApps,
+    refetch: fetchAllApps,
   };
 }
 
 export function useRecentApps() {
-  const { recentApps, moreRecentAvailable, loading, error, refetchAllApps } = useAppsStore();
+  const { recentApps, moreRecentAvailable, loading, error } = useAppsSelectors();
+  const { fetchAllApps } = useAppsActions();
   
   return { 
     apps: recentApps, 
     moreAvailable: moreRecentAvailable,
     loading: loading.allApps, 
     error: error.allApps, 
-    refetch: refetchAllApps
+    refetch: fetchAllApps
   };
 }
 
 export function useFavoriteApps(): AppHookState<AppWithFavoriteStatus> {
-  const { favoriteApps, loading, error, refetchFavoriteApps } = useAppsStore();
+  const { favoriteApps, loading, error } = useAppsSelectors();
+  const { fetchFavoriteApps } = useAppsActions();
   
   return {
     apps: favoriteApps,
     loading: loading.favoriteApps,
     error: error.favoriteApps,
-    refetch: refetchFavoriteApps,
+    refetch: fetchFavoriteApps,
   };
 }
 
