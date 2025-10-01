@@ -3,6 +3,7 @@ import { createLogger } from '../../logger';
 import { WebSocketMessageRequests, WebSocketMessageResponses } from '../constants';
 import { SimpleCodeGeneratorAgent } from './simpleGeneratorAgent';
 import { WebSocketMessage, WebSocketMessageData, WebSocketMessageType } from '../../api/websocketTypes';
+import { MAX_IMAGES_PER_MESSAGE, MAX_IMAGE_SIZE_BYTES } from '../../types/image-attachment';
 
 const logger = createLogger('CodeGeneratorWebSocket');
 
@@ -175,7 +176,9 @@ export function handleWebSocketMessage(agent: SimpleCodeGeneratorAgent, connecti
             case WebSocketMessageRequests.USER_SUGGESTION:
                 // Handle user suggestion for conversational AI
                 logger.info('Received user suggestion', {
-                    messageLength: parsedMessage.message?.length || 0
+                    messageLength: parsedMessage.message?.length || 0,
+                    hasImages: !!parsedMessage.images && parsedMessage.images.length > 0,
+                    imageCount: parsedMessage.images?.length || 0
                 });
                 
                 if (!parsedMessage.message) {
@@ -183,7 +186,23 @@ export function handleWebSocketMessage(agent: SimpleCodeGeneratorAgent, connecti
                     return;
                 }
                 
-                agent.handleUserInput(parsedMessage.message).catch((error: unknown) => {
+                // Validate image count and size
+                if (parsedMessage.images && parsedMessage.images.length > 0) {
+                    if (parsedMessage.images.length > MAX_IMAGES_PER_MESSAGE) {
+                        sendError(connection, `Maximum ${MAX_IMAGES_PER_MESSAGE} images allowed per message. Received ${parsedMessage.images.length} images.`);
+                        return;
+                    }
+                    
+                    // Validate each image size
+                    for (const image of parsedMessage.images) {
+                        if (image.size > MAX_IMAGE_SIZE_BYTES) {
+                            sendError(connection, `Image "${image.filename}" exceeds maximum size of ${MAX_IMAGE_SIZE_BYTES / (1024 * 1024)}MB`);
+                            return;
+                        }
+                    }
+                }
+                
+                agent.handleUserInput(parsedMessage.message, parsedMessage.images).catch((error: unknown) => {
                     logger.error('Error handling user suggestion:', error);
                     sendError(connection, `Error processing user suggestion: ${error instanceof Error ? error.message : String(error)}`);
                 });

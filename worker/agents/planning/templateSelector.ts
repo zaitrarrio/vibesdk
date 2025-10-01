@@ -1,4 +1,4 @@
-import { MessageRole } from '../inferutils/common';
+import { createSystemMessage, createUserMessage, createMultiModalUserMessage } from '../inferutils/common';
 import { TemplateListResponse} from '../../services/sandbox/sandboxTypes';
 import { createLogger } from '../../logger';
 import { executeInference } from '../inferutils/infer';
@@ -6,6 +6,7 @@ import { InferenceContext } from '../inferutils/config.types';
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { TemplateSelection, TemplateSelectionSchema } from '../../agents/schemas';
 import { generateSecureToken } from 'worker/utils/cryptoUtils';
+import type { ImageAttachment } from '../../types/image-attachment';
 
 const logger = createLogger('TemplateSelector');
 interface SelectTemplateArgs {
@@ -13,12 +14,13 @@ interface SelectTemplateArgs {
     query: string;
     availableTemplates: TemplateListResponse['templates'];
     inferenceContext: InferenceContext;
+    images?: ImageAttachment[];
 }
 
 /**
  * Uses AI to select the most suitable template for a given query.
  */
-export async function selectTemplate({ env, query, availableTemplates, inferenceContext }: SelectTemplateArgs): Promise<TemplateSelection> {
+export async function selectTemplate({ env, query, availableTemplates, inferenceContext, images }: SelectTemplateArgs): Promise<TemplateSelection> {
     if (availableTemplates.length === 0) {
         logger.info("No templates available for selection.");
         return { selectedTemplateName: null, reasoning: "No templates were available to choose from.", useCase: null, complexity: null, styleSelection: null, projectName: '' };
@@ -28,6 +30,7 @@ export async function selectTemplate({ env, query, availableTemplates, inference
         logger.info("Asking AI to select a template", { 
             query, 
             queryLength: query.length,
+            imagesCount: images?.length || 0,
             availableTemplates: availableTemplates.map(t => t.name),
             templateCount: availableTemplates.length 
         });
@@ -88,16 +91,25 @@ ${templateDescriptions}
 **Task:** Select the most suitable template and provide:
 1. Template name (exact match from list)
 2. Clear reasoning for why it fits the user's needs
-3. Appropriate style for the project type. Try to come up with unique styles that might look nice and unique. Be creative about your choices.
+3. Appropriate style for the project type. Try to come up with unique styles that might look nice and unique. Be creative about your choices. But don't pick brutalist all the time.
 4. Descriptive project name
 
 Analyze each template's features, frameworks, and architecture to make the best match.
+${images && images.length > 0 ? `\n**Note:** User provided ${images.length} image(s) - consider visual requirements and UI style from the images.` : ''}
 
 ENTROPY SEED: ${generateSecureToken(64)} - for unique results`;
 
+        const userMessage = images && images.length > 0
+            ? createMultiModalUserMessage(
+                userPrompt,
+                images.map(img => `data:${img.mimeType};base64,${img.base64Data}`),
+                'high'
+              )
+            : createUserMessage(userPrompt);
+
         const messages = [
-            { role: "system" as MessageRole, content: systemPrompt },
-            { role: "user" as MessageRole, content: userPrompt }
+            createSystemMessage(systemPrompt),
+            userMessage
         ];
 
         const { object: selection } = await executeInference({

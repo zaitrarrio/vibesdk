@@ -3,9 +3,10 @@ import { STRATEGIES, PROMPT_UTILS, generalSystemPromptBuilder } from '../prompts
 import { executeInference } from '../inferutils/infer';
 import { Blueprint, BlueprintSchema, TemplateSelection } from '../schemas';
 import { createLogger } from '../../logger';
-import { createSystemMessage, createUserMessage } from '../inferutils/common';
+import { createSystemMessage, createUserMessage, createMultiModalUserMessage } from '../inferutils/common';
 import { InferenceContext } from '../inferutils/config.types';
 import { TemplateRegistry } from '../inferutils/schemaFormatters';
+import type { ImageAttachment } from '../../types/image-attachment';
 import z from 'zod';
 
 const logger = createLogger('Blueprint');
@@ -244,6 +245,7 @@ export interface BlueprintGenerationArgs {
     // Add optional template info
     templateDetails: TemplateDetails;
     templateMetaInfo: TemplateSelection;
+    images?: ImageAttachment[];
     stream?: {
         chunk_size: number;
         onChunk: (chunk: string) => void;
@@ -254,9 +256,9 @@ export interface BlueprintGenerationArgs {
  * Generate a blueprint for the application based on user prompt
  */
 // Update function signature and system prompt
-export async function generateBlueprint({ env, inferenceContext, query, language, frameworks, templateDetails, templateMetaInfo, stream }: BlueprintGenerationArgs): Promise<Blueprint> {
+export async function generateBlueprint({ env, inferenceContext, query, language, frameworks, templateDetails, templateMetaInfo, images, stream }: BlueprintGenerationArgs): Promise<Blueprint> {
     try {
-        logger.info("Generating application blueprint", { query, queryLength: query.length });
+        logger.info("Generating application blueprint", { query, queryLength: query.length, imagesCount: images?.length || 0 });
         logger.info(templateDetails ? `Using template: ${templateDetails.name}` : "Not using a template.");
 
         // ---------------------------------------------------------------------------
@@ -280,9 +282,17 @@ export async function generateBlueprint({ env, inferenceContext, query, language
             dependencies: templateDetails.deps,
         }));
 
+        const userMessage = images && images.length > 0
+            ? createMultiModalUserMessage(
+                `CLIENT REQUEST: "${query}"`,
+                images.map(img => `data:${img.mimeType};base64,${img.base64Data}`),
+                'high'
+              )
+            : createUserMessage(`CLIENT REQUEST: "${query}"`);
+
         const messages = [
             systemPromptMessage,
-            createUserMessage(`CLIENT REQUEST: "${query}"`)
+            userMessage
         ];
 
         // Log messages to console for debugging

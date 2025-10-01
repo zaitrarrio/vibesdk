@@ -10,6 +10,7 @@ import { selectTemplate } from './planning/templateSelector';
 import { getSandboxService } from '../services/sandbox/factory';
 import { TemplateDetails } from '../services/sandbox/sandboxTypes';
 import { TemplateSelection } from './schemas';
+import type { ImageAttachment } from '../types/image-attachment';
 
 export async function getAgentStub(env: Env, agentId: string, searchInOtherJurisdictions: boolean = false, logger: StructuredLogger) : Promise<DurableObjectStub<SmartCodeGeneratorAgent>> {
     if (searchInOtherJurisdictions) {
@@ -74,6 +75,7 @@ export async function getTemplateForQuery(
     env: Env,
     inferenceContext: InferenceContext,
     query: string,
+    images: ImageAttachment[] | undefined,
     logger: StructuredLogger,
 ) : Promise<{sandboxSessionId: string, templateDetails: TemplateDetails, selection: TemplateSelection}> {
     // Fetch available templates
@@ -90,6 +92,7 @@ export async function getTemplateForQuery(
                 inferenceContext,
                 query,
                 availableTemplates: templatesResponse.templates,
+                images,
             }), 
             getSandboxService(sandboxSessionId)
         ]);

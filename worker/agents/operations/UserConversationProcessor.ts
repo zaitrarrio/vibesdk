@@ -1,5 +1,5 @@
 import { ConversationalResponseType } from "../schemas";
-import { createAssistantMessage, createUserMessage } from "../inferutils/common";
+import { createAssistantMessage, createUserMessage, createMultiModalUserMessage } from "../inferutils/common";
 import { executeInference } from "../inferutils/infer";
 import { getSystemPromptWithProjectContext } from "./common";
 import { WebSocketMessageResponses } from "../constants";
@@ -9,6 +9,7 @@ import { ConversationMessage } from "../inferutils/common";
 import { StructuredLogger } from "../../logger";
 import { IdGenerator } from "../utils/idGenerator";
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
+import type { ImageAttachment } from '../../types/image-attachment';
 import { toolWebSearchDefinition } from "../tools/toolkit/web-search";
 import { toolWeatherDefinition } from "../tools/toolkit/weather";
 import { ToolDefinition } from "../tools/types";
@@ -29,6 +30,7 @@ export interface UserConversationInputs {
         tool?: { name: string; status: 'start' | 'success' | 'error'; args?: Record<string, unknown> }
     ) => void;
     errors: RuntimeError[];
+    images?: ImageAttachment[];
 }
 
 export interface UserConversationOutputs {
@@ -176,15 +178,27 @@ export function buildEditAppTool(stateMutator: (modificationRequest: string) => 
 export class UserConversationProcessor extends AgentOperation<UserConversationInputs, UserConversationOutputs> {
     async execute(inputs: UserConversationInputs, options: OperationOptions): Promise<UserConversationOutputs> {
         const { env, logger, context } = options;
-        const { userMessage, pastMessages, errors } = inputs;
+        const { userMessage, pastMessages, errors, images } = inputs;
         logger.info("Processing user message", { 
             messageLength: inputs.userMessage.length,
+            hasImages: !!images && images.length > 0,
+            imageCount: images?.length || 0
         });
 
         try {
             const systemPrompt = SYSTEM_PROMPT.replace("{{errors}}", PROMPT_UTILS.serializeErrors(errors));
             const systemPromptMessages = getSystemPromptWithProjectContext(systemPrompt, context, CodeSerializerType.SIMPLE);
-            const messages = [...pastMessages, {...createUserMessage(userMessage), conversationId: IdGenerator.generateConversationId()}];
+            
+            // Create user message with optional images
+            const userMessageContent = images && images.length > 0
+                ? createMultiModalUserMessage(
+                    userMessage,
+                    images.map(img => `data:${img.mimeType};base64,${img.base64Data}`),
+                    'high'
+                )
+                : createUserMessage(userMessage);
+            
+            const messages = [...pastMessages, {...userMessageContent, conversationId: IdGenerator.generateConversationId()}];
 
             let extractedUserResponse = "";
             let extractedEnhancedRequest = "";

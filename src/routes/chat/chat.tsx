@@ -6,7 +6,7 @@ import {
 	useState,
 	type FormEvent,
 } from 'react';
-import { ArrowRight } from 'react-feather';
+import { ArrowRight, Image as ImageIcon } from 'react-feather';
 import { useParams, useSearchParams, useNavigate } from 'react-router';
 import { MonacoEditor } from '../../components/monaco-editor/monaco-editor';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -20,8 +20,7 @@ import { ViewModeSwitch } from './components/view-mode-switch';
 import { DebugPanel, type DebugMessage } from './components/debug-panel';
 import { DeploymentControls } from './components/deployment-controls';
 import { useChat, type FileType } from './hooks/use-chat';
-import type { BlueprintType } from '@/api-types';
-import type { ModelConfigsData } from '@/api-types';
+import { type ModelConfigsData, type BlueprintType, SUPPORTED_IMAGE_MIME_TYPES } from '@/api-types';
 import { Copy } from './components/copy';
 import { useFileContentStream } from './hooks/use-file-content-stream';
 import { logger } from '@/utils/logger';
@@ -31,6 +30,9 @@ import { useGitHubExport } from '@/hooks/use-github-export';
 import { GitHubExportModal } from '@/components/github-export-modal';
 import { ModelConfigInfo } from './components/model-config-info';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { useImageUpload } from '@/hooks/use-image-upload';
+import { useDragDrop } from '@/hooks/use-drag-drop';
+import { ImageAttachmentPreview } from '@/components/image-attachment-preview';
 
 export default function Chat() {
 	const { chatId: urlChatId } = useParams();
@@ -189,6 +191,13 @@ export default function Chat() {
 
 	const [newMessage, setNewMessage] = useState('');
 	const [showTooltip, setShowTooltip] = useState(false);
+
+	const { images, addImages, removeImage, clearImages, isProcessing } = useImageUpload({
+		onError: (error) => {
+			console.error('Chat image upload error:', error);
+		},
+	});
+	const imageInputRef = useRef<HTMLInputElement>(null);
 
 	// Fake stream bootstrap files
 	const { streamedFiles: streamedBootstrapFiles, doneStreaming } =
@@ -400,6 +409,13 @@ export default function Chat() {
 		return !isBlueprintComplete || !hasAgentId;
 	}, [projectStages, chatId]);
 
+	const chatFormRef = useRef<HTMLFormElement>(null);
+	const { isDragging: isChatDragging, dragHandlers: chatDragHandlers } = useDragDrop({
+		onFilesDropped: addImages,
+		accept: [...SUPPORTED_IMAGE_MIME_TYPES],
+		disabled: isChatDisabled,
+	});
+
 	const onNewMessage = useCallback(
 		(e: FormEvent) => {
 			e.preventDefault();
@@ -414,14 +430,19 @@ export default function Chat() {
 				JSON.stringify({
 					type: 'user_suggestion',
 					message: newMessage,
+					images: images.length > 0 ? images : undefined,
 				}),
 			);
 			sendUserMessage(newMessage);
 			setNewMessage('');
+			// Clear images after sending
+			if (images.length > 0) {
+				clearImages();
+			}
 			// Ensure we scroll after sending our own message
 			requestAnimationFrame(() => scrollToBottom());
 		},
-		[newMessage, websocket, sendUserMessage, isChatDisabled, scrollToBottom],
+		[newMessage, websocket, sendUserMessage, isChatDisabled, scrollToBottom, images, clearImages],
 	);
 
 	const [progress, total] = useMemo((): [number, number] => {
@@ -462,11 +483,11 @@ export default function Chat() {
 	}
 
 	return (
-		<div className="size-full flex flex-col text-text-primary">
-			<div className="flex-1 flex min-h-0 justify-center">
+		<div className="size-full flex flex-col min-h-0 text-text-primary">
+			<div className="flex-1 flex min-h-0 overflow-hidden justify-center">
 				<motion.div
 					layout="position"
-					className="flex-1 shrink-0 flex flex-col basis-0 max-w-lg relative z-10 h-full"
+					className="flex-1 shrink-0 flex flex-col basis-0 max-w-lg relative z-10 h-full min-h-0"
 				>
 					<div className="flex-1 overflow-y-auto min-h-0 chat-messages-scroll" ref={messagesContainerRef}>
 						<div className="pt-5 px-4 pb-4 text-sm flex flex-col gap-5">
@@ -589,18 +610,49 @@ export default function Chat() {
 					</div>
 
 					<form
-						onSubmit={onNewMessage}
-						className="shrink-0 p-4 pb-5 bg-transparent"
-					>
-						<div className="relative">
-							<textarea
-								value={newMessage}
-								onChange={(e) => {
-									setNewMessage(e.target.value);
-									const ta = e.currentTarget;
-									ta.style.height = 'auto';
-									ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-								}}
+                        ref={chatFormRef}
+                        onSubmit={onNewMessage}
+                        className="shrink-0 p-4 pb-5 bg-transparent"
+                        {...chatDragHandlers}
+                    >
+					<input
+						ref={imageInputRef}
+						type="file"
+						accept={SUPPORTED_IMAGE_MIME_TYPES.join(',')}
+						multiple
+						onChange={(e) => {
+							const files = Array.from(e.target.files || []);
+							if (files.length > 0) {
+								addImages(files);
+							}
+							e.target.value = '';
+						}}
+						className="hidden"
+						disabled={isChatDisabled}
+					/>
+					<div className="relative">
+						{isChatDragging && (
+							<div className="absolute inset-0 flex items-center justify-center bg-accent/10 backdrop-blur-sm rounded-xl z-50 pointer-events-none">
+								<p className="text-accent font-medium">Drop images here</p>
+							</div>
+						)}
+						{images.length > 0 && (
+							<div className="mb-2">
+								<ImageAttachmentPreview
+									images={images}
+									onRemove={removeImage}
+									compact
+								/>
+							</div>
+						)}
+						<textarea
+							value={newMessage}
+							onChange={(e) => {
+								setNewMessage(e.target.value);
+								const ta = e.currentTarget;
+								ta.style.height = 'auto';
+								ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+							}}
 								onKeyDown={(e) => {
 									if (e.key === 'Enter') {
 										if (!e.shiftKey) {
@@ -620,7 +672,7 @@ export default function Chat() {
 											: 'Ask a follow up...'
 								}
 								rows={1}
-								className="w-full bg-bg-2 border border-text-primary/10 rounded-xl px-3 pr-10 py-2 text-sm outline-none focus:border-white/20 drop-shadow-2xl text-text-primary placeholder:!text-text-primary/50 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto no-scrollbar min-h-[36px] max-h-[120px]"
+								className="w-full bg-bg-2 border border-text-primary/10 rounded-xl px-3 pr-20 py-2 text-sm outline-none focus:border-white/20 drop-shadow-2xl text-text-primary placeholder:!text-text-primary/50 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto no-scrollbar min-h-[36px] max-h-[120px]"
 								style={{
 									// Auto-resize based on content
 									height: 'auto',
@@ -634,26 +686,38 @@ export default function Chat() {
 									}
 								}}
 							/>
-							<button
-								type="submit"
-								disabled={!newMessage.trim() || isChatDisabled}
-								className="absolute right-2 bottom-2 p-1.5 rounded-md bg-accent/90 hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent text-white disabled:text-text-primary transition-colors"
-							>
-								<ArrowRight className="size-4" />
-							</button>
+							<div className="absolute right-2 bottom-2 flex items-center gap-1">
+								<button
+									type="button"
+									onClick={() => imageInputRef.current?.click()}
+									disabled={isChatDisabled || isProcessing}
+									className="p-1.5 rounded-md hover:bg-bg-3 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									aria-label="Upload image"
+									title="Upload image"
+								>
+									<ImageIcon className="size-4" strokeWidth={1.5} />
+								</button>
+								<button
+									type="submit"
+									disabled={!newMessage.trim() || isChatDisabled}
+									className="p-1.5 rounded-md bg-accent/90 hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent text-white disabled:text-text-primary transition-colors"
+								>
+									<ArrowRight className="size-4" />
+								</button>
+							</div>
 						</div>
 					</form>
 				</motion.div>
 
 				<AnimatePresence>
 					{showMainView && (
-						<motion.div
-							layout="position"
-							className="flex-1 flex shrink-0 basis-0 p-4 pl-0 ml-2 z-30"
-							initial={{ opacity: 0, scale: 0.84 }}
-							animate={{ opacity: 1, scale: 1 }}
-							transition={{ duration: 0.3, ease: 'easeInOut' }}
-						>
+					<motion.div
+						layout="position"
+						className="flex-1 flex shrink-0 basis-0 p-4 pl-0 ml-2 z-30 min-h-0"
+						initial={{ opacity: 0, scale: 0.84 }}
+						animate={{ opacity: 1, scale: 1 }}
+						transition={{ duration: 0.3, ease: 'easeInOut' }}
+					>
 							{view === 'preview' && previewUrl && (
 								<div className="flex-1 flex flex-col bg-bg-3 rounded-xl shadow-md shadow-bg-2 overflow-hidden border border-border-primary">
 									<div className="grid grid-cols-3 px-2 h-10 border-b bg-bg-2">

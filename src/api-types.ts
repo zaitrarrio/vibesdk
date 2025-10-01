@@ -189,6 +189,14 @@ export interface StreamingResponse {
 
 export type AgentStreamingResponse = StreamingResponse;
 
+export {
+	type ImageAttachment, 
+	isSupportedImageType, 
+	MAX_IMAGE_SIZE_BYTES,
+	MAX_IMAGES_PER_MESSAGE,
+	SUPPORTED_IMAGE_MIME_TYPES
+} from 'worker/types/image-attachment';
+
 // Auth types imported from worker
 export type { 
   AuthSession, 

@@ -1,16 +1,18 @@
 import { PhaseConceptGenerationSchema, PhaseConceptGenerationSchemaType } from '../schemas';
 import { IssueReport } from '../domain/values/IssueReport';
-import { createUserMessage } from '../inferutils/common';
+import { createUserMessage, createMultiModalUserMessage } from '../inferutils/common';
 import { executeInference } from '../inferutils/infer';
 import { issuesPromptFormatter, PROMPT_UTILS, STRATEGIES } from '../prompts';
 import { Message } from '../inferutils/common';
 import { AgentOperation, getSystemPromptWithProjectContext, OperationOptions } from '../operations/common';
 import { AGENT_CONFIG } from '../inferutils/config';
+import type { ImageAttachment } from '../../types/image-attachment';
 
 export interface PhaseGenerationInputs {
     issues: IssueReport;
     userSuggestions?: string[];
     isUserSuggestedPhase?: boolean;
+    images?: ImageAttachment[];
 }
 
 const SYSTEM_PROMPT = `<ROLE>
@@ -167,18 +169,30 @@ export class PhaseGenerationOperation extends AgentOperation<PhaseGenerationInpu
         inputs: PhaseGenerationInputs,
         options: OperationOptions
     ): Promise<PhaseConceptGenerationSchemaType> {
-        const { issues, userSuggestions, isUserSuggestedPhase } = inputs;
+        const { issues, userSuggestions, isUserSuggestedPhase, images } = inputs;
         const { env, logger, context } = options;
         try {
             const suggestionsInfo = userSuggestions && userSuggestions.length > 0
                 ? `with ${userSuggestions.length} user suggestions`
                 : "without user suggestions";
+            const imagesInfo = images && images.length > 0
+                ? ` and ${images.length} image(s)`
+                : "";
             
-            logger.info(`Generating next phase ${suggestionsInfo}`);
+            logger.info(`Generating next phase ${suggestionsInfo}${imagesInfo}`);
     
+            const userPrompt = userPromptFormatter(issues, userSuggestions, isUserSuggestedPhase);
+            const userMessage = images && images.length > 0
+                ? createMultiModalUserMessage(
+                    userPrompt,
+                    images.map(img => `data:${img.mimeType};base64,${img.base64Data}`),
+                    'high'
+                )
+                : createUserMessage(userPrompt);
+            
             const messages: Message[] = [
                 ...getSystemPromptWithProjectContext(SYSTEM_PROMPT, context),
-                createUserMessage(userPromptFormatter(issues, userSuggestions, isUserSuggestedPhase))
+                userMessage
             ];
     
             const { object: results } = await executeInference({

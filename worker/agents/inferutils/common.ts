@@ -66,12 +66,14 @@ export function createAssistantMessage(content: string) {
  */
 export function createMultiModalUserMessage(
 	text: string,
-	imageUrl: string,
+	imageUrls: string | string[],
 	detail?: 'auto' | 'low' | 'high',
 ): {
 	role: MessageRole;
 	content: (TextContent | ImageContent)[];
 } {
+	const urls = Array.isArray(imageUrls) ? imageUrls : [imageUrls];
+	
 	return {
 		role: 'user' as MessageRole,
 		content: [
@@ -79,13 +81,13 @@ export function createMultiModalUserMessage(
 				type: 'text',
 				text,
 			},
-			{
-				type: 'image_url',
+			...urls.map(url => ({
+				type: 'image_url' as const,
 				image_url: {
-					url: imageUrl,
+					url,
 					detail: detail || 'auto',
 				},
-			},
+			})),
 		],
 	};
 }

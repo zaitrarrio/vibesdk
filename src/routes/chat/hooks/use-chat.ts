@@ -1,10 +1,13 @@
 import { WebSocket } from 'partysocket';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import {
     RateLimitExceededError,
 	type BlueprintType,
 	type WebSocketMessage,
-	type CodeFixEdits} from '@/api-types';
+	type CodeFixEdits,
+	type ImageAttachment
+} from '@/api-types';
 import {
 	createRepairingJSONParser,
 	ndjsonStream,
@@ -18,6 +21,7 @@ import { isConversationalMessage, addOrUpdateMessage, createUserMessage, handleR
 import { sendWebSocketMessage } from '../utils/websocket-helpers';
 import { initialStages as defaultStages, updateStage as updateStageHelper } from '../utils/project-stage-helpers';
 import type { ProjectStage } from '../utils/project-stage-helpers';
+
 
 export interface FileType {
 	filePath: string;
@@ -47,12 +51,14 @@ export interface PhaseTimelineItem {
 export function useChat({
 	chatId: urlChatId,
 	query: userQuery,
+	images: userImages,
 	agentMode = 'deterministic',
 	onDebugMessage,
 	onTerminalMessage,
 }: {
 	chatId?: string;
 	query: string | null;
+	images?: ImageAttachment[];
 	agentMode?: 'deterministic' | 'smart';
 	onDebugMessage?: (type: 'error' | 'warning' | 'info' | 'websocket', message: string, details?: string, source?: string, messageType?: string, rawMessage?: unknown) => void;
 	onTerminalMessage?: (log: { id: string; content: string; type: 'command' | 'stdout' | 'stderr' | 'info' | 'error' | 'warn' | 'debug'; timestamp: number; source?: string }) => void;
@@ -386,7 +392,9 @@ export function useChat({
 			try {
 				if (urlChatId === 'new') {
 					if (!userQuery) {
+						const errorMsg = 'Please enter a description of what you want to build';
 						logger.error('Query is required for new code generation');
+						toast.error(errorMsg);
 						return;
 					}
 
@@ -394,6 +402,7 @@ export function useChat({
 					const response = await apiClient.createAgentSession({
 						query: userQuery,
 						agentMode,
+						images: userImages, // Pass images from URL params for multi-modal blueprint
 					});
 
 					const parser = createRepairingJSONParser();
