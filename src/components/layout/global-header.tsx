@@ -3,7 +3,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { AuthButton } from '../auth/auth-button';
 import { ThemeToggle } from '../theme-toggle';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/hooks/use-auth';
 import { ChevronRight, GithubIcon, AlertCircle } from 'lucide-react';
 import { CloudflareLogo } from '../icons/logos';
 import { usePlatformStatus } from '@/hooks/use-platform-status';

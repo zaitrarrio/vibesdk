@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/hooks/use-auth';
 import { toggleFavorite } from '@/hooks/use-apps';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import { toast } from 'sonner';

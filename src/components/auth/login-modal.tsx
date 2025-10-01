@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
-import { useAuth } from '@/contexts/auth-context';
+import { useAuth } from '@/hooks/use-auth';
 // import {
 // 	validateEmail,
 // 	validatePassword,

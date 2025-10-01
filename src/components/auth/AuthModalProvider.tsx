@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { LoginModal } from './login-modal';
-import { useAuth } from '../../contexts/auth-context';
+import { useAuthStore } from '../../stores/auth-store';
 import { setGlobalAuthModalTrigger } from '../../lib/api-client';
 
 interface AuthModalContextType {
@@ -33,7 +33,7 @@ export function AuthModalProvider({ children }: AuthModalProviderProps) {
   const [modalContext, setModalContext] = useState<string | undefined>();
   const [pendingAction, setPendingAction] = useState<(() => void) | undefined>();
   const [intendedUrl, setIntendedUrlState] = useState<string | undefined>();
-  const { login, loginWithEmail, register, error, clearError, isAuthenticated } = useAuth();
+  const { login, loginWithEmail, register, error, clearError, isAuthenticated } = useAuthStore();
 
   const showAuthModal = useCallback((context?: string, onSuccess?: () => void, intendedUrl?: string) => {
     setModalContext(context);
