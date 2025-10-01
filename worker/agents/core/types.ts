@@ -47,9 +47,15 @@ export interface AgentSummary {
     conversation: ConversationMessage[];
 }
 
+export interface UserContext {
+    suggestions?: string[];
+    images?: ImageAttachment[];
+}
+
 export interface PhaseExecutionResult {
     currentDevState: CurrentDevState;
     staticAnalysis?: StaticAnalysisResponse;
     result?: PhaseConceptType;
     userSuggestions?: string[];
+    userContext?: UserContext;
 }

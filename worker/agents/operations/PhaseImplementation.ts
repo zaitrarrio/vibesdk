@@ -1,6 +1,6 @@
 import { PhaseConceptType, FileOutputType, PhaseConceptSchema } from '../schemas';
 import { IssueReport } from '../domain/values/IssueReport';
-import { createUserMessage } from '../inferutils/common';
+import { createUserMessage, createMultiModalUserMessage } from '../inferutils/common';
 import { executeInference } from '../inferutils/infer';
 import { issuesPromptFormatter, PROMPT_UTILS, STRATEGIES } from '../prompts';
 import { CodeGenerationStreamingState } from '../output-formats/streaming-formats/base';
@@ -12,13 +12,14 @@ import { TemplateRegistry } from '../inferutils/schemaFormatters';
 import { IsRealtimeCodeFixerEnabled, RealtimeCodeFixer } from '../assistants/realtimeCodeFixer';
 import { AGENT_CONFIG } from '../inferutils/config';
 import { CodeSerializerType } from '../utils/codeSerializers';
+import type { UserContext } from '../core/types';
 
 export interface PhaseImplementationInputs {
     phase: PhaseConceptType
     issues: IssueReport
     isFirstPhase: boolean
     shouldAutoFix: boolean
-    userSuggestions?: string[];
+    userContext?: UserContext;
     fileGeneratingCallback: (filePath: string, filePurpose: string) => void
     fileChunkGeneratedCallback: (filePath: string, chunk: string, format: 'full_content' | 'unified_diff') => void
     fileClosedCallback: (file: FileOutputType, message: string) => void
@@ -350,7 +351,7 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
         inputs: PhaseImplementationInputs,
         options: OperationOptions
     ): Promise<PhaseImplementationOutputs> {
-        const { phase, issues, userSuggestions } = inputs;
+        const { phase, issues, userContext } = inputs;
         const { env, logger, context } = options;
         
         logger.info(`Generating files for phase: ${phase.name}`, phase.description, "files:", phase.files.map(f => f.path));
@@ -359,7 +360,18 @@ export class PhaseImplementationOperation extends AgentOperation<PhaseImplementa
         const codeGenerationFormat = new SCOFFormat();
         // Build messages for generation
         const messages = getSystemPromptWithProjectContext(SYSTEM_PROMPT, context, CodeSerializerType.SCOF);
-        messages.push(createUserMessage(userPromptFormatter(phase, issues, userSuggestions) + codeGenerationFormat.formatInstructions()));
+        
+        // Create user message with optional images
+        const userPrompt = userPromptFormatter(phase, issues, userContext?.suggestions) + codeGenerationFormat.formatInstructions();
+        const userMessage = userContext?.images && userContext.images.length > 0
+            ? createMultiModalUserMessage(
+                userPrompt,
+                userContext.images.map(img => `data:${img.mimeType};base64,${img.base64Data}`),
+                'high'
+            )
+            : createUserMessage(userPrompt);
+        
+        messages.push(userMessage);
     
         // Initialize streaming state
         const streamingState: CodeGenerationStreamingState = {

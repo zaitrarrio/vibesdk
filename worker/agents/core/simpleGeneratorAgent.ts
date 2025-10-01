@@ -10,7 +10,7 @@ import {
 import { GitHubPushRequest, PreviewType, StaticAnalysisResponse, TemplateDetails } from '../../services/sandbox/sandboxTypes';
 import {  GitHubExportResult } from '../../services/github/types';
 import { CodeGenState, CurrentDevState, MAX_PHASES, FileState } from './state';
-import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs, PhaseExecutionResult } from './types';
+import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs, PhaseExecutionResult, UserContext } from './types';
 import { MAX_DEPLOYMENT_RETRIES, PREVIEW_EXPIRED_ERROR, WebSocketMessageResponses } from '../constants';
 import { broadcastToConnections, handleWebSocketClose, handleWebSocketMessage } from './websocket';
 import { createObjectLogger, StructuredLogger } from '../../logger';
@@ -489,7 +489,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         }
 
         let staticAnalysisCache: StaticAnalysisResponse | undefined;
-        let userSuggestions: string[] | undefined;
+        let userContext: UserContext | undefined;
 
         // Store review cycles for later use
         this.setState({
@@ -508,13 +508,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         currentDevState = executionResults.currentDevState;
                         phaseConcept = executionResults.result;
                         staticAnalysisCache = executionResults.staticAnalysis;
-                        userSuggestions = executionResults.userSuggestions;
+                        userContext = executionResults.userContext;
                         break;
                     case CurrentDevState.PHASE_IMPLEMENTING:
-                        executionResults = await this.executePhaseImplementation(phaseConcept, staticAnalysisCache, userSuggestions);
+                        executionResults = await this.executePhaseImplementation(phaseConcept, staticAnalysisCache, userContext);
                         currentDevState = executionResults.currentDevState;
                         staticAnalysisCache = executionResults.staticAnalysis;
-                        userSuggestions = undefined;
+                        userContext = undefined;
                         break;
                     case CurrentDevState.REVIEWING:
                         currentDevState = await this.executeReviewCycle();
@@ -565,16 +565,19 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             const userSuggestions = this.state.pendingUserInputs.length > 0 ? this.state.pendingUserInputs : undefined;
             
             // Get stored images if user suggestions are present
-            const userImages = (userSuggestions && userSuggestions.length > 0 && this.pendingUserImages.length > 0) 
-                ? this.pendingUserImages 
+            const userContext = (userSuggestions && userSuggestions.length > 0 && this.pendingUserImages.length > 0) 
+                ? {
+                    suggestions: userSuggestions,
+                    images: this.pendingUserImages
+                } as UserContext
                 : undefined;
 
             if (userSuggestions && userSuggestions.length > 0) {
                 // Only reset pending user inputs if user suggestions were read
                 this.logger().info("Resetting pending user inputs", { 
                     userSuggestions,
-                    hasImages: !!userImages,
-                    imageCount: userImages?.length || 0
+                    hasImages: !!userContext?.images,
+                    imageCount: userContext?.images?.length || 0
                 });
                 this.setState({
                     ...this.state,
@@ -582,12 +585,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 });
                 
                 // Clear images after they're passed to phase generation
-                if (userImages && userImages.length > 0) {
+                if (userContext?.images && userContext.images.length > 0) {
                     this.logger().info('Clearing stored user images after passing to phase generation');
                     this.pendingUserImages = [];
                 }
             }
-            const nextPhase = await this.generateNextPhase(currentIssues, userSuggestions, userImages);
+            
+            const nextPhase = await this.generateNextPhase(currentIssues, userContext);
                 
             if (!nextPhase) {
                 this.logger().info("No more phases to implement, transitioning to FINALIZING");
@@ -606,7 +610,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 currentDevState: CurrentDevState.PHASE_IMPLEMENTING,
                 result: nextPhase,
                 staticAnalysis: currentIssues.staticAnalysis,
-                userSuggestions: userSuggestions
+                userContext: userContext,
             };
         } catch (error) {
             this.logger().error("Error generating phase", error);
@@ -626,7 +630,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     /**
      * Execute phase implementation state - implement current phase
      */
-    async executePhaseImplementation(phaseConcept?: PhaseConceptType, staticAnalysis?: StaticAnalysisResponse, userSuggestions?: string[]): Promise<{currentDevState: CurrentDevState, staticAnalysis?: StaticAnalysisResponse}> {
+    async executePhaseImplementation(phaseConcept?: PhaseConceptType, staticAnalysis?: StaticAnalysisResponse, userContext?: UserContext): Promise<{currentDevState: CurrentDevState, staticAnalysis?: StaticAnalysisResponse}> {
         try {
             this.logger().info("Executing PHASE_IMPLEMENTING state");
     
@@ -660,8 +664,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 currentIssues = await this.fetchAllIssues(true)
             }
             
-            // Implement the phase
-            await this.implementPhase(phaseConcept, currentIssues, userSuggestions);
+            // Implement the phase with user context (suggestions and images)
+            await this.implementPhase(phaseConcept, currentIssues, userContext);
     
             this.logger().info(`Phase ${phaseConcept.name} completed, generating next phase`);
 
@@ -814,34 +818,33 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     }
 
     /**
-     * Generate next phase with raw user suggestions and optional images
+     * Generate next phase with user context (suggestions and images)
      */
-    async generateNextPhase(currentIssues: AllIssues, userSuggestions?: string[], images?: ImageAttachment[]): Promise<PhaseConceptGenerationSchemaType | undefined> {
+    async generateNextPhase(currentIssues: AllIssues, userContext?: UserContext): Promise<PhaseConceptGenerationSchemaType | undefined> {
         const context = GenerationContext.from(this.state, this.logger());
         const issues = IssueReport.from(currentIssues);
         
         // Build notification message
         let notificationMsg = "Generating next phase";
-        if (userSuggestions && userSuggestions.length > 0) {
-            notificationMsg = `Generating next phase incorporating ${userSuggestions.length} user suggestion(s)`;
+        if (userContext?.suggestions && userContext.suggestions.length > 0) {
+            notificationMsg = `Generating next phase incorporating ${userContext.suggestions.length} user suggestion(s)`;
         }
-        if (images && images.length > 0) {
-            notificationMsg += ` with ${images.length} image(s)`;
+        if (userContext?.images && userContext.images.length > 0) {
+            notificationMsg += ` with ${userContext.images.length} image(s)`;
         }
         
         // Notify phase generation start
         this.broadcast(WebSocketMessageResponses.PHASE_GENERATING, {
             message: notificationMsg,
             issues: issues,
-            userSuggestions: userSuggestions,
+            userSuggestions: userContext?.suggestions,
         });
         
         const result = await this.operations.generateNextPhase.execute(
             {
                 issues,
-                userSuggestions,
-                isUserSuggestedPhase: userSuggestions && userSuggestions.length > 0 && this.state.mvpGenerated,  // If mvpGenerated is true, then it is a purely user suggested phase
-                images
+                userContext,
+                isUserSuggestedPhase: userContext?.suggestions && userContext.suggestions.length > 0 && this.state.mvpGenerated,
             },
             {
                 env: this.env,
@@ -896,12 +899,19 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
      * Implement a single phase of code generation
      * Streams file generation with real-time updates and incorporates technical instructions
      */
-    async implementPhase(phase: PhaseConceptType, currentIssues: AllIssues, userSuggestions?: string[], streamChunks: boolean = true): Promise<PhaseImplementationSchemaType> {
+    async implementPhase(phase: PhaseConceptType, currentIssues: AllIssues, userContext?: UserContext, streamChunks: boolean = true): Promise<PhaseImplementationSchemaType> {
         const context = GenerationContext.from(this.state, this.logger());
         const issues = IssueReport.from(currentIssues);
         
+        const implementationMsg = userContext?.suggestions && userContext.suggestions.length > 0
+            ? `Implementing phase: ${phase.name} with ${userContext.suggestions.length} user suggestion(s)`
+            : `Implementing phase: ${phase.name}`;
+        const msgWithImages = userContext?.images && userContext.images.length > 0
+            ? `${implementationMsg} and ${userContext.images.length} image(s)`
+            : implementationMsg;
+            
         this.broadcast(WebSocketMessageResponses.PHASE_IMPLEMENTING, {
-            message: `Implementing phase: ${phase.name}`,
+            message: msgWithImages,
             phase: phase,
             issues: issues,
         });
@@ -919,7 +929,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                         filePurpose: filePurpose
                     });
                 },
-                userSuggestions,
+                userContext,
                 shouldAutoFix: this.state.inferenceContext.enableRealtimeCodeFix,
                 fileChunkGeneratedCallback: streamChunks ? (filePath: string, chunk: string, format: 'full_content' | 'unified_diff') => {
                     this.broadcast(WebSocketMessageResponses.FILE_CHUNK_GENERATED, {
