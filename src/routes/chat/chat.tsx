@@ -40,6 +40,18 @@ export default function Chat() {
 	const [searchParams] = useSearchParams();
 	const userQuery = searchParams.get('query');
 	const agentMode = searchParams.get('agentMode') || 'deterministic';
+	
+	// Extract images from URL params if present
+	const userImages = useMemo(() => {
+		const imagesParam = searchParams.get('images');
+		if (!imagesParam) return undefined;
+		try {
+			return JSON.parse(decodeURIComponent(imagesParam));
+		} catch (error) {
+			console.error('Failed to parse images from URL:', error);
+			return undefined;
+		}
+	}, [searchParams]);
 
 	// Load existing app data if chatId is provided
 	const { app, loading: appLoading } = useApp(urlChatId);
@@ -118,6 +130,7 @@ export default function Chat() {
 	} = useChat({
 		chatId: urlChatId,
 		query: userQuery,
+		images: userImages,
 		agentMode: agentMode as 'deterministic' | 'smart',
 		onDebugMessage: addDebugMessage,
 	});
