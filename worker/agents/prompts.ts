@@ -108,8 +108,12 @@ and provide a preview url for the application.
             const errorsSerialized = errors.map(e => {
                 // Use rawOutput if available, otherwise serialize using schema
                 const errorText = e.message;
+                // Remove any trace lines with no 'tsx' or 'ts' extension in them
+                const cleanedText = errorText.split('\n')
+                                    .map(line => line.includes('deps/chunk') && !(line.includes('.tsx') || line.includes('.ts')) ? '...' : line)
+                                    .join('\n');
                 // Truncate to 1000 characters to prevent context overflow
-                return `<error>${errorText.slice(0, 1000)}</error>`;
+                return `<error>${cleanedText.slice(0, 1000)}</error>`;
             });
             return errorsSerialized.join('\n\n');
         } else {
