@@ -1,4 +1,4 @@
-import { SimpleCodeGeneratorAgent } from "./simpleGeneratorAgent";
+import { SimpleCodeGeneratorAgent } from "./simple-generator-agent";
 import { CodeGenState } from "./state";
 import { AgentInitArgs } from "./types";
 

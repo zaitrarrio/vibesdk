@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
-import { getCORSConfig, getSecureHeadersConfig } from './config/security';
-import { RateLimitService } from './services/rate-limit/rateLimits';
-import { AppEnv } from './types/appenv';
-import { setupRoutes } from './api/routes';
-import { CsrfService } from './services/csrf/CsrfService';
-import { SecurityError, SecurityErrorType } from 'shared/types/errors';
-import { getGlobalConfigurableSettings } from './config';
-import { AuthConfig, setAuthLevel } from './middleware/auth/routeAuth';
-// import { initHonoSentry } from './observability/sentry';
+import { getCORSConfig, getSecureHeadersConfig } from '@worker/config/security';
+import { RateLimitService } from '@worker/services/rate-limit/rate-limits';
+import { AppEnv } from '@worker/types/appenv';
+import { setupRoutes } from '@worker/api/routes';
+import { CsrfService } from '@worker/services/csrf/csrf-service';
+import { SecurityError, SecurityErrorType } from '@shared/types/errors';
+import { getGlobalConfigurableSettings } from '@worker/config';
+import { AuthConfig, setAuthLevel } from '@worker/middleware/auth/route-auth';
+// import { initHonoSentry } from '@worker/observability/sentry';
 
 export function createApp(env: Env): Hono<AppEnv> {
     const app = new Hono<AppEnv>();
@@ -42,20 +42,22 @@ export function createApp(env: Env): Hono<AppEnv> {
         }
         
         try {
+            const csrfService = new CsrfService();
+            
             // Handle GET requests - establish CSRF token if needed
             if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
                 await next();
                 
                 // Only set CSRF token for successful API responses
                 if (c.req.url.startsWith('/api/') && c.res.status < 400) {
-                    await CsrfService.enforce(c.req.raw, c.res);
+                    await csrfService.enforce(c.req.raw, c.res);
                 }
                 
                 return;
             }
             
             // Validate CSRF token for state-changing requests
-            await CsrfService.enforce(c.req.raw, undefined);
+            await csrfService.enforce(c.req.raw, undefined);
             await next();
         } catch (error) {
             if (error instanceof SecurityError && error.type === SecurityErrorType.CSRF_VIOLATION) {

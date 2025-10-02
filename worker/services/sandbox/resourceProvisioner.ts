@@ -7,10 +7,20 @@ export interface ResourceProvisionResult {
     error?: string;
 }
 
+interface CloudflareError {
+    code: number;
+    message: string;
+}
+
+interface CloudflareMessage {
+    code: number;
+    message: string;
+}
+
 export interface CloudflareKVNamespaceResponse {
     success: boolean;
-    errors: any[];
-    messages: any[];
+    errors: CloudflareError[];
+    messages: CloudflareMessage[];
     result?: {
         id: string;
         title: string;
@@ -20,8 +30,8 @@ export interface CloudflareKVNamespaceResponse {
 
 export interface CloudflareD1DatabaseResponse {
     success: boolean;
-    errors: any[];
-    messages: any[];
+    errors: CloudflareError[];
+    messages: CloudflareMessage[];
     result?: {
         uuid: string;
         name: string;

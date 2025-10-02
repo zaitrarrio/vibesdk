@@ -211,7 +211,7 @@ export class ControllerErrorHandler {
     /**
      * Handle authentication requirement
      */
-    static requireAuthentication(user: any): void {
+    static requireAuthentication(user: unknown): void {
         if (!user) {
             throw ErrorFactory.authenticationError();
         }
@@ -220,7 +220,7 @@ export class ControllerErrorHandler {
     /**
      * Handle resource ownership verification
      */
-    static requireResourceOwnership(resource: any, userId: string, resourceName: string): void {
+    static requireResourceOwnership(resource: { userId: string } | null | undefined, userId: string, resourceName: string): void {
         if (!resource) {
             throw ErrorFactory.notFoundError(resourceName);
         }

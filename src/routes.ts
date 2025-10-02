@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router';
 import React from 'react';
 
-import App from './App';
+import App from './app';
 import Home from './routes/home';
 import Chat from './routes/chat/chat';
 import Profile from './routes/profile';

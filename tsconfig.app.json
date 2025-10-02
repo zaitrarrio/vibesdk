@@ -33,6 +33,15 @@
           ],
           "worker/*": [
             "./worker/*"
+          ],
+          "@shared/*": [
+            "./shared/*"
+          ],
+          "@worker/*": [
+            "./worker/*"
+          ],
+          "@src/*": [
+            "./src/*"
           ]
 		}
 	},
