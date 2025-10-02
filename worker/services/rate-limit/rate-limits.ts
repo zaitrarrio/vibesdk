@@ -1,9 +1,9 @@
 import { RateLimitType, RateLimitStore, RateLimitSettings, DORateLimitConfig, KVRateLimitConfig } from './config';
 import { createObjectLogger } from '../../logger';
 import { AuthUser } from '../../types/auth-types';
-import { extractTokenWithMetadata, extractRequestMetadata } from '../../utils/authUtils';
+import { extractTokenWithMetadata, extractRequestMetadata } from '../../utils/auth-utils';
 import { captureSecurityEvent } from '../../observability/sentry';
-import { KVRateLimitStore } from './KVRateLimitStore';
+import { KVRateLimitStore } from './kv-rate-limit-store';
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 
 export class RateLimitService {

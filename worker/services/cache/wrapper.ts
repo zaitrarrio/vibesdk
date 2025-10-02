@@ -2,9 +2,9 @@
  * Cache wrapper for controller methods without decorators
  */
 
-import { CacheService } from './CacheService';
+import { CacheService } from './cache-service';
 import type { RouteContext } from '../../api/types/route-context';
-import type { BaseController } from '../../api/controllers/baseController';
+import type { BaseController } from '../../api/controllers/base-controller';
 
 interface CacheOptions {
 	ttlSeconds: number;

@@ -1,4 +1,4 @@
-import { BaseController } from '../baseController';
+import { BaseController } from '../base-controller';
 import type { ApiResponse, ControllerResponse } from '../types';
 import type { RouteContext } from '../../types/route-context';
 import type { PlatformStatusData } from './types';

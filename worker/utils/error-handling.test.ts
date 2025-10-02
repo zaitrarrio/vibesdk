@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ErrorHandler, ErrorFactory } from './ErrorHandling';
+import { ErrorHandler, ErrorFactory } from './error-handling';
 import { SecurityError, SecurityErrorType } from '@shared/types/errors';
 
 describe('ErrorHandler', () => {

@@ -3,7 +3,7 @@
  * Handles cases where imports use wrong syntax (named vs default)
  */
 
-import { CodeIssue } from '../../sandbox/sandboxTypes';
+import { CodeIssue } from '../../sandbox/sandbox-types';
 import { FixerContext, FixResult, FixedIssue, UnfixableIssue, FileObject } from '../types';
 import { generateCode, traverseAST } from '../utils/ast';
 import { findImportAtLocation, getFileAST, getFileExports } from '../utils/imports';

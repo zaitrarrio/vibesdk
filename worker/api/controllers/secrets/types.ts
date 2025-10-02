@@ -3,7 +3,7 @@
  */
 
 import type { EncryptedSecret } from '../../../database/types';
-import { SecretTemplate } from '../../../types/secretsTemplates';
+import { SecretTemplate } from '../../../types/secrets-templates';
 
 /**
  * Response data for getSecrets

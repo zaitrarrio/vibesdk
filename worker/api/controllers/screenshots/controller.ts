@@ -1,4 +1,4 @@
-import { BaseController } from '../baseController';
+import { BaseController } from '../base-controller';
 import type { ControllerResponse, ApiResponse } from '../types';
 import type { RouteContext } from '../../types/route-context';
 import { createLogger } from '../../../logger';

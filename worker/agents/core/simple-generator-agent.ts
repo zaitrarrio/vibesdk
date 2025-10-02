@@ -7,7 +7,7 @@ import {
     FileOutputType,
     PhaseImplementationSchemaType,
 } from '../schemas';
-import { GitHubPushRequest, PreviewType, StaticAnalysisResponse, TemplateDetails } from '../../services/sandbox/sandboxTypes';
+import { GitHubPushRequest, PreviewType, StaticAnalysisResponse, TemplateDetails } from '../../services/sandbox/sandbox-types';
 import {  GitHubExportResult } from '../../services/github/types';
 import { CodeGenState, CurrentDevState, MAX_PHASES, FileState } from './state';
 import { AllIssues, AgentSummary, ScreenshotData, AgentInitArgs, PhaseExecutionResult } from './types';
@@ -15,30 +15,30 @@ import { MAX_DEPLOYMENT_RETRIES, PREVIEW_EXPIRED_ERROR, WebSocketMessageResponse
 import { broadcastToConnections, handleWebSocketClose, handleWebSocketMessage } from './websocket';
 import { createObjectLogger, StructuredLogger } from '../../logger';
 import { ProjectSetupAssistant } from '../assistants/projectsetup';
-import { UserConversationProcessor } from '../operations/UserConversationProcessor';
-import { FileManager } from '../services/implementations/FileManager';
-import { StateManager } from '../services/implementations/StateManager';
+import { UserConversationProcessor } from '../operations/user-conversation-processor';
+import { FileManager } from '../services/implementations/file-manager';
+import { StateManager } from '../services/implementations/state-manager';
 // import { WebSocketBroadcaster } from '../services/implementations/WebSocketBroadcaster';
-import { GenerationContext } from '../domain/values/GenerationContext';
-import { IssueReport } from '../domain/values/IssueReport';
-import { PhaseImplementationOperation } from '../operations/PhaseImplementation';
-import { CodeReviewOperation } from '../operations/CodeReview';
-import { FileRegenerationOperation } from '../operations/FileRegeneration';
-import { PhaseGenerationOperation } from '../operations/PhaseGeneration';
-import { ScreenshotAnalysisOperation } from '../operations/ScreenshotAnalysis';
+import { GenerationContext } from '../domain/values/generation-context';
+import { IssueReport } from '../domain/values/issue-report';
+import { PhaseImplementationOperation } from '../operations/phase-implementation';
+import { CodeReviewOperation } from '../operations/code-review';
+import { FileRegenerationOperation } from '../operations/file-regeneration';
+import { PhaseGenerationOperation } from '../operations/phase-generation';
+import { ScreenshotAnalysisOperation } from '../operations/screenshot-analysis';
 // Database schema imports removed - using zero-storage OAuth flow
-import { BaseSandboxService } from '../../services/sandbox/BaseSandboxService';
+import { BaseSandboxService } from '../../services/sandbox/base-sandbox-service';
 import { getSandboxService } from '../../services/sandbox/factory';
-import { WebSocketMessageData, WebSocketMessageType } from '../../api/websocketTypes';
+import { WebSocketMessageData, WebSocketMessageType } from '../../api/websocket-types';
 import { InferenceContext, AgentActionKey } from '../inferutils/config.types';
 import { AGENT_CONFIG } from '../inferutils/config';
-import { ModelConfigService } from '../../database/services/ModelConfigService';
+import { ModelConfigService } from '../../database/services/model-config-service';
 import { FileFetcher, fixProjectIssues } from '../../services/code-fixer';
-import { FastCodeFixerOperation } from '../operations/FastCodeFixer';
+import { FastCodeFixerOperation } from '../operations/fast-code-fixer';
 import { getProtocolForHost } from '../../utils/urls';
 import { looksLikeCommand } from '../utils/common';
 import { generateBlueprint } from '../planning/blueprint';
-import { prepareCloudflareButton } from '../../utils/deployToCf';
+import { prepareCloudflareButton } from '../../utils/deploy-to-cf';
 import { AppService } from '../../database';
 import { RateLimitExceededError } from 'shared/types/errors';
 import { generateId } from 'worker/utils/idGenerator';

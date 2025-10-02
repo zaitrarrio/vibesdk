@@ -2,10 +2,10 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { toggleFavorite } from '@/hooks/use-apps';
 import { usePaginatedApps } from '@/hooks/use-paginated-apps';
-import { AppListContainer } from '@/components/shared/AppListContainer';
-import { AppFiltersForm } from '@/components/shared/AppFiltersForm';
-import { AppSortTabs } from '@/components/shared/AppSortTabs';
-import { VisibilityFilter } from '@/components/shared/VisibilityFilter';
+import { AppListContainer } from '@/components/shared/app-list-container';
+import { AppFiltersForm } from '@/components/shared/app-filters-form';
+import { AppSortTabs } from '@/components/shared/app-sort-tabs';
+import { VisibilityFilter } from '@/components/shared/visibility-filter';
 import type { AppSortOption } from '@/api-types';
 
 export default function AppsPage() {

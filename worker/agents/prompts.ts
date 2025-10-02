@@ -1,10 +1,10 @@
-import { FileTreeNode, RuntimeError, StaticAnalysisResponse, TemplateDetails } from "../services/sandbox/sandboxTypes";
-import { TemplateRegistry } from "./inferutils/schemaFormatters";
+import { FileTreeNode, RuntimeError, StaticAnalysisResponse, TemplateDetails } from "../services/sandbox/sandbox-types";
+import { TemplateRegistry } from "./inferutils/schema-formatters";
 import z from 'zod';
 import { Blueprint, BlueprintSchema, ClientReportedErrorSchema, ClientReportedErrorType, FileOutputType, PhaseConceptSchema, PhaseConceptType, TemplateSelection } from "./schemas";
-import { IssueReport } from "./domain/values/IssueReport";
+import { IssueReport } from "./domain/values/issue-report";
 import { FileState, MAX_PHASES } from "./core/state";
-import { CODE_SERIALIZERS, CodeSerializerType } from "./utils/codeSerializers";
+import { CODE_SERIALIZERS, CodeSerializerType } from "./utils/code-serializers";
 
 export const PROMPT_UTILS = {
     /**

@@ -1,8 +1,8 @@
-import { BaseController } from '../baseController';
+import { BaseController } from '../base-controller';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
-import { UserService } from '../../../database/services/UserService';
-import { AppService } from '../../../database/services/AppService';
+import { UserService } from '../../../database/services/user-service';
+import { AppService } from '../../../database/services/app-service';
 import { Visibility, AppSortOption, SortOrder, TimePeriod } from '../../../database/types';
 import { UserAppsData, ProfileUpdateData } from './types';
 import { createLogger } from '../../../logger';

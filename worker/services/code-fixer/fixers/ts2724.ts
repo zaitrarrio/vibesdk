@@ -4,7 +4,7 @@
  * Example: "'@/components/ui/sonner' has no exported member named 'toast'. Did you mean 'Toaster'?"
  */
 
-import { CodeIssue } from '../../sandbox/sandboxTypes';
+import { CodeIssue } from '../../sandbox/sandbox-types';
 import { FixerContext, FixResult, FixedIssue, UnfixableIssue, FileObject } from '../types';
 import { generateCode } from '../utils/ast';
 import { getFileAST, findImportAtLocation, getFileExports } from '../utils/imports';

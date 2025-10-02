@@ -2,16 +2,16 @@
  * Secure Authentication Controller
  */
 
-import { AuthService } from '../../../database/services/AuthService';
-import { SessionService } from '../../../database/services/SessionService';
-import { UserService } from '../../../database/services/UserService';
-import { ApiKeyService } from '../../../database/services/ApiKeyService';
-import { generateApiKey } from '../../../utils/cryptoUtils';
+import { AuthService } from '../../../database/services/auth-service';
+import { SessionService } from '../../../database/services/session-service';
+import { UserService } from '../../../database/services/user-service';
+import { ApiKeyService } from '../../../database/services/api-key-service';
+import { generateApiKey } from '../../../utils/crypto-utils';
 import { 
     loginSchema, 
     registerSchema, 
     oauthProviderSchema
-} from './authSchemas';
+} from './auth-schemas';
 import { SecurityError } from 'shared/types/errors';
 import { 
     formatAuthResponse,
@@ -19,11 +19,11 @@ import {
     setSecureAuthCookies, 
     clearAuthCookies, 
     extractSessionId
-} from '../../../utils/authUtils';
+} from '../../../utils/auth-utils';
 import { RouteContext } from '../../types/route-context';
 import { authMiddleware } from '../../../middleware/auth/auth';
 import { CsrfService } from '../../../services/csrf/CsrfService';
-import { BaseController } from '../baseController';
+import { BaseController } from '../base-controller';
 import { createLogger } from '../../../logger';
 /**
  * Authentication Controller

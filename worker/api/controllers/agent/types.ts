@@ -1,4 +1,4 @@
-import { PreviewType } from "../../../services/sandbox/sandboxTypes";
+import { PreviewType } from "../../../services/sandbox/sandbox-types";
 
 export interface CodeGenArgs {
     query: string;

@@ -4,7 +4,7 @@
  */
 
 import { FileObject } from './types';
-import { CodeIssue } from '../sandbox/sandboxTypes';
+import { CodeIssue } from '../sandbox/sandbox-types';
 import { 
     CodeFixResult, 
     FileFetcher, 

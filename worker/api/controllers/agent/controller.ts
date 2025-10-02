@@ -1,6 +1,6 @@
 import { WebSocketMessageResponses } from '../../../agents/constants';
-import { BaseController } from '../baseController';
-import { generateId } from '../../../utils/idGenerator';
+import { BaseController } from '../base-controller';
+import { generateId } from '../../../utils/id-generator';
 import { CodeGenState } from '../../../agents/core/state';
 import { getAgentStub, getTemplateForQuery } from '../../../agents';
 import { AgentConnectionData, AgentPreviewResponse, CodeGenArgs } from './types';

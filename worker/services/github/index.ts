@@ -2,5 +2,5 @@
  * GitHub Service Module Exports
  */
 
-export { GitHubService } from './GitHubService';
+export { GitHubService } from './git-hub-service';
 export * from './types';

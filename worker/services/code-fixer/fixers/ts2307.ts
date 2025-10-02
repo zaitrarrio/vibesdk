@@ -3,7 +3,7 @@
  * Handles missing module imports by either finding existing files or creating stubs
  */
 
-import { CodeIssue } from '../../sandbox/sandboxTypes';
+import { CodeIssue } from '../../sandbox/sandbox-types';
 import { FixerContext, FixResult, FixedIssue, ImportInfo } from '../types';
 import * as t from '@babel/types';
 import { generateCode } from '../utils/ast';

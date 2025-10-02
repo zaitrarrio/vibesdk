@@ -3,17 +3,17 @@
  * Handles API endpoints for user secrets and API keys management
  */
 
-import { BaseController } from '../baseController';
+import { BaseController } from '../base-controller';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
-import { SecretsService } from '../../../database/services/SecretsService';
+import { SecretsService } from '../../../database/services/secrets-service';
 import {
     SecretsData,
     SecretStoreData,
     SecretDeleteData,
     SecretTemplatesData,
 } from './types';
-import { getTemplatesData } from '../../../types/secretsTemplates';
+import { getTemplatesData } from '../../../types/secrets-templates';
 
 export class SecretsController extends BaseController {
 

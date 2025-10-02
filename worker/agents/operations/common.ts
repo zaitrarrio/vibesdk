@@ -1,10 +1,10 @@
 import { StructuredLogger } from "../../logger";
-import { GenerationContext } from "../domain/values/GenerationContext";
+import { GenerationContext } from "../domain/values/generation-context";
 import { Message } from "../inferutils/common";
 import { InferenceContext } from "../inferutils/config.types";
 import { createUserMessage, createSystemMessage, createAssistantMessage } from "../inferutils/common";
 import { generalSystemPromptBuilder, USER_PROMPT_FORMATTER } from "../prompts";
-import { CodeSerializerType } from "../utils/codeSerializers";
+import { CodeSerializerType } from "../utils/code-serializers";
 
 export function getSystemPromptWithProjectContext(
     systemPrompt: string,

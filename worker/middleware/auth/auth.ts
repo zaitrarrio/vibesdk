@@ -5,8 +5,8 @@
 
 import { AuthUserSession } from '../../types/auth-types';
 import { createLogger } from '../../logger';
-import { AuthService } from '../../database/services/AuthService';
-import { extractToken } from '../../utils/authUtils';
+import { AuthService } from '../../database/services/auth-service';
+import { extractToken } from '../../utils/auth-utils';
 
 const logger = createLogger('AuthMiddleware');
 /**

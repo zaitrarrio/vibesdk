@@ -1,9 +1,9 @@
 
-import { BaseController } from '../baseController';
+import { BaseController } from '../base-controller';
 import { RouteContext } from '../../types/route-context';
 import { ApiResponse, ControllerResponse } from '../types';
 import { UserStatsData, UserActivityData } from './types';
-import { AnalyticsService } from '../../../database/services/AnalyticsService';
+import { AnalyticsService } from '../../../database/services/analytics-service';
 import { createLogger } from '../../../logger';
 
 export class StatsController extends BaseController {

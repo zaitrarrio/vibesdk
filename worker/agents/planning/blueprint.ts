@@ -1,11 +1,11 @@
-import { TemplateDetails, TemplateFileSchema } from '../../services/sandbox/sandboxTypes'; // Import the type
+import { TemplateDetails, TemplateFileSchema } from '../../services/sandbox/sandbox-types'; // Import the type
 import { STRATEGIES, PROMPT_UTILS, generalSystemPromptBuilder } from '../prompts';
 import { executeInference } from '../inferutils/infer';
 import { Blueprint, BlueprintSchema, TemplateSelection } from '../schemas';
 import { createLogger } from '../../logger';
 import { createSystemMessage, createUserMessage } from '../inferutils/common';
 import { InferenceContext } from '../inferutils/config.types';
-import { TemplateRegistry } from '../inferutils/schemaFormatters';
+import { TemplateRegistry } from '../inferutils/schema-formatters';
 import z from 'zod';
 
 const logger = createLogger('Blueprint');

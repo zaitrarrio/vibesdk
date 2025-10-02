@@ -1,9 +1,9 @@
 
-import type { RuntimeError, StaticAnalysisResponse } from '../../services/sandbox/sandboxTypes';
+import type { RuntimeError, StaticAnalysisResponse } from '../../services/sandbox/sandbox-types';
 import type { ClientReportedErrorType, FileOutputType, PhaseConceptType } from '../schemas';
 import type { ConversationMessage } from '../inferutils/common';
 import type { InferenceContext } from '../inferutils/config.types';
-import type { TemplateDetails } from '../../services/sandbox/sandboxTypes';
+import type { TemplateDetails } from '../../services/sandbox/sandbox-types';
 import { TemplateSelection } from '../schemas';
 import { CurrentDevState } from './state';
 

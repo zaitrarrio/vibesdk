@@ -1,6 +1,6 @@
-import { SandboxSdkClient } from "./sandboxSdkClient";
-import { RemoteSandboxServiceClient } from "./remoteSandboxService";
-import { BaseSandboxService } from "./BaseSandboxService";
+import { SandboxSdkClient } from "./sandbox-sdk-client";
+import { RemoteSandboxServiceClient } from "./remote-sandbox-service";
+import { BaseSandboxService } from "./base-sandbox-service";
 import { env } from 'cloudflare:workers'
 
 export function getSandboxService(sessionId: string): BaseSandboxService {

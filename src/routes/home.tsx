@@ -6,10 +6,10 @@ import {
 	AgentModeToggle,
 	type AgentMode,
 } from '../components/agent-mode-toggle';
-import { useAuthGuard } from '../hooks/useAuthGuard';
+import { useAuthGuard } from '../hooks/use-auth-guard';
 import { usePaginatedApps } from '@/hooks/use-paginated-apps';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
-import { AppCard } from '@/components/shared/AppCard';
+import { AppCard } from '@/components/shared/app-card';
 import clsx from 'clsx';
 
 export default function Home() {

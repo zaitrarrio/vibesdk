@@ -1,6 +1,6 @@
 import type { OAuthUserInfo } from '../../types/auth-types';
 import { createLogger } from '../../logger';
-import { createGitHubHeaders } from '../../utils/githubUtils';
+import { createGitHubHeaders } from '../../utils/github-utils';
 import { GitHubOAuthProvider } from './github';
 
 const logger = createLogger('GitHubExporterOAuth');

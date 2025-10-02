@@ -3,7 +3,7 @@
  * Handles missing named exports by adding stub exports to the target file
  */
 
-import { CodeIssue } from '../../sandbox/sandboxTypes';
+import { CodeIssue } from '../../sandbox/sandbox-types';
 import { FixerContext, FixResult, FixedIssue, UnfixableIssue, FileObject } from '../types';
 import { generateCode } from '../utils/ast';
 import { getFileExports, analyzeImportUsage } from '../utils/imports';

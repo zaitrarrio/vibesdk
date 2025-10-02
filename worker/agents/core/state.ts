@@ -1,7 +1,7 @@
 import type { Blueprint, ClientReportedErrorType, PhaseConceptType ,
     FileOutputType,
 } from '../schemas';
-import type { TemplateDetails } from '../../services/sandbox/sandboxTypes';
+import type { TemplateDetails } from '../../services/sandbox/sandbox-types';
 // import type { ScreenshotData } from './types';
 import type { ConversationMessage } from '../inferutils/common';
 import type { InferenceContext } from '../inferutils/config.types';

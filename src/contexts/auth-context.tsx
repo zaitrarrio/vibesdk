@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { useSentryUser } from '@/hooks/useSentryUser';
+import { useSentryUser } from '@/hooks/use-sentry-user';
 import type { AuthSession, AuthUser } from '../api-types';
 
 interface AuthContextType {

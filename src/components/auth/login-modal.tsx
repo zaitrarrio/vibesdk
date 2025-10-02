@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/auth-context';
 // 	validateEmail,
 // 	validatePassword,
 // 	validateDisplayName,
-// } from '../../utils/validationUtils';
+// } from '../../utils/validation-utils';
 
 interface LoginModalProps {
 	isOpen: boolean;

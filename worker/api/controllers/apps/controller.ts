@@ -1,7 +1,7 @@
-import { AppService } from '../../../database/services/AppService';
+import { AppService } from '../../../database/services/app-service';
 import type { AppSortOption, SortOrder, TimePeriod, Visibility } from '../../../database/types';
-import { formatRelativeTime } from '../../../utils/timeFormatter';
-import { BaseController } from '../baseController';
+import { formatRelativeTime } from '../../../utils/time-formatter';
+import { BaseController } from '../base-controller';
 import { ApiResponse, ControllerResponse } from '../types';
 import type { RouteContext } from '../../types/route-context';
 import { 

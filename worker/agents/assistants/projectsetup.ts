@@ -1,4 +1,4 @@
-import { TemplateDetails } from "../../services/sandbox/sandboxTypes";
+import { TemplateDetails } from "../../services/sandbox/sandbox-types";
 import { SetupCommandsType, type Blueprint } from "../schemas";
 import { createObjectLogger, StructuredLogger } from '../../logger';
 import { generalSystemPromptBuilder, PROMPT_UTILS } from '../prompts';

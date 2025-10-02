@@ -6,7 +6,7 @@ import {
     type FormatterOptions,
     generateTemplateForSchema,
     parseContentForSchema,
-} from './schemaFormatters';
+} from './schema-formatters';
 import { zodResponseFormat } from 'openai/helpers/zod.mjs';
 import {
     ChatCompletionMessageFunctionToolCall,
@@ -21,7 +21,7 @@ import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { AuthUser } from '../../types/auth-types';
 import { getGlobalConfigurableSettings } from '../../config';
 import { SecurityError, RateLimitExceededError } from 'shared/types/errors';
-import { executeToolWithDefinition } from '../tools/customTools';
+import { executeToolWithDefinition } from '../tools/custom-tools';
 import { RateLimitType } from 'worker/services/rate-limit/config';
 
 function optimizeInputs(messages: Message[]): Message[] {

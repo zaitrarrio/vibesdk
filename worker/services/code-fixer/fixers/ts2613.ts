@@ -3,7 +3,7 @@
  * Handles import/export mismatches by converting between default and named imports
  */
 
-import { CodeIssue } from '../../sandbox/sandboxTypes';
+import { CodeIssue } from '../../sandbox/sandbox-types';
 import { FixerContext, FixResult, FixedIssue, UnfixableIssue, FileObject } from '../types';
 import { generateCode } from '../utils/ast';
 import { findImportAtLocation, getFileAST, getFileExports, fixImportExportMismatch } from '../utils/imports';

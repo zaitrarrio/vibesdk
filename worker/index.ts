@@ -9,7 +9,7 @@ import { DORateLimitStore as BaseDORateLimitStore } from '@worker/services/rate-
 import { getPreviewDomain } from '@worker/utils/urls';
 
 // Durable Object and Service exports
-export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
+export { UserAppSandboxService, DeployerService } from './services/sandbox/sandbox-sdk-client';
 
 // export const CodeGeneratorAgent = Sentry.instrumentDurableObjectWithSentry(sentryOptions, SmartCodeGeneratorAgent);
 // export const DORateLimitStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, BaseDORateLimitStore);

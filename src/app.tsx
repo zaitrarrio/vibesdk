@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router';
 import { AuthProvider } from './contexts/auth-context';
-import { AuthModalProvider } from './components/auth/AuthModalProvider';
+import { AuthModalProvider } from './components/auth/auth-modal-provider';
 import { ThemeProvider } from './contexts/theme-context';
 import { Toaster } from './components/ui/sonner';
 import { AppLayout } from './components/layout/app-layout';

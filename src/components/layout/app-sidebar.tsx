@@ -40,7 +40,7 @@ import {
 	TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { formatDistanceToNow, isValid } from 'date-fns';
-import { AppActionsDropdown } from '@/components/shared/AppActionsDropdown';
+import { AppActionsDropdown } from '@/components/shared/app-actions-dropdown';
 
 interface App {
 	id: string;

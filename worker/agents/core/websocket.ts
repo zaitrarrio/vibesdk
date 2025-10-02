@@ -2,7 +2,7 @@ import { Connection } from 'agents';
 import { createLogger } from '../../logger';
 import { WebSocketMessageRequests, WebSocketMessageResponses } from '../constants';
 import { SimpleCodeGeneratorAgent } from './simpleGeneratorAgent';
-import { WebSocketMessage, WebSocketMessageData, WebSocketMessageType } from '../../api/websocketTypes';
+import { WebSocketMessage, WebSocketMessageData, WebSocketMessageType } from '../../api/websocket-types';
 
 const logger = createLogger('CodeGeneratorWebSocket');
 

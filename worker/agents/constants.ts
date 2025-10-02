@@ -1,4 +1,4 @@
-import { WebSocketMessageType } from "../api/websocketTypes";
+import { WebSocketMessageType } from "../api/websocket-types";
 
 export const WebSocketMessageResponses: Record<string, WebSocketMessageType> = {
     GENERATION_STARTED: 'generation_started',

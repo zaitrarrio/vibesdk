@@ -2,13 +2,13 @@
 import { SmartCodeGeneratorAgent } from './core/smartGeneratorAgent';
 import { getAgentByName } from 'agents';
 import { CodeGenState } from './core/state';
-import { generateId } from '../utils/idGenerator';
+import { generateId } from '../utils/id-generator';
 import { StructuredLogger } from '../logger';
 import { InferenceContext } from './inferutils/config.types';
-import { SandboxSdkClient } from '../services/sandbox/sandboxSdkClient';
-import { selectTemplate } from './planning/templateSelector';
+import { SandboxSdkClient } from '../services/sandbox/sandbox-sdk-client';
+import { selectTemplate } from './planning/template-selector';
 import { getSandboxService } from '../services/sandbox/factory';
-import { TemplateDetails } from '../services/sandbox/sandboxTypes';
+import { TemplateDetails } from '../services/sandbox/sandbox-types';
 import { TemplateSelection } from './schemas';
 
 export async function getAgentStub(env: Env, agentId: string, searchInOtherJurisdictions: boolean = false, logger: StructuredLogger) : Promise<DurableObjectStub<SmartCodeGeneratorAgent>> {

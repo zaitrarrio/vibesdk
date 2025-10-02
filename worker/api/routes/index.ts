@@ -1,18 +1,18 @@
-import { setupAuthRoutes } from './authRoutes';
-import { setupAppRoutes } from './appRoutes';
-import { setupUserRoutes } from './userRoutes';
-import { setupStatsRoutes } from './statsRoutes';
-import { setupAnalyticsRoutes } from './analyticsRoutes';
-import { setupSecretsRoutes } from './secretsRoutes';
-import { setupModelConfigRoutes } from './modelConfigRoutes';
-import { setupModelProviderRoutes } from './modelProviderRoutes';
-import { setupGitHubExporterRoutes } from './githubExporterRoutes';
-import { setupCodegenRoutes } from './codegenRoutes';
-import { setupScreenshotRoutes } from './screenshotRoutes';
-import { setupSentryRoutes } from './sentryRoutes';
+import { setupAuthRoutes } from './auth-routes';
+import { setupAppRoutes } from './app-routes';
+import { setupUserRoutes } from './user-routes';
+import { setupStatsRoutes } from './stats-routes';
+import { setupAnalyticsRoutes } from './analytics-routes';
+import { setupSecretsRoutes } from './secrets-routes';
+import { setupModelConfigRoutes } from './model-config-routes';
+import { setupModelProviderRoutes } from './model-provider-routes';
+import { setupGitHubExporterRoutes } from './github-exporter-routes';
+import { setupCodegenRoutes } from './codegen-routes';
+import { setupScreenshotRoutes } from './screenshot-routes';
+import { setupSentryRoutes } from './sentry-routes';
 import { Hono } from "hono";
 import { AppEnv } from "../../types/appenv";
-import { setupStatusRoutes } from './statusRoutes';
+import { setupStatusRoutes } from './status-routes';
 
 export function setupRoutes(app: Hono<AppEnv>): void {
     // Health check route

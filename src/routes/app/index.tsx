@@ -41,8 +41,8 @@ import { toggleFavorite } from '@/hooks/use-apps';
 import { formatDistanceToNow, isValid } from 'date-fns';
 import { toast } from 'sonner';
 import { capitalizeFirstLetter, cn, getPreviewUrl } from '@/lib/utils';
-import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog';
-import { useAuthGuard } from '@/hooks/useAuthGuard';
+import { ConfirmDeleteDialog } from '@/components/shared/confirm-delete-dialog';
+import { useAuthGuard } from '@/hooks/use-auth-guard';
 
 // Use proper types from API types
 type AppDetails = AppDetailsData;

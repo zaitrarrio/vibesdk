@@ -7,10 +7,10 @@
 export { DatabaseService, createDatabaseService } from './database';
 
 // Domain-specific services
-export { AnalyticsService } from './services/AnalyticsService';
-export { BaseService } from './services/BaseService';
-export { UserService } from './services/UserService';
-export { AppService } from './services/AppService';
-export { SecretsService } from './services/SecretsService';
-export { ModelConfigService } from './services/ModelConfigService';
-export { ModelTestService } from './services/ModelTestService';
+export { AnalyticsService } from './services/analytics-service';
+export { BaseService } from './services/base-service';
+export { UserService } from './services/user-service';
+export { AppService } from './services/app-service';
+export { SecretsService } from './services/secrets-service';
+export { ModelConfigService } from './services/model-config-service';
+export { ModelTestService } from './services/model-test-service';
